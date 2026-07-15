@@ -124,19 +124,21 @@ df_insumos = obtener_insumos()
 # --- ALERTAS DE STOCK CRÍTICO (Solo para Admin y Secretaria) ---
 if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
     st.subheader("⚠️ Alertas de Stock Crítico")
-    
+    alertas_activas = False
+
     if not df_insumos.empty:
-        # Creamos dos columnas o filas visuales para organizar el estado de todo el inventario
         for index, fila in df_insumos.iterrows():
             cant_actual = int(fila["Cantidad"])
             cant_minima = int(fila["Stock Mínimo"])
             
+            # Solo muestra si está en un nivel crítico o menor
             if cant_actual <= cant_minima:
                 st.error(f"🚨 **¡ALERTA DE STOCK BAJO!** El insumo **{fila['Nombre']}** ({fila['Categoría'] if 'Categoría' in fila else fila['Categoria']}) tiene **{cant_actual}** unidades. (Mínimo requerido: {cant_minima})")
-            else:
-                st.success(f"✅ **Stock Saludable:** El insumo **{fila['Nombre']}** ({fila['Categoría'] if 'Categoría' in fila else fila['Categoria']}) cuenta con **{cant_actual}** unidades. (Mínimo: {cant_minima})")
-    else:
-        st.info("No hay insumos registrados para analizar el stock.")
+                alertas_activas = True
+
+    # Si absolutamente ningún insumo está bajo, muestra un solo mensaje de tranquilidad
+    if not alertas_activas:
+        st.success("✅ ¡Todos los insumos tienen niveles de stock saludables!")
         
     st.markdown("---")
 # --- SECCIÓN OPERATIVA (Diferenciada por Roles) ---
