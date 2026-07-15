@@ -140,38 +140,65 @@ if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
 if st.session_state["rol_actual"] == "Técnico":
     st.warning("ℹ️ Tu cuenta de **Técnico** tiene permisos de 'Solo Lectura'. Puedes revisar las existencias y gráficos abajo.")
 else:
-    # Columnas para registrar insumos y movimientos (Solo Admin y Secretaria)
+    # Columnas para registrar insumos, modificar stock mínimo y movimientos
     col_izq, col_der = st.columns([1, 1])
 
     with col_izq:
         if st.session_state["rol_actual"] == "Administrador":
-            st.subheader("➕ Registrar Nuevo Insumo")
-            with st.form("nuevo_insumo_form", clear_on_submit=True):
-                nombre = st.text_input("Nombre del Insumo", placeholder="Ej: Cajas de cartón")
-                categoria = st.text_input("Categoría", placeholder="Ej: Empaque")
-                cantidad_ini = st.number_input("Cantidad Inicial", min_value=0, step=1, value=0)
-                stock_min = st.number_input("Stock Mínimo (Alerta)", min_value=1, step=1, value=5)
-                guardado = st.form_submit_button("Guardar Insumo")
+            # Pestañas internas para el Administrador
+            tab_nuevo, tab_editar_min = st.tabs(["➕ Registrar Insumo", "✏️ Editar Stock Mínimo"])
+            
+            with tab_nuevo:
+                st.write("**Registrar Nuevo Insumo**")
+                with st.form("nuevo_insumo_form", clear_on_submit=True):
+                    nombre = st.text_input("Nombre del Insumo", placeholder="Ej: Cajas de cartón")
+                    categoria = st.text_input("Categoría", placeholder="Ej: Empaque")
+                    cantidad_ini = st.number_input("Cantidad Inicial", min_value=0, step=1, value=0)
+                    stock_min = st.number_input("Stock Mínimo (Alerta)", min_value=1, step=1, value=5)
+                    guardado = st.form_submit_button("Guardar Insumo")
 
-            if guardado:
-                if nombre.strip() == "":
-                    st.error("Por favor, ingresa el nombre del insumo.")
-                elif not df_insumos.empty and nombre.lower() in df_insumos["Nombre"].str.lower().values:
-                    st.warning("Ese insumo ya existe en la lista.")
+                if guardado:
+                    if nombre.strip() == "":
+                        st.error("Por favor, ingresa el nombre del insumo.")
+                    elif not df_insumos.empty and nombre.lower() in df_insumos["Nombre"].str.lower().values:
+                        st.warning("Ese insumo ya existe en la lista.")
+                    else:
+                        with st.spinner("Guardando en Google Sheets..."):
+                            registrar_insumo(nombre, categoria, cantidad_ini, stock_min)
+                        st.success(f"¡Insumo '{nombre}' registrado correctamente!")
+                        st.cache_resource.clear()
+                        st.rerun()
+            
+            with tab_editar_min:
+                st.write("**Modificar Alerta de Stock Mínimo**")
+                if not df_insumos.empty:
+                    insumo_editar = st.selectbox("Selecciona el insumo a modificar:", df_insumos["Nombre"].tolist(), key="select_editar_min")
+                    datos_insumo_editar = df_insumos[df_insumos["Nombre"] == insumo_editar].iloc[0]
+                    id_insumo_editar = datos_insumo_editar["ID"]
+                    min_actual = int(datos_insumo_editar["Stock Mínimo"])
+                    
+                    st.info(f"Stock mínimo actual para **{insumo_editar}**: {min_actual} unidades.")
+                    
+                    nuevo_minimo = st.number_input("Nuevo Stock Mínimo:", min_value=1, step=1, value=min_actual, key="num_nuevo_min")
+                    
+                    if st.button("Actualizar Stock Mínimo"):
+                        celda_id = hoja_insumos.find(str(id_insumo_editar))
+                        if celda_id:
+                            # La columna 5 corresponde a "Stock Mínimo"
+                            hoja_insumos.update_cell(celda_id.row, 5, nuevo_minimo)
+                            st.success(f"¡Stock mínimo de '{insumo_editar}' actualizado a {nuevo_minimo}!")
+                            st.cache_resource.clear()
+                            st.rerun()
                 else:
-                    with st.spinner("Guardando en Google Sheets..."):
-                        registrar_insumo(nombre, categoria, cantidad_ini, stock_min)
-                    st.success(f"¡Insumo '{nombre}' registrado correctamente!")
-                    st.cache_resource.clear()
-                    st.rerun()
+                    st.info("No hay insumos registrados para editar.")
         else:
-            st.info("🔒 La creación de **nuevos insumos** está reservada únicamente para el Administrador.")
+            st.info("🔒 Las funciones de creación y edición de insumos están reservadas únicamente para el Administrador.")
 
     with col_der:
         st.subheader("🔄 Registrar Movimiento (Entrada/Salida)")
         if not df_insumos.empty:
             opciones = df_insumos["Nombre"].tolist()
-            seleccionado = st.selectbox("Selecciona el insumo a modificar:", opciones)
+            seleccionado = st.selectbox("Selecciona el insumo a modificar:", opciones, key="select_movimiento")
             
             if seleccionado:
                 datos_insumo = df_insumos[df_insumos["Nombre"] == seleccionado].iloc[0]
@@ -181,7 +208,7 @@ else:
                 st.info(f"Cantidad actual en bodega: **{cant_actual}** unidades.")
                 
                 tipo_movimiento = st.radio("Tipo de movimiento:", ["Agregar Stock (Entrada)", "Restar Stock (Salida)"], horizontal=True)
-                cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1)
+                cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1, key="num_cant_mover")
                 
                 if st.button("Aplicar Movimiento"):
                     if tipo_movimiento == "Agregar Stock (Entrada)":
