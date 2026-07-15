@@ -45,7 +45,16 @@ if st.sidebar.button("Cerrar Sesión"):
 @st.cache_resource
 def conectar_google_sheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credenciales.json", scope)
+
+    # Si estamos en Streamlit Cloud, leemos desde Secrets
+    if "gspread_credentials" in st.secrets:
+        import json
+        info_creds = json.loads(st.secrets["gspread_credentials"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(info_creds, scope)
+    # Si estamos en local, leemos el archivo credenciales.json
+    else:
+        creds = ServiceAccountCredentials.from_json_keyfile_name("credenciales.json", scope)
+
     cliente = gspread.authorize(creds)
     return cliente.open("Inventario_Empresa")
 
