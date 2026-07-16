@@ -30,6 +30,9 @@ try:
     hoja_historial = sh.worksheet("Historial")
     hoja_usuarios = sh.worksheet("Usuarios")
     hoja_parametros = sh.worksheet("Parametros")
+    # Nuevas hojas de historial específico
+    hoja_ventas = sh.worksheet("Ventas")
+    hoja_alquileres = sh.worksheet("Alquileres")
 except Exception as e:
     st.error("❌ Error al conectar con Google Sheets. Verifica tus credenciales y pestañas.")
     st.stop()
@@ -144,15 +147,16 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     hoja_insumos.append_row([nuevo_id, nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado])
     
     fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # Formato de historial: [Fecha, Insumo, Tipo Movimiento, Cantidad, Stock Resultante, Usuario, Motivo, Empresa, Area/Precio]
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
-def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio=""):
+def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0):
     celda_id = hoja_insumos.find(str(id_insumo))
     if celda_id:
+        # 1. Actualizar Stock en la pestaña "Insumos"
         hoja_insumos.update_cell(celda_id.row, 4, nuevo_stock)
         fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Guarda el historial incluyendo la empresa (para alquiler) o el tipo de precio aplicado (para ventas) en la novena columna
+        
+        # 2. Registrar en el Historial General (Auditoría)
         hoja_historial.append_row([
             fecha_actual, 
             nombre_insumo, 
@@ -164,6 +168,30 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
             empresa, 
             area_o_precio
         ])
+        
+        # 3. Registrar en Historiales Específicos
+        if tipo_mov == "Salida":
+            if motivo == "Venta":
+                total_venta = float(cant_movida) * float(precio_unitario)
+                # Formato Ventas: [Fecha, Insumo, Cantidad, Precio Aplicado, Monto Total, Usuario]
+                hoja_ventas.append_row([
+                    fecha_actual,
+                    nombre_insumo,
+                    cant_movida,
+                    area_o_precio, # Contiene el nombre del esquema (ej. "Precio Cliente")
+                    total_venta,
+                    st.session_state["usuario_actual"]
+                ])
+            elif motivo == "Alquiler":
+                # Formato Alquileres: [Fecha, Insumo, Cantidad, Empresa Destino, Area Destino, Usuario]
+                hoja_alquileres.append_row([
+                    fecha_actual,
+                    nombre_insumo,
+                    cant_movida,
+                    empresa,
+                    area_o_precio, # Contiene el área seleccionada
+                    st.session_state["usuario_actual"]
+                ])
 
 # --- INTERFAZ PRINCIPAL ---
 st.title("📦 Sistema de Control de Inventario Nube")
@@ -191,7 +219,7 @@ with tab_operaciones:
                 cant_actual = int(fila["Cantidad"])
                 cant_minima = int(fila["Stock Mínimo"])
                 if cant_actual <= cant_minima:
-                    st.error(f"🚨 **¡ALERTA DE STOCK BAJO!** El insumo **{fila['Nombre']}** ({fila['Categoría'] if 'Categoría' in fila else fila['Categoria']}) tiene solo **{cant_actual}** unidades. (Mínimo: {cant_minima})")
+                    st.error(f"🚨 **¡ALERTA DE STOCK BAJO!** El insumo **{fila['Nombre']}** tiene solo **{cant_actual}** unidades. (Mínimo: {cant_minima})")
                     alertas_activas = True
         if not alertas_activas:
             st.success("✅ ¡Todos los insumos tienen niveles de stock saludables!")
@@ -291,36 +319,32 @@ with tab_operaciones:
                     
                     tipo_movimiento = st.radio("Tipo de movimiento:", ["Agregar Stock (Entrada)", "Restar Stock (Salida)"], horizontal=True)
                     
-                    # Variables que se guardarán en el historial
                     motivo_salida = ""
                     empresa_destino = ""
                     area_o_precio_destino = ""
+                    val_unit = 0.0
                     
                     if tipo_movimiento == "Restar Stock (Salida)":
                         col_mot1, col_mot2 = st.columns(2)
                         with col_mot1:
                             motivo_salida = st.selectbox("Motivo de la Salida:", ["Venta", "Alquiler"])
                         
-                        # --- NUEVA LÓGICA DE DETALLE DE PRECIOS PARA VENTA ---
                         if motivo_salida == "Venta":
                             with col_mot2:
-                                # Le permitimos al usuario elegir qué esquema de precio se aplicó
                                 tipo_precio_aplicado = st.selectbox(
                                     "🏷️ Esquema de Precio Aplicado:",
                                     ["Precio Técnico", "Precio Cliente", "Precio Facturado"]
                                 )
                                 area_o_precio_destino = tipo_precio_aplicado
                                 
-                                # Mostramos de forma dinámica cuánto vale según la selección
                                 if tipo_precio_aplicado == "Precio Técnico":
-                                    val_unit = datos_insumo['Precio Técnico']
+                                    val_unit = float(datos_insumo['Precio Técnico'])
                                 elif tipo_precio_aplicado == "Precio Cliente":
-                                    val_unit = datos_insumo['Precio Cliente']
+                                    val_unit = float(datos_insumo['Precio Cliente'])
                                 else:
-                                    val_unit = datos_insumo['Precio Facturado']
+                                    val_unit = float(datos_insumo['Precio Facturado'])
                                 st.caption(f"Valor Unitario: *{val_unit} Bs.*")
                         
-                        # --- Lógica de Alquiler ---
                         elif motivo_salida == "Alquiler":
                             with col_mot2:
                                 if empresas_disponibles:
@@ -335,8 +359,7 @@ with tab_operaciones:
                     
                     cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1)
                     
-                    # Mostrar total estimado si es venta
-                    if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Venta" and 'val_unit' in locals():
+                    if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Venta":
                         st.write(f"💵 **Total de la Venta Estimado:** {val_unit * cantidad_mov:,.2f} Bs.")
                     
                     if st.button("Aplicar Movimiento"):
@@ -369,7 +392,8 @@ with tab_operaciones:
                                     cantidad_mov,
                                     motivo=motivo_final,
                                     empresa=empresa_destino,
-                                    area_o_precio=area_o_precio_destino
+                                    area_o_precio=area_o_precio_destino,
+                                    precio_unitario=val_unit
                                 )
                             st.success(f"¡Stock actualizado! Ahora tienes {nueva_cantidad} unidades de '{seleccionado}'.")
                             st.cache_resource.clear()
@@ -447,46 +471,92 @@ with tab_valorizacion:
 with tab_reportes:
     st.subheader("📅 Filtro de Auditoría y Movimientos por Rango de Fecha")
     
-    try:
-        registros_hist = hoja_historial.get_all_records()
-        df_hist = pd.DataFrame(registros_hist)
-    except Exception as e:
-        df_hist = pd.DataFrame()
+    # Subpestañas para ver el historial consolidado, solo ventas o solo alquileres
+    tab_rep_general, tab_rep_ventas, tab_rep_alquileres = st.tabs([
+        "📊 Historial General", 
+        "💵 Historial de Ventas", 
+        "🏗️ Historial de Alquileres"
+    ])
+    
+    # --- FECHAS COMUNES DE BÚSQUEDA ---
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        fecha_inicio = st.date_input("Desde:", value=datetime.today())
+    with col_f2:
+        fecha_fin = st.date_input("Hasta:", value=datetime.today())
         
-    if not df_hist.empty and "Fecha" in df_hist.columns:
-        df_hist["Fecha_dt"] = pd.to_datetime(df_hist["Fecha"], errors='coerce')
-        
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            fecha_inicio = st.date_input("Desde:", value=datetime.today())
-        with col_f2:
-            fecha_fin = st.date_input("Hasta:", value=datetime.today())
+    # --- SUBPESTAÑA GENERAL ---
+    with tab_rep_general:
+        try:
+            df_hist = pd.DataFrame(hoja_historial.get_all_records())
+        except:
+            df_hist = pd.DataFrame()
             
-        df_filtrado_fecha = df_hist[
-            (df_hist["Fecha_dt"].dt.date >= fecha_inicio) & 
-            (df_hist["Fecha_dt"].dt.date <= fecha_fin)
-        ]
-        
-        if df_filtrado_fecha.empty:
-            st.warning("No se registraron movimientos en el rango de fechas seleccionado.")
-        else:
-            df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore')
+        if not df_hist.empty and "Fecha" in df_hist.columns:
+            df_hist["Fecha_dt"] = pd.to_datetime(df_hist["Fecha"], errors='coerce')
+            df_filtrado_fecha = df_hist[(df_hist["Fecha_dt"].dt.date >= fecha_inicio) & (df_hist["Fecha_dt"].dt.date <= fecha_fin)]
             
-            st.write(f"📝 Se encontraron **{len(df_mostrar)}** movimientos registrados:")
-            st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
-            
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                df_mostrar.to_excel(writer, sheet_name='Movimientos Filtrados', index=False)
+            if df_filtrado_fecha.empty:
+                st.warning("No se registraron movimientos en este rango.")
+            else:
+                df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore')
+                st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
                 
-            st.download_button(
-                label="📥 Descargar Reporte de este Rango (Excel)",
-                data=buffer.getvalue(),
-                file_name=f"Reporte_{fecha_inicio}_a_{fecha_fin}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-    else:
-        st.info("ℹ️ El historial de movimientos se encuentra vacío o la pestaña 'Historial' no tiene la columna 'Fecha'. Realiza un movimiento (Entrada/Salida) para comenzar a ver registros aquí.")
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    df_mostrar.to_excel(writer, sheet_name='Historial_General', index=False)
+                st.download_button("Descargar Reporte General (Excel)", data=buffer.getvalue(), file_name=f"Reporte_General_{fecha_inicio}_a_{fecha_fin}.xlsx")
+        else:
+            st.info("Historial vacío.")
+
+    # --- SUBPESTAÑA VENTAS ---
+    with tab_rep_ventas:
+        try:
+            df_v = pd.DataFrame(hoja_ventas.get_all_records())
+        except:
+            df_v = pd.DataFrame()
+            
+        if not df_v.empty and "Fecha" in df_v.columns:
+            df_v["Fecha_dt"] = pd.to_datetime(df_v["Fecha"], errors='coerce')
+            df_filtrado_v = df_v[(df_v["Fecha_dt"].dt.date >= fecha_inicio) & (df_v["Fecha_dt"].dt.date <= fecha_fin)]
+            
+            if df_filtrado_v.empty:
+                st.warning("No se registraron ventas en este rango.")
+            else:
+                df_v_mostrar = df_filtrado_v.drop(columns=["Fecha_dt"], errors='ignore')
+                st.subheader(f"Monto total vendido en el rango: {df_v_mostrar['Monto Total (Bs.)'].sum():,.2f} Bs.")
+                st.dataframe(df_v_mostrar, use_container_width=True, hide_index=True)
+                
+                buffer_v = io.BytesIO()
+                with pd.ExcelWriter(buffer_v, engine='openpyxl') as writer:
+                    df_v_mostrar.to_excel(writer, sheet_name='Ventas', index=False)
+                st.download_button("Descargar Reporte de Ventas (Excel)", data=buffer_v.getvalue(), file_name=f"Reporte_Ventas_{fecha_inicio}_a_{fecha_fin}.xlsx")
+        else:
+            st.info("No se han registrado ventas aún.")
+
+    # --- SUBPESTAÑA ALQUILERES ---
+    with tab_rep_alquileres:
+        try:
+            df_a = pd.DataFrame(hoja_alquileres.get_all_records())
+        except:
+            df_a = pd.DataFrame()
+            
+        if not df_a.empty and "Fecha" in df_a.columns:
+            df_a["Fecha_dt"] = pd.to_datetime(df_a["Fecha"], errors='coerce')
+            df_filtrado_a = df_a[(df_a["Fecha_dt"].dt.date >= fecha_inicio) & (df_a["Fecha_dt"].dt.date <= fecha_fin)]
+            
+            if df_filtrado_a.empty:
+                st.warning("No se registraron salidas por alquiler en este rango.")
+            else:
+                df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore')
+                st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
+                
+                buffer_a = io.BytesIO()
+                with pd.ExcelWriter(buffer_a, engine='openpyxl') as writer:
+                    df_a_mostrar.to_excel(writer, sheet_name='Alquileres', index=False)
+                st.download_button("Descargar Reporte de Alquileres (Excel)", data=buffer_a.getvalue(), file_name=f"Reporte_Alquileres_{fecha_inicio}_a_{fecha_fin}.xlsx")
+        else:
+            st.info("No se han registrado alquileres aún.")
 
 # ==========================================
 # 4. PESTAÑA DE CONFIGURACIÓN Y USUARIOS (Exclusivo Admin)
@@ -497,7 +567,6 @@ with tab_usuarios:
         
         tab_sub_usuarios, tab_sub_parametros = st.tabs(["👥 Cuentas de Usuarios", "🏢 Parámetros de Alquiler (Empresas/Áreas)"])
         
-        # --- SUBPESTAÑA 1: GESTIÓN DE USUARIOS ---
         with tab_sub_usuarios:
             col_user_izq, col_user_der = st.columns([1, 1.5])
             
@@ -526,7 +595,6 @@ with tab_usuarios:
                 df_lista_usuarios = obtener_usuarios()
                 st.dataframe(df_lista_usuarios[["Usuario", "Rol"]], use_container_width=True, hide_index=True)
                 
-        # --- SUBPESTAÑA 2: GESTIÓN DE EMPRESAS Y ÁREAS ---
         with tab_sub_parametros:
             col_param_izq, col_param_der = st.columns([1, 1.5])
             
