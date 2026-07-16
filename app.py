@@ -513,10 +513,15 @@ with tab_operaciones:
                                     area_o_precio_destino = st.text_input("📍 Área de Destino (Escribe manual):")
                             
                             with col_al_dest2:
-                                if agencias_disponibles:
-                                    agencia_destino = st.selectbox("🏢 Agencia de Destino:", agencias_disponibles)
-                                else:
-                                    agencia_destino = st.text_input("🏢 Agencia de Destino (Escribe manual):")
+                                # --- LÓGICA DE AUTOCOMPLETADO PEDIDA ---
+                                # "Agencia" será igual a "Empresa - Área"
+                                valor_automatico_agencia = f"{empresa_destino} - {area_o_precio_destino}"
+                                
+                                # Mostramos el campo de texto con el valor sugerido dinámicamente, permitiendo edición manual.
+                                agencia_destino = st.text_input(
+                                    "🏢 Agencia de Destino (Escribe manual):", 
+                                    value=valor_automatico_agencia
+                                )
                             
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
@@ -930,14 +935,14 @@ with tab_reportes:
                     df_crud_visual.insert(0, "N°", range(1, len(df_crud_visual) + 1))
                     st.dataframe(df_crud_visual, use_container_width=True, hide_index=True)
                     
-                    opciones_eliminar = []
+                    options_eliminar = []
                     for index, row in df_crud.iterrows():
                         fecha_r = row.get("Fecha", "Sin Fecha")
                         insumo_r = row.get("Insumo", "Sin Insumo")
                         det_r = row.get("Empresa Destino", row.get("Area Destino", row.get("Motivo", "")))
-                        opciones_eliminar.append(f"Fila {row['Fila_Sheet']} | {fecha_r} | {insumo_r} | {det_r}")
+                        options_eliminar.append(f"Fila {row['Fila_Sheet']} | {fecha_r} | {insumo_r} | {det_r}")
                         
-                    seleccion_borrado = st.selectbox("Selecciona fila a eliminar:", opciones_eliminar)
+                    seleccion_borrado = st.selectbox("Selecciona fila a eliminar:", options_eliminar)
                     
                     if seleccion_borrado:
                         fila_eliminar_real = int(seleccion_borrado.split(" | ")[0].replace("Fila ", ""))
