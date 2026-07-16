@@ -506,22 +506,60 @@ with tab_operaciones:
                                     empresa_destino = st.text_input("🏢 Empresa de Destino (Escribe manual):")
                             
                             col_al_dest1, col_al_dest2 = st.columns(2)
+                            
+                            # --- FILTRADO DINÁMICO DE ÁREAS Y AGENCIAS POR EMPRESA SELECCIONADA ---
+                            # Si se seleccionó una empresa, buscamos áreas y agencias que empiecen con su nombre o convención
+                            areas_filtradas = [
+                                area for area in areas_disponibles 
+                                if area.lower().startswith(empresa_destino.lower() + " -") or area.lower() == area.lower()
+                            ]
+                            # Intentamos un filtrado estricto por formato "Empresa - Área"
+                            areas_estrictas = [a for a in areas_disponibles if a.strip().startswith(empresa_destino.strip() + " -")]
+                            if areas_estrictas:
+                                areas_mostrar = areas_estrictas
+                            else:
+                                areas_mostrar = areas_disponibles
+
+                            agencias_estrictas = [ag for ag in agencias_disponibles if ag.strip().startswith(empresa_destino.strip() + " -")]
+                            if agencias_estrictas:
+                                agencias_mostrar = agencias_estrictas
+                            else:
+                                agencias_mostrar = agencias_disponibles
+
                             with col_al_dest1:
-                                if areas_disponibles:
-                                    area_o_precio_destino = st.selectbox("📍 Área de Destino:", areas_disponibles)
+                                if areas_mostrar:
+                                    # Limpiamos el texto de prefijo de empresa para que el usuario visualice solo el Área real
+                                    opciones_area_formateadas = {
+                                        a: a.replace(empresa_destino + " -", "").strip() for a in areas_mostrar
+                                    }
+                                    area_seleccionada_clave = st.selectbox(
+                                        "📍 Área de Destino:", 
+                                        options=list(opciones_area_formateadas.keys()),
+                                        format_func=lambda x: opciones_area_formateadas[x]
+                                    )
+                                    area_o_precio_destino = area_seleccionada_clave
                                 else:
                                     area_o_precio_destino = st.text_input("📍 Área de Destino (Escribe manual):")
                             
                             with col_al_dest2:
-                                # --- LÓGICA DE AUTOCOMPLETADO PEDIDA ---
-                                # "Agencia" será igual a "Empresa - Área"
-                                valor_automatico_agencia = f"{empresa_destino} - {area_o_precio_destino}"
-                                
-                                # Mostramos el campo de texto con el valor sugerido dinámicamente, permitiendo edición manual.
-                                agencia_destino = st.text_input(
-                                    "🏢 Agencia de Destino (Escribe manual):", 
-                                    value=valor_automatico_agencia
-                                )
+                                if agencias_mostrar:
+                                    # Limpiamos el texto de prefijo de empresa para visualizar solo el nombre de la Agencia real
+                                    opciones_agencia_formateadas = {
+                                        ag: ag.replace(empresa_destino + " -", "").strip() for ag in agencias_mostrar
+                                    }
+                                    agencia_seleccionada_clave = st.selectbox(
+                                        "🏢 Agencia de Destino:", 
+                                        options=list(opciones_agencia_formateadas.keys()),
+                                        format_func=lambda x: opciones_agencia_formateadas[x]
+                                    )
+                                    agencia_destino = agencia_seleccionada_clave
+                                else:
+                                    # Si no hay agencias pre-cargadas para esta empresa, sugerimos el formato automático y permitimos edición
+                                    valor_automatico_agencia = f"{empresa_destino} - {area_o_precio_destino.replace(empresa_destino + ' -', '').strip()}"
+                                    agencia_destino = st.text_input(
+                                        "🏢 Agencia de Destino (Escribe manual):", 
+                                        value=valor_automatico_agencia
+                                    )
                             
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
@@ -1030,7 +1068,8 @@ with tab_usuarios:
                 st.markdown("---")
                 
                 with st.form("nueva_area_form", clear_on_submit=True):
-                    nueva_ar = st.text_input("Nombre del Área / Obra:", placeholder="Ej: Proyecto Norte")
+                    st.write("**Para asociar un área a una empresa, regístrala con el formato:** `Empresa - Área` (Ej: *Constructora Gamma - Proyecto Norte*)")
+                    nueva_ar = st.text_input("Nombre del Área / Obra:", placeholder="Ej: Constructora Gamma - Proyecto Norte")
                     guardar_ar_btn = st.form_submit_button("Añadir Área")
                     
                 if guardar_ar_btn:
@@ -1050,7 +1089,8 @@ with tab_usuarios:
                 # --- NUEVO FORMULARIO: REGISTRO DE AGENCIA (SOLO EDITABLE POR EL ADMINISTRADOR) ---
                 st.info("🔐 **Gestión de Agencias**: Solo disponible para cuentas con rol de Administrador.")
                 with st.form("nueva_agencia_form", clear_on_submit=True):
-                    nueva_ag = st.text_input("Nombre de la Agencia:", placeholder="Ej: Agencia Norte")
+                    st.write("**Para asociar una agencia a una empresa, regístrala con el formato:** `Empresa - Agencia` (Ej: *Constructora Gamma - Agencia Norte*)")
+                    nueva_ag = st.text_input("Nombre de la Agencia:", placeholder="Ej: Constructora Gamma - Agencia Norte")
                     guardar_ag_btn = st.form_submit_button("Añadir Agencia")
                     
                 if guardar_ag_btn:
