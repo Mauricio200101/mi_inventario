@@ -30,7 +30,7 @@ try:
     hoja_historial = sh.worksheet("Historial")
     hoja_usuarios = sh.worksheet("Usuarios")
     hoja_parametros = sh.worksheet("Parametros")
-    # Nuevas hojas de historial específico
+    # Hojas de historial específico
     hoja_ventas = sh.worksheet("Ventas")
     hoja_alquileres = sh.worksheet("Alquileres")
 except Exception as e:
@@ -469,24 +469,23 @@ with tab_valorizacion:
 # 3. PESTAÑA DE REPORTES Y AUDITORÍA POR FECHA
 # ==========================================
 with tab_reportes:
-    st.subheader("📅 Filtro de Auditoría y Movimientos por Rango de Fecha")
+    st.subheader("📅 Reportes de Inventario, Ventas y Alquileres")
     
-    # Subpestañas para ver el historial consolidado, solo ventas o solo alquileres
     tab_rep_general, tab_rep_ventas, tab_rep_alquileres = st.tabs([
-        "📊 Historial General", 
-        "💵 Historial de Ventas", 
-        "🏗️ Historial de Alquileres"
+        "📊 Historial General (Rango de Fechas)", 
+        "💵 Historial de Ventas (Separado por Mes/Año)", 
+        "🏗️ Historial de Alquileres (Rango de Fechas)"
     ])
     
-    # --- FECHAS COMUNES DE BÚSQUEDA ---
-    col_f1, col_f2 = st.columns(2)
-    with col_f1:
-        fecha_inicio = st.date_input("Desde:", value=datetime.today())
-    with col_f2:
-        fecha_fin = st.date_input("Hasta:", value=datetime.today())
-        
-    # --- SUBPESTAÑA GENERAL ---
+    # --- 1. SUBPESTAÑA GENERAL ---
     with tab_rep_general:
+        st.write("🔍 **Filtro por Rango de Fechas**")
+        col_fg1, col_fg2 = st.columns(2)
+        with col_fg1:
+            fecha_inicio_gen = st.date_input("Desde (General):", value=datetime.today(), key="f_gen_ini")
+        with col_fg2:
+            fecha_fin_gen = st.date_input("Hasta (General):", value=datetime.today(), key="f_gen_fin")
+            
         try:
             df_hist = pd.DataFrame(hoja_historial.get_all_records())
         except:
@@ -494,7 +493,7 @@ with tab_reportes:
             
         if not df_hist.empty and "Fecha" in df_hist.columns:
             df_hist["Fecha_dt"] = pd.to_datetime(df_hist["Fecha"], errors='coerce')
-            df_filtrado_fecha = df_hist[(df_hist["Fecha_dt"].dt.date >= fecha_inicio) & (df_hist["Fecha_dt"].dt.date <= fecha_fin)]
+            df_filtrado_fecha = df_hist[(df_hist["Fecha_dt"].dt.date >= fecha_inicio_gen) & (df_hist["Fecha_dt"].dt.date <= fecha_fin_gen)]
             
             if df_filtrado_fecha.empty:
                 st.warning("No se registraron movimientos en este rango.")
@@ -505,37 +504,86 @@ with tab_reportes:
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                     df_mostrar.to_excel(writer, sheet_name='Historial_General', index=False)
-                st.download_button("Descargar Reporte General (Excel)", data=buffer.getvalue(), file_name=f"Reporte_General_{fecha_inicio}_a_{fecha_fin}.xlsx")
+                st.download_button("Descargar Reporte General (Excel)", data=buffer.getvalue(), file_name=f"Reporte_General_{fecha_inicio_gen}_a_{fecha_fin_gen}.xlsx")
         else:
             st.info("Historial vacío.")
 
-    # --- SUBPESTAÑA VENTAS ---
+    # --- 2. SUBPESTAÑA VENTAS (SEPARADO POR MES Y AÑO) ---
     with tab_rep_ventas:
+        st.write("📆 **Segmentación Mensual de Ventas**")
+        
         try:
             df_v = pd.DataFrame(hoja_ventas.get_all_records())
         except:
             df_v = pd.DataFrame()
             
         if not df_v.empty and "Fecha" in df_v.columns:
+            # Convertimos la columna Fecha en formato Datetime para operar con ella
             df_v["Fecha_dt"] = pd.to_datetime(df_v["Fecha"], errors='coerce')
-            df_filtrado_v = df_v[(df_v["Fecha_dt"].dt.date >= fecha_inicio) & (df_v["Fecha_dt"].dt.date <= fecha_fin)]
+            
+            # Creamos columnas auxiliares para extraer el Año y el Mes
+            df_v["Año"] = df_v["Fecha_dt"].dt.year
+            df_v["Mes_Num"] = df_v["Fecha_dt"].dt.month
+            
+            # Diccionario para mostrar los meses en texto legible en español
+            meses_es = {
+                1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+                7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+            }
+            df_v["Mes"] = df_v["Mes_Num"].map(meses_es)
+            
+            # Obtenemos dinámicamente las listas de años y meses disponibles en tus datos reales
+            anos_disponibles = sorted(df_v["Año"].dropna().unique().astype(int).tolist(), reverse=True)
+            
+            col_v1, col_v2 = st.columns(2)
+            with col_v1:
+                # Si por alguna razón no hay años registrados, usamos el año actual
+                ano_seleccionado = st.selectbox("Selecciona el Año:", anos_disponibles if anos_disponibles else [datetime.today().year])
+            
+            # Filtramos los meses que efectivamente tienen ventas en ese año seleccionado
+            meses_del_ano = df_v[df_v["Año"] == ano_seleccionado]["Mes_Num"].unique()
+            meses_opciones = [meses_es[m] for m in sorted(meses_del_ano)]
+            
+            with col_v2:
+                mes_seleccionado = st.selectbox("Selecciona el Mes:", meses_opciones if meses_opciones else ["Ninguno"])
+            
+            # Filtrar DataFrame según selección
+            mes_num_sel = [k for k, v in meses_es.items() if v == mes_seleccionado][0] if mes_seleccionado != "Ninguno" else None
+            
+            df_filtrado_v = df_v[(df_v["Año"] == ano_seleccionado) & (df_v["Mes_Num"] == mes_num_sel)]
             
             if df_filtrado_v.empty:
-                st.warning("No se registraron ventas en este rango.")
+                st.warning(f"No se registraron ventas en {mes_seleccionado} del {ano_seleccionado}.")
             else:
-                df_v_mostrar = df_filtrado_v.drop(columns=["Fecha_dt"], errors='ignore')
-                st.subheader(f"Monto total vendido en el rango: {df_v_mostrar['Monto Total (Bs.)'].sum():,.2f} Bs.")
+                df_v_mostrar = df_filtrado_v.drop(columns=["Fecha_dt", "Año", "Mes_Num", "Mes"], errors='ignore')
+                
+                # Muestra los datos totales de forma muy visible
+                suma_ventas = pd.to_numeric(df_v_mostrar["Monto Total (Bs.)"], errors='coerce').sum()
+                st.success(f"💰 **Monto Total Facturado en {mes_seleccionado} del {ano_seleccionado}:** {suma_ventas:,.2f} Bs.")
+                
                 st.dataframe(df_v_mostrar, use_container_width=True, hide_index=True)
                 
+                # Botón de descarga de este mes específico
                 buffer_v = io.BytesIO()
                 with pd.ExcelWriter(buffer_v, engine='openpyxl') as writer:
-                    df_v_mostrar.to_excel(writer, sheet_name='Ventas', index=False)
-                st.download_button("Descargar Reporte de Ventas (Excel)", data=buffer_v.getvalue(), file_name=f"Reporte_Ventas_{fecha_inicio}_a_{fecha_fin}.xlsx")
+                    df_v_mostrar.to_excel(writer, sheet_name=f'Ventas_{mes_seleccionado}_{ano_seleccionado}', index=False)
+                st.download_button(
+                    label=f"📥 Descargar Ventas de {mes_seleccionado} - {ano_seleccionado} (Excel)", 
+                    data=buffer_v.getvalue(), 
+                    file_name=f"Ventas_{mes_seleccionado}_{ano_seleccionado}.xlsx"
+                )
         else:
-            st.info("No se han registrado ventas aún.")
+            st.info("No se han registrado ventas en la hoja 'Ventas' de Google Sheets todavía.")
 
-    # --- SUBPESTAÑA ALQUILERES ---
+    # --- 3. SUBPESTAÑA ALQUILERES ---
     with tab_rep_alquileres:
+        st.write("🔍 **Filtro por Rango de Fechas**")
+        col_fa1, col_fa2 = st.columns(2)
+        with col_fa1:
+            fecha_inicio_alq = st.date_input("Desde (Alquileres):", value=datetime.today(), key="f_alq_ini")
+        with col_fa2:
+            fecha_fin_alq = st.date_input("Hasta (Alquileres):", value=datetime.today(), key="f_alq_fin")
+            
         try:
             df_a = pd.DataFrame(hoja_alquileres.get_all_records())
         except:
@@ -543,7 +591,7 @@ with tab_reportes:
             
         if not df_a.empty and "Fecha" in df_a.columns:
             df_a["Fecha_dt"] = pd.to_datetime(df_a["Fecha"], errors='coerce')
-            df_filtrado_a = df_a[(df_a["Fecha_dt"].dt.date >= fecha_inicio) & (df_a["Fecha_dt"].dt.date <= fecha_fin)]
+            df_filtrado_a = df_a[(df_a["Fecha_dt"].dt.date >= fecha_inicio_alq) & (df_a["Fecha_dt"].dt.date <= fecha_fin_alq)]
             
             if df_filtrado_a.empty:
                 st.warning("No se registraron salidas por alquiler en este rango.")
@@ -554,7 +602,7 @@ with tab_reportes:
                 buffer_a = io.BytesIO()
                 with pd.ExcelWriter(buffer_a, engine='openpyxl') as writer:
                     df_a_mostrar.to_excel(writer, sheet_name='Alquileres', index=False)
-                st.download_button("Descargar Reporte de Alquileres (Excel)", data=buffer_a.getvalue(), file_name=f"Reporte_Alquileres_{fecha_inicio}_a_{fecha_fin}.xlsx")
+                st.download_button("Descargar Reporte de Alquileres (Excel)", data=buffer_a.getvalue(), file_name=f"Reporte_Alquileres_{fecha_inicio_alq}_a_{fecha_fin_alq}.xlsx")
         else:
             st.info("No se han registrado alquileres aún.")
 
