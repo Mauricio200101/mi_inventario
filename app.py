@@ -154,24 +154,24 @@ def eliminar_parametro(valor_a_eliminar, tipo):
         df = pd.DataFrame(registros[1:], columns=cabeceras)
         
         # Filtrado y estructuración por tipo
-        if tipo == "Empresa" and "Empresas" in df.columns:
-            lista_actual = df["Empresas"].dropna().astype(str).str.strip().tolist()
+        if tipo == "Empresa" and "Empresa" in df.columns:
+            lista_actual = df["Empresa"].dropna().astype(str).str.strip().tolist()
             lista_actual = [x for x in lista_actual if x != ""]
             if valor_a_eliminar in lista_actual:
                 lista_actual.remove(valor_a_eliminar)
             col_index = 1
             col_letra = "A"
             nueva_lista = lista_actual
-        elif tipo == "Area" and "Areas" in df.columns:
-            lista_actual = df["Areas"].dropna().astype(str).str.strip().tolist()
+        elif tipo == "Area" and "Area" in df.columns:
+            lista_actual = df["Area"].dropna().astype(str).str.strip().tolist()
             lista_actual = [x for x in lista_actual if x != ""]
             if valor_a_eliminar in lista_actual:
                 lista_actual.remove(valor_a_eliminar)
             col_index = 2
             col_letra = "B"
             nueva_lista = lista_actual
-        elif tipo == "Agencia" and "Agencias" in df.columns:
-            lista_actual = df["Agencias"].dropna().astype(str).str.strip().tolist()
+        elif tipo == "Agencia" and "Agencia" in df.columns:
+            lista_actual = df["Agencia"].dropna().astype(str).str.strip().tolist()
             lista_actual = [x for x in lista_actual if x != ""]
             if valor_a_eliminar in lista_actual:
                 lista_actual.remove(valor_a_eliminar)
