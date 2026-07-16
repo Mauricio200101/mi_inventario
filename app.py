@@ -5,11 +5,12 @@ import pandas as pd
 from datetime import datetime
 import io
 import plotly.express as px
+import time  # <--- Importante para manejar las esperas por saturación
 
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
 
-# --- CONEXIÓN CON GOOGLE SHEETS ---
+# --- CONEXIÓN CON GOOGLE SHEETS (CON REINTENTOS AUTOMÁTICOS) ---
 @st.cache_resource
 def conectar_google_sheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -24,49 +25,41 @@ def conectar_google_sheets():
     cliente = gspread.authorize(creds)
     return cliente.open("Inventario_Empresa")
 
-try:
-    sh = conectar_google_sheets()
-    
-    # Intentamos cargar cada pestaña por separado para identificar errores fácilmente
-    try:
-        hoja_insumos = sh.worksheet("Insumos")
-    except Exception:
-        st.error("❌ No se encontró la pestaña llamada **'Insumos'** en tu Google Sheets. Revisa el nombre.")
-        st.stop()
-        
-    try:
-        hoja_historial = sh.worksheet("Historial")
-    except Exception:
-        st.error("❌ No se encontró la pestaña llamada **'Historial'** en tu Google Sheets. Revisa el nombre.")
-        st.stop()
-        
-    try:
-        hoja_usuarios = sh.worksheet("Usuarios")
-    except Exception:
-        st.error("❌ No se encontró la pestaña llamada **'Usuarios'** en tu Google Sheets. Revisa el nombre.")
-        st.stop()
-        
-    try:
-        hoja_parametros = sh.worksheet("Parametros")
-    except Exception:
-        st.error("❌ No se encontró la pestaña llamada **'Parametros'** en tu Google Sheets. Revisa el nombre.")
-        st.stop()
-        
-    try:
-        hoja_ventas = sh.worksheet("Ventas")
-    except Exception:
-        st.error("❌ No se encontró la pestaña llamada **'Ventas'** en tu Google Sheets. Revisa que no tenga espacios adicionales.")
-        st.stop()
-        
-    try:
-        hoja_alquileres = sh.worksheet("Alquileres")
-    except Exception:
-        st.error("❌ No se encontró la pestaña llamada **'Alquileres'** en tu Google Sheets. Revisa que no tenga espacios adicionales.")
-        st.stop()
+# Intentar abrir el documento y sus pestañas con tolerancia a saturaciones de Google (reintentos)
+def inicializar_pestanas():
+    max_intentos = 3
+    for intento in range(max_intentos):
+        try:
+            sh = conectar_google_sheets()
+            pestanas = {
+                "Insumos": sh.worksheet("Insumos"),
+                "Historial": sh.worksheet("Historial"),
+                "Usuarios": sh.worksheet("Usuarios"),
+                "Parametros": sh.worksheet("Parametros"),
+                "Ventas": sh.worksheet("Ventas"),
+                "Alquileres": sh.worksheet("Alquileres")
+            }
+            return pestanas
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e) and intento < max_intentos - 1:
+                # Si es un error de cuota, esperamos un poco y reintentamos
+                time.sleep(2)
+                continue
+            else:
+                st.error(f"🚨 Google Sheets está saturado o sin respuesta. Por favor, espera 10 segundos y recarga la página. (Error: {e})")
+                st.stop()
+        except Exception as e:
+            st.error(f"❌ Error crítico al conectar con las pestañas de Google Sheets: {e}")
+            st.stop()
 
-except Exception as e:
-    st.error(f"❌ Error crítico al conectar con Google Drive / Sheets: {e}")
-    st.stop()
+# Inicializamos las hojas de trabajo de forma segura
+pestanas_activas = inicializar_pestanas()
+hoja_insumos = pestanas_activas["Insumos"]
+hoja_historial = pestanas_activas["Historial"]
+hoja_usuarios = pestanas_activas["Usuarios"]
+hoja_parametros = pestanas_activas["Parametros"]
+hoja_ventas = pestanas_activas["Ventas"]
+hoja_alquileres = pestanas_activas["Alquileres"]
 
 # --- FUNCIONES DE GESTIÓN DE USUARIOS ---
 def obtener_usuarios():
