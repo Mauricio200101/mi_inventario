@@ -162,20 +162,20 @@ def eliminar_parametro(valor_a_eliminar, tipo):
             col_index = 1
             col_letra = "A"
             nueva_lista = lista_actual
-        elif tipo == "Area" and "Area" in df.columns:
-            lista_actual = df["Area"].dropna().astype(str).str.strip().tolist()
-            lista_actual = [x for x in lista_actual if x != ""]
-            if valor_a_eliminar in lista_actual:
-                lista_actual.remove(valor_a_eliminar)
-            col_index = 2
-            col_letra = "B"
-            nueva_lista = lista_actual
         elif tipo == "Agencia" and "Agencia" in df.columns:
             lista_actual = df["Agencia"].dropna().astype(str).str.strip().tolist()
             lista_actual = [x for x in lista_actual if x != ""]
             if valor_a_eliminar in lista_actual:
                 lista_actual.remove(valor_a_eliminar)
             col_index = 3
+            col_letra = "B"
+            nueva_lista = lista_actual
+        elif tipo == "Area" and "Area" in df.columns:
+            lista_actual = df["Area"].dropna().astype(str).str.strip().tolist()
+            lista_actual = [x for x in lista_actual if x != ""]
+            if valor_a_eliminar in lista_actual:
+                lista_actual.remove(valor_a_eliminar)
+            col_index = 2
             col_letra = "C"
             nueva_lista = lista_actual
         else:
