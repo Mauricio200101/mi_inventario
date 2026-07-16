@@ -550,19 +550,26 @@ with tab_operaciones:
                             col_al_dest1, col_al_dest2 = st.columns(2)
                             
                             # Selección estructurada de Empresa, Área y Agencia con relación dinámica
-                            with col_al_dest1:
-                                # 1. Selector de Empresa
-                                empresa_destino = st.selectbox("🏢 Empresa:", empresas_disponibles)
-    
-                                # 2. Filtro de Agencias basado en la Empresa
-                                # Buscamos elementos que comiencen con el nombre de la empresa
-                                agencias_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_destino.strip())]
-                                agencia_destino = st.selectbox("🏢 Agencia:", agencias_filtradas)
+                        with col_al_dest1:
+                        # 1. Selector de Empresa
+                            empresa_destino = st.selectbox("🏢 Empresa:", empresas_disponibles)
 
-                            with col_al_dest2:
-                                # 3. Filtro de Áreas basado en la Agencia
-                                areas_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_destino)]
-                                area_o_precio_destino = st.selectbox("📍 Área:", areas_filtradas)
+                        # 2. Filtro de Agencias
+                            agencias_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_destino.strip())]
+                            agencia_destino = st.selectbox(
+                            "🏢 Agencia:", 
+                            agencias_filtradas, 
+                            format_func=lambda x: x.replace(empresa_destino + " - ", "")
+                            )
+
+                        with col_al_dest2:
+                        # 3. Filtro de Áreas
+                            areas_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_destino)]
+                            area_o_precio_destino = st.selectbox(
+                            "📍 Área:", 
+                            areas_filtradas, 
+                            format_func=lambda x: x.replace(agencia_destino + " - ", "")
+                            )
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
                             
