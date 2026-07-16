@@ -286,7 +286,7 @@ st.title("📦 Sistema de Control de Inventario Nube")
 df_insumos = obtener_insumos()
 empresas_disponibles, areas_disponibles = obtener_parametros()
 
-# --- PESTAÑAS DEL SISTEMA (AÑADIDAS NUEVAS PESTAÑAS) ---
+# --- PESTAÑAS DEL SISTEMA ---
 tab_operaciones, tab_valorizacion, tab_rendimiento, tab_reportes, tab_usuarios = st.tabs([
     "⚙️ Operaciones de Stock", 
     "💰 Valorización del Inventario", 
@@ -486,14 +486,25 @@ with tab_operaciones:
                             col_c1, col_c2 = st.columns(2)
                             with col_c1:
                                 if st.session_state["rol_actual"] == "Administrador":
-                                    cont_anterior = st.number_input("Contador Anterior (Editable - Admin):", min_value=0, step=1, value=sugerencia_anterior)
+                                    cont_anterior = st.number_input(
+                                        "Contador Anterior (Editable - Admin):", 
+                                        min_value=0, 
+                                        step=1, 
+                                        value=int(sugerencia_anterior)
+                                    )
                                 else:
                                     cont_anterior = sugerencia_anterior
                                     st.metric(label="Contador Anterior (Bloqueado)", value=cont_anterior)
                                     st.caption("🔒 El contador anterior es automático. Solo un Administrador puede cambiarlo.")
                             
                             with col_c2:
-                                cont_actual = st.number_input("Contador Actual (Lectura de hoy):", min_value=cont_anterior, step=1, value=cont_anterior)
+                                # Sincronizado dinámicamente con cont_anterior
+                                cont_actual = st.number_input(
+                                    "Contador Actual (Lectura de hoy):", 
+                                    min_value=int(cont_anterior), 
+                                    step=1, 
+                                    value=int(cont_anterior)
+                                )
                             
                             paginas_calculadas = cont_actual - cont_anterior
                             
@@ -574,7 +585,10 @@ with tab_operaciones:
     if df_filtrado.empty:
         st.warning("No se encontraron insumos.")
     else:
-        st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
+        # Añadimos la columna N° a la visualización de existencias de manera similar
+        df_filtrado_con_num = df_filtrado.copy()
+        df_filtrado_con_num.insert(0, "N°", range(1, len(df_filtrado_con_num) + 1))
+        st.dataframe(df_filtrado_con_num, use_container_width=True, hide_index=True)
 
 
 # ==========================================
@@ -654,7 +668,11 @@ with tab_rendimiento:
                 df_promedios.columns = ["Insumo", "Páginas Promedio por Periodo", "Duración Promedio (Días)", "Nº Mediciones Realizadas"]
                 
                 st.write("📊 **Tabla de Rendimiento Promedio por Insumo**")
-                st.dataframe(df_promedios, use_container_width=True, hide_index=True)
+                
+                # Insertamos la columna de índice visual N°
+                df_promedios_con_num = df_promedios.copy()
+                df_promedios_con_num.insert(0, "N°", range(1, len(df_promedios_con_num) + 1))
+                st.dataframe(df_promedios_con_num, use_container_width=True, hide_index=True)
                 
                 st.markdown("---")
                 col_graf1, col_graf2 = st.columns(2)
@@ -728,7 +746,10 @@ with tab_reportes:
             if df_filtrado_fecha.empty:
                 st.warning("No se registraron movimientos en este rango.")
             else:
-                df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore')
+                df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore').copy()
+                
+                # Modificado: Se añade la columna N° secuencial
+                df_mostrar.insert(0, "N°", range(1, len(df_mostrar) + 1))
                 st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
                 
                 buffer = io.BytesIO()
@@ -778,9 +799,12 @@ with tab_reportes:
             if df_filtrado_v.empty:
                 st.warning(f"No se registraron ventas en {mes_seleccionado} del {ano_seleccionado}.")
             else:
-                df_v_mostrar = df_filtrado_v.drop(columns=["Fecha_dt", "Año", "Mes_Num", "Mes"], errors='ignore')
+                df_v_mostrar = df_filtrado_v.drop(columns=["Fecha_dt", "Año", "Mes_Num", "Mes"], errors='ignore').copy()
                 suma_ventas = pd.to_numeric(df_v_mostrar["Monto Total (Bs.)"], errors='coerce').sum()
                 st.success(f"💰 **Monto Total Facturado en {mes_seleccionado} del {ano_seleccionado}:** {suma_ventas:,.2f} Bs.")
+                
+                # Modificado: Se añade la columna N° secuencial
+                df_v_mostrar.insert(0, "N°", range(1, len(df_v_mostrar) + 1))
                 st.dataframe(df_v_mostrar, use_container_width=True, hide_index=True)
                 
                 buffer_v = io.BytesIO()
@@ -819,7 +843,10 @@ with tab_reportes:
             if df_filtrado_a.empty:
                 st.warning("No se registraron salidas por alquiler en este rango.")
             else:
-                df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore')
+                df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore').copy()
+                
+                # Modificado: Se añade la columna N° secuencial
+                df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
                 st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
                 
                 buffer_a = io.BytesIO()
@@ -848,12 +875,16 @@ with tab_reportes:
                 datos_crud = hoja_activa_borrar.get_all_values()
                 
                 if datos_crud and len(datos_crud) > 1:
-                    df_crud = pd.DataFrame(datos_crud[1:], columns=datos_crud[0])
-                    # Añadimos una columna temporal de índice real de fila en Google Sheets (las filas en Sheets inician en 1, y la cabecera es la 1, por lo que los datos inician en la fila 2)
+                    df_crud = pd.DataFrame(datos_crud[1:], columns=datos_crud[0]).copy()
+                    # Añadimos una columna temporal de índice real de fila en Google Sheets
                     df_crud["Fila_Sheet"] = [i for i in range(2, len(df_crud) + 2)]
                     
                     st.write("Selecciona el registro que deseas eliminar permanentemente de Google Sheets:")
-                    st.dataframe(df_crud, use_container_width=True, hide_index=True)
+                    
+                    # Modificado: Se añade la columna N° secuencial para esta visualización también
+                    df_crud_visual = df_crud.copy()
+                    df_crud_visual.insert(0, "N°", range(1, len(df_crud_visual) + 1))
+                    st.dataframe(df_crud_visual, use_container_width=True, hide_index=True)
                     
                     # Generamos una lista legible para el dropdown
                     opciones_eliminar = []
