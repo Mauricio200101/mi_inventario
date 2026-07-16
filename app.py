@@ -2,13 +2,20 @@ import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
-from datetime import datetime
+# Importamos timezone y timedelta para ajustar la hora a Bolivia (UTC-4)
+from datetime import datetime, timezone, timedelta 
 import io
 import plotly.express as px
 import time
 
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
+
+# --- AJUSTE DE ZONA HORARIA (BOLIVIA UTC-4) ---
+def obtener_hora_local_bo():
+    """Retorna la fecha y hora actual con la zona horaria de Bolivia (UTC-4)."""
+    tz_bo = timezone(timedelta(hours=-4))
+    return datetime.now(tz_bo)
 
 # --- CONEXIÓN CON GOOGLE SHEETS (CON REINTENTOS AUTOMÁTICOS Y CACHÉ) ---
 @st.cache_resource
@@ -195,7 +202,8 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     nuevo_id = int(df["ID"].max() + 1) if not df.empty and pd.notna(df["ID"].max()) else 1
     hoja_insumos.append_row([nuevo_id, nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado])
     
-    fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # REGISTRO DE FECHA ADAPTADO A BOLIVIA
+    fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
 def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0):
@@ -209,7 +217,9 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
             
             # Actualizar en la pestaña "Insumos"
             hoja_insumos.update_cell(fila_sheet, 4, nuevo_stock)
-            fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # REGISTRO DE FECHA ADAPTADO A BOLIVIA
+            fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
             
             # Registrar en el Historial General
             hoja_historial.append_row([
@@ -354,11 +364,10 @@ with tab_operaciones:
             
             st.markdown("📷 **Lector de Códigos QR/Barra**")
             
-            # --- NUEVO BOTÓN DE ENCENDIDO / APAGADO DE CÁMARA ---
+            # --- BOTÓN DE ENCENDIDO / APAGADO DE CÁMARA ---
             if "camara_activa" not in st.session_state:
                 st.session_state["camara_activa"] = False
                 
-            # Un control interactivo rápido para prender o apagar la cámara físicamente
             st.session_state["camara_activa"] = st.checkbox(
                 "🎥 Activar / Encender Cámara", 
                 value=st.session_state["camara_activa"],
@@ -367,7 +376,6 @@ with tab_operaciones:
             
             insumo_detectado = None
             
-            # Solo si el usuario decide activarla, mostramos el componente de cámara
             if st.session_state["camara_activa"]:
                 foto_codigo = st.camera_input("Toma una foto al código de barra para escanearlo")
                 if foto_codigo is not None:
@@ -557,9 +565,11 @@ with tab_reportes:
         st.write("🔍 **Filtro por Rango de Fechas**")
         col_fg1, col_fg2 = st.columns(2)
         with col_fg1:
-            fecha_inicio_gen = st.date_input("Desde (General):", value=datetime.today(), key="f_gen_ini")
+            # Sincronizamos la fecha de inicio del selector con la fecha de Bolivia por defecto
+            fecha_inicio_gen = st.date_input("Desde (General):", value=obtener_hora_local_bo().date(), key="f_gen_ini")
         with col_fg2:
-            fecha_fin_gen = st.date_input("Hasta (General):", value=datetime.today(), key="f_gen_fin")
+            # Sincronizamos la fecha de fin del selector con la fecha de Bolivia por defecto
+            fecha_fin_gen = st.date_input("Hasta (General):", value=obtener_hora_local_bo().date(), key="f_gen_fin")
             
         try:
             datos_hist = hoja_historial.get_all_values()
@@ -616,7 +626,8 @@ with tab_reportes:
             
             col_v1, col_v2 = st.columns(2)
             with col_v1:
-                ano_seleccionado = st.selectbox("Selecciona el Año:", anos_disponibles if anos_disponibles else [datetime.today().year])
+                # El año por defecto se asocia al año local de Bolivia
+                ano_seleccionado = st.selectbox("Selecciona el Año:", anos_disponibles if anos_disponibles else [obtener_hora_local_bo().year])
             
             meses_del_ano = df_v[df_v["Año"] == ano_seleccionado]["Mes_Num"].unique()
             meses_opciones = [meses_es[m] for m in sorted(meses_del_ano)]
@@ -654,9 +665,11 @@ with tab_reportes:
         st.write("🔍 **Filtro por Rango de Fechas**")
         col_fa1, col_fa2 = st.columns(2)
         with col_fa1:
-            fecha_inicio_alq = st.date_input("Desde (Alquileres):", value=datetime.today(), key="f_alq_ini")
+            # Sincronizamos la fecha de inicio del alquiler con el día actual en Bolivia
+            fecha_inicio_alq = st.date_input("Desde (Alquileres):", value=obtener_hora_local_bo().date(), key="f_alq_ini")
         with col_fa2:
-            fecha_fin_alq = st.date_input("Hasta (Alquileres):", value=datetime.today(), key="f_alq_fin")
+            # Sincronizamos la fecha de fin del alquiler con el día actual en Bolivia
+            fecha_fin_alq = st.date_input("Hasta (Alquileres):", value=obtener_hora_local_bo().date(), key="f_alq_fin")
             
         try:
             datos_a = hoja_alquileres.get_all_values()
