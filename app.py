@@ -351,13 +351,19 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                     int(dias)
                 ]
                 hoja_alquileres.append_row(fila_registro)
+                else:
+                    st.error("No se encontró el ID del insumo en la hoja de cálculo.")
+                except Exception as e:
+                    st.error(f"Error al conectar con la base de datos: {e}")
+
 # --- PESTAÑAS DEL SISTEMA ---
+# Asegúrate de que esto esté totalmente a la izquierda (sin sangría/indentación)
 tab_operaciones, tab_valorizacion, tab_rendimiento, tab_reportes, tab_usuarios = st.tabs([
-    "⚙️ Operaciones de Stock", 
-    "💰 Valorización del Inventario", 
-    "📈 Rendimiento de Insumos",
-    "📅 Reportes por Fecha / Edición", 
-    "👥 Configuración y Usuarios"
+    "Operaciones de Stock",
+    "Valorización del Inventario",
+    "Rendimiento de Insumos",
+    "Reportes por Fecha / Edición",
+    "Configuración y Usuarios"
 ])
 
 # ==========================================
