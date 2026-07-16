@@ -29,7 +29,6 @@ try:
     hoja_insumos = sh.worksheet("Insumos")
     hoja_historial = sh.worksheet("Historial")
     hoja_usuarios = sh.worksheet("Usuarios")
-    # Pestaña para parámetros dinámicos (Empresas y Áreas)
     hoja_parametros = sh.worksheet("Parametros")
 except Exception as e:
     st.error("❌ Error al conectar con Google Sheets. Verifica tus credenciales y pestañas.")
@@ -52,7 +51,6 @@ def obtener_parametros():
         registros = hoja_parametros.get_all_records()
         df = pd.DataFrame(registros)
         
-        # Filtrar valores vacíos y convertirlos en listas limpias
         lista_empresas = df["Empresas"].dropna().astype(str).str.strip().tolist() if "Empresas" in df.columns else []
         lista_areas = df["Areas"].dropna().astype(str).str.strip().tolist() if "Areas" in df.columns else []
         
@@ -65,10 +63,8 @@ def obtener_parametros():
     return lista_empresas, lista_areas
 
 def registrar_parametro(nuevo_valor, tipo):
-    # Obtener registros actuales para no sobreescribir la estructura
     registros = hoja_parametros.get_all_values()
     if not registros:
-        # Si la hoja estuviera completamente vacía, se inicializa
         hoja_parametros.append_row(["Empresas", "Areas"])
         registros = [["Empresas", "Areas"]]
         
@@ -87,8 +83,7 @@ def registrar_parametro(nuevo_valor, tipo):
         col_index = 2
         nueva_lista = lista_actual
 
-    # Sobreescribir o añadir en la celda correcta para mantener las listas organizadas en columnas
-    row_to_write = len(nueva_lista) + 1  # +1 por el encabezado
+    row_to_write = len(nueva_lista) + 1
     hoja_parametros.update_cell(row_to_write, col_index, nuevo_valor)
 
 # --- CONTROL DE ACCESO (LOGIN) ---
@@ -138,7 +133,6 @@ def obtener_insumos():
     df = pd.DataFrame(registros)
     if df.empty:
         df = pd.DataFrame(columns=["ID", "Nombre", "Categoría", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
-    # Asegurar tipos numéricos para cálculos
     for col in ["Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -150,16 +144,26 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     hoja_insumos.append_row([nuevo_id, nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado])
     
     fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # Guarda en el historial el registro inicial auditando el usuario activo
+    # Formato de historial: [Fecha, Insumo, Tipo Movimiento, Cantidad, Stock Resultante, Usuario, Motivo, Empresa, Area/Precio]
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
-def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area=""):
+def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio=""):
     celda_id = hoja_insumos.find(str(id_insumo))
     if celda_id:
         hoja_insumos.update_cell(celda_id.row, 4, nuevo_stock)
         fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Guarda en el historial auditando al usuario activo e incluyendo los nuevos campos de alquiler/venta
-        hoja_historial.append_row([fecha_actual, nombre_insumo, tipo_mov, cant_movida, nuevo_stock, st.session_state["usuario_actual"], motivo, empresa, area])
+        # Guarda el historial incluyendo la empresa (para alquiler) o el tipo de precio aplicado (para ventas) en la novena columna
+        hoja_historial.append_row([
+            fecha_actual, 
+            nombre_insumo, 
+            tipo_mov, 
+            cant_movida, 
+            nuevo_stock, 
+            st.session_state["usuario_actual"], 
+            motivo, 
+            empresa, 
+            area_o_precio
+        ])
 
 # --- INTERFAZ PRINCIPAL ---
 st.title("📦 Sistema de Control de Inventario Nube")
@@ -249,7 +253,6 @@ with tab_operaciones:
                         if st.button("Actualizar Parámetros"):
                             celda_id = hoja_insumos.find(str(cel_id))
                             if celda_id:
-                                # Actualizar en cascada en Google Sheets
                                 hoja_insumos.update_cell(celda_id.row, 5, nuevo_minimo)
                                 hoja_insumos.update_cell(celda_id.row, 6, nuevo_pt)
                                 hoja_insumos.update_cell(celda_id.row, 7, nuevo_pc)
@@ -288,30 +291,53 @@ with tab_operaciones:
                     
                     tipo_movimiento = st.radio("Tipo de movimiento:", ["Agregar Stock (Entrada)", "Restar Stock (Salida)"], horizontal=True)
                     
-                    # --- Lógica Dinámica de Alquiler / Venta con Parámetros Predefinidos ---
+                    # Variables que se guardarán en el historial
                     motivo_salida = ""
                     empresa_destino = ""
-                    area_destino = ""
+                    area_o_precio_destino = ""
                     
                     if tipo_movimiento == "Restar Stock (Salida)":
                         col_mot1, col_mot2 = st.columns(2)
                         with col_mot1:
                             motivo_salida = st.selectbox("Motivo de la Salida:", ["Venta", "Alquiler"])
                         
-                        if motivo_salida == "Alquiler":
+                        # --- NUEVA LÓGICA DE DETALLE DE PRECIOS PARA VENTA ---
+                        if motivo_salida == "Venta":
                             with col_mot2:
-                                # Selectores desplegables dinámicos
+                                # Le permitimos al usuario elegir qué esquema de precio se aplicó
+                                tipo_precio_aplicado = st.selectbox(
+                                    "🏷️ Esquema de Precio Aplicado:",
+                                    ["Precio Técnico", "Precio Cliente", "Precio Facturado"]
+                                )
+                                area_o_precio_destino = tipo_precio_aplicado
+                                
+                                # Mostramos de forma dinámica cuánto vale según la selección
+                                if tipo_precio_aplicado == "Precio Técnico":
+                                    val_unit = datos_insumo['Precio Técnico']
+                                elif tipo_precio_aplicado == "Precio Cliente":
+                                    val_unit = datos_insumo['Precio Cliente']
+                                else:
+                                    val_unit = datos_insumo['Precio Facturado']
+                                st.caption(f"Valor Unitario: *{val_unit} Bs.*")
+                        
+                        # --- Lógica de Alquiler ---
+                        elif motivo_salida == "Alquiler":
+                            with col_mot2:
                                 if empresas_disponibles:
                                     empresa_destino = st.selectbox("🏢 Empresa de Destino:", empresas_disponibles)
                                 else:
-                                    empresa_destino = st.text_input("🏢 Empresa de Destino (Escribe manual, no hay predefinidas):")
+                                    empresa_destino = st.text_input("🏢 Empresa de Destino (Escribe manual):")
                             
                             if areas_disponibles:
-                                area_destino = st.selectbox("📍 Área de Destino:", areas_disponibles)
+                                area_o_precio_destino = st.selectbox("📍 Área de Destino:", areas_disponibles)
                             else:
-                                area_destino = st.text_input("📍 Área de Destino (Escribe manual, no hay predefinidas):")
+                                area_o_precio_destino = st.text_input("📍 Área de Destino (Escribe manual):")
                     
                     cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1)
+                    
+                    # Mostrar total estimado si es venta
+                    if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Venta" and 'val_unit' in locals():
+                        st.write(f"💵 **Total de la Venta Estimado:** {val_unit * cantidad_mov:,.2f} Bs.")
                     
                     if st.button("Aplicar Movimiento"):
                         es_valido = True
@@ -320,7 +346,7 @@ with tab_operaciones:
                             es_valido = False
                         
                         if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Alquiler":
-                            if not str(empresa_destino).strip() or not str(area_destino).strip():
+                            if not str(empresa_destino).strip() or not str(area_o_precio_destino).strip():
                                 st.error("❌ Error: Para registrar un alquiler debes seleccionar la Empresa y el Área de destino.")
                                 es_valido = False
                                 
@@ -343,7 +369,7 @@ with tab_operaciones:
                                     cantidad_mov,
                                     motivo=motivo_final,
                                     empresa=empresa_destino,
-                                    area=area_destino
+                                    area_o_precio=area_o_precio_destino
                                 )
                             st.success(f"¡Stock actualizado! Ahora tienes {nueva_cantidad} unidades de '{seleccionado}'.")
                             st.cache_resource.clear()
@@ -469,7 +495,6 @@ with tab_usuarios:
     if st.session_state["rol_actual"] == "Administrador":
         st.subheader("⚙️ Configuración y Gestión de Usuarios")
         
-        # Sub-pestañas internas para organizar mejor la pantalla del Administrador
         tab_sub_usuarios, tab_sub_parametros = st.tabs(["👥 Cuentas de Usuarios", "🏢 Parámetros de Alquiler (Empresas/Áreas)"])
         
         # --- SUBPESTAÑA 1: GESTIÓN DE USUARIOS ---
@@ -508,7 +533,6 @@ with tab_usuarios:
             with col_param_izq:
                 st.write("➕ **Añadir Nuevo Destino de Alquiler**")
                 
-                # Formulario para Empresas
                 with st.form("nueva_empresa_form", clear_on_submit=True):
                     nueva_emp = st.text_input("Nombre de la Empresa / Cliente:", placeholder="Ej: Constructora Gamma")
                     guardar_emp_btn = st.form_submit_button("Añadir Empresa")
@@ -527,7 +551,6 @@ with tab_usuarios:
                         
                 st.markdown("---")
                 
-                # Formulario para Áreas
                 with st.form("nueva_area_form", clear_on_submit=True):
                     nueva_ar = st.text_input("Nombre del Área / Obra:", placeholder="Ej: Proyecto Norte")
                     guardar_ar_btn = st.form_submit_button("Añadir Área")
@@ -547,7 +570,6 @@ with tab_usuarios:
             with col_param_der:
                 st.write("📋 **Lista de Destinos Actuales**")
                 
-                # Mostrar en dos columnas ordenadas las opciones cargadas
                 c_emp, c_are = st.columns(2)
                 with c_emp:
                     st.info("**🏢 Empresas Registradas:**")
