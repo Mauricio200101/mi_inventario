@@ -51,7 +51,6 @@ def inicializar_pestanas_seguras():
             except gspread.exceptions.APIError as e:
                 if "429" in str(e):
                     if intento < max_intentos - 1:
-                        # Espera exponencial para darle un respiro a la API de Google
                         tiempo_espera = (intento + 1) * 3
                         st.warning(f"⚠️ Google Sheets saturado. Reintentando conexión en {tiempo_espera} segundos...")
                         time.sleep(tiempo_espera)
@@ -202,7 +201,6 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     nuevo_id = int(df["ID"].max() + 1) if not df.empty and pd.notna(df["ID"].max()) else 1
     hoja_insumos.append_row([nuevo_id, nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado])
     
-    # REGISTRO DE FECHA ADAPTADO A BOLIVIA
     fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
@@ -218,7 +216,6 @@ def obtener_ultimo_alquiler(insumo, empresa, area):
             return None
         
         df_alq = pd.DataFrame(datos[1:], columns=datos[0])
-        # Filtrar por coincidencia exacta
         df_filtrado = df_alq[
             (df_alq["Insumo"].str.strip() == str(insumo).strip()) & 
             (df_alq["Empresa Destino"].str.strip() == str(empresa).strip()) & 
@@ -226,7 +223,6 @@ def obtener_ultimo_alquiler(insumo, empresa, area):
         ]
         
         if not df_filtrado.empty:
-            # Obtener la última fila (el registro más reciente)
             ultimo_registro = df_filtrado.iloc[-1]
             return ultimo_registro
     except Exception as e:
@@ -235,20 +231,15 @@ def obtener_ultimo_alquiler(insumo, empresa, area):
 
 def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0, contador_anterior=0, contador_actual=0, paginas=0, dias=0):
     try:
-        # Buscamos la fila localmente en el DataFrame para optimizar la cuota
         df_local = obtener_insumos()
         idx_lista = df_local[df_local["ID"].astype(str) == str(id_insumo)].index
         
         if not idx_lista.empty:
             fila_sheet = int(idx_lista[0]) + 2
             
-            # Actualizar en la pestaña "Insumos"
             hoja_insumos.update_cell(fila_sheet, 4, nuevo_stock)
-            
-            # REGISTRO DE FECHA ADAPTADO A BOLIVIA
             fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Registrar en el Historial General
             hoja_historial.append_row([
                 fecha_actual, 
                 nombre_insumo, 
@@ -261,7 +252,6 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                 area_o_precio
             ])
             
-            # Registrar en Historiales Específicos
             if tipo_mov == "Salida":
                 if motivo == "Venta":
                     total_venta = float(cant_movida) * float(precio_unitario)
@@ -274,7 +264,6 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                         st.session_state["usuario_actual"]
                     ])
                 elif motivo == "Alquiler":
-                    # REGISTRAR EN ALQUILERES CON CONTADORES, PÁGINAS Y TIEMPO (DÍAS)
                     hoja_alquileres.append_row([
                         fecha_actual,
                         nombre_insumo,
@@ -297,11 +286,12 @@ st.title("📦 Sistema de Control de Inventario Nube")
 df_insumos = obtener_insumos()
 empresas_disponibles, areas_disponibles = obtener_parametros()
 
-# --- PESTAÑAS DEL SISTEMA ---
-tab_operaciones, tab_valorizacion, tab_reportes, tab_usuarios = st.tabs([
+# --- PESTAÑAS DEL SISTEMA (AÑADIDAS NUEVAS PESTAÑAS) ---
+tab_operaciones, tab_valorizacion, tab_rendimiento, tab_reportes, tab_usuarios = st.tabs([
     "⚙️ Operaciones de Stock", 
     "💰 Valorización del Inventario", 
-    "📅 Reportes por Fecha", 
+    "📈 Rendimiento de Insumos",
+    "📅 Reportes por Fecha / Edición", 
     "👥 Configuración y Usuarios"
 ])
 
@@ -396,14 +386,12 @@ with tab_operaciones:
             
             st.markdown("📷 **Lector de Códigos QR/Barra**")
             
-            # --- BOTÓN DE ENCENDIDO / APAGADO DE CÁMARA ---
             if "camara_activa" not in st.session_state:
                 st.session_state["camara_activa"] = False
                 
             st.session_state["camara_activa"] = st.checkbox(
                 "🎥 Activar / Encender Cámara", 
-                value=st.session_state["camara_activa"],
-                help="Marca esta casilla para encender la cámara y desmárcala para apagarla por completo."
+                value=st.session_state["camara_activa"]
             )
             
             insumo_detectado = None
@@ -438,7 +426,6 @@ with tab_operaciones:
                     area_o_precio_destino = ""
                     val_unit = 0.0
                     
-                    # Variables para cálculos de alquiler
                     cont_anterior = 0
                     cont_actual = 0
                     paginas_calculadas = 0
@@ -480,7 +467,6 @@ with tab_operaciones:
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
                             
-                            # Intentar buscar el último registro idéntico para extraer el contador anterior
                             ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino)
                             
                             sugerencia_anterior = 0
@@ -500,10 +486,8 @@ with tab_operaciones:
                             col_c1, col_c2 = st.columns(2)
                             with col_c1:
                                 if st.session_state["rol_actual"] == "Administrador":
-                                    # Solo el administrador puede modificar el Contador Anterior
                                     cont_anterior = st.number_input("Contador Anterior (Editable - Admin):", min_value=0, step=1, value=sugerencia_anterior)
                                 else:
-                                    # Otros roles (Secretaria, etc.) solo lo ven de forma informativa y se bloquea
                                     cont_anterior = sugerencia_anterior
                                     st.metric(label="Contador Anterior (Bloqueado)", value=cont_anterior)
                                     st.caption("🔒 El contador anterior es automático. Solo un Administrador puede cambiarlo.")
@@ -511,10 +495,8 @@ with tab_operaciones:
                             with col_c2:
                                 cont_actual = st.number_input("Contador Actual (Lectura de hoy):", min_value=cont_anterior, step=1, value=cont_anterior)
                             
-                            # Calcular páginas
                             paginas_calculadas = cont_actual - cont_anterior
                             
-                            # Calcular tiempo (días)
                             hoy = obtener_hora_local_bo()
                             if fecha_ultimo_alquiler is not None and not pd.isna(fecha_ultimo_alquiler):
                                 if fecha_ultimo_alquiler.tzinfo is None:
@@ -522,9 +504,8 @@ with tab_operaciones:
                                 dif_tiempo = hoy - fecha_ultimo_alquiler
                                 dias_calculados = max(0, dif_tiempo.days)
                             else:
-                                dias_calculados = 0 # Primer registro de alquiler
+                                dias_calculados = 0 
                                 
-                            # Mostrar resumen de métricas
                             st.info(f"📑 **Páginas Impresas:** {paginas_calculadas} págs. | 📅 **Duración del Periodo:** {dias_calculados} días.")
                     
                     cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1)
@@ -595,6 +576,7 @@ with tab_operaciones:
     else:
         st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
 
+
 # ==========================================
 # 2. PESTAÑA DE VALORIZACIÓN DEL INVENTARIO
 # ==========================================
@@ -640,16 +622,85 @@ with tab_valorizacion:
     else:
         st.info("No hay datos de insumos para calcular la valorización.")
 
+
 # ==========================================
-# 3. PESTAÑA DE REPORTES Y AUDITORÍA POR FECHA
+# 3. PESTAÑA DE RENDIMIENTO DE INSUMOS
+# ==========================================
+with tab_rendimiento:
+    st.subheader("📈 Análisis de Rendimiento Promedio de Insumos")
+    st.write("Esta sección calcula el rendimiento histórico del equipamiento/tóner en función de las copias realizadas y el tiempo útil de uso.")
+
+    try:
+        datos_rend = hoja_alquileres.get_all_values()
+        if datos_rend and len(datos_rend) > 1:
+            df_rend = pd.DataFrame(datos_rend[1:], columns=datos_rend[0])
+            
+            # Convertir columnas a numéricas
+            df_rend["Páginas Impresas"] = pd.to_numeric(df_rend["Páginas Impresas"], errors="coerce").fillna(0)
+            df_rend["Días Transcurridos"] = pd.to_numeric(df_rend["Días Transcurridos"], errors="coerce").fillna(0)
+            
+            # Solo analizamos registros donde hubo uso (páginas > 0 o días > 0)
+            df_rend_filtrado = df_rend[(df_rend["Páginas Impresas"] > 0) | (df_rend["Días Transcurridos"] > 0)]
+            
+            if not df_rend_filtrado.empty:
+                # Agrupamos por insumo para obtener el promedio
+                df_promedios = df_rend_filtrado.groupby("Insumo").agg(
+                    Promedio_Paginas=("Páginas Impresas", "mean"),
+                    Promedio_Dias=("Días Transcurridos", "mean"),
+                    Total_Registros=("Insumo", "count")
+                ).reset_index()
+                
+                # Renombrar columnas para la interfaz
+                df_promedios.columns = ["Insumo", "Páginas Promedio por Periodo", "Duración Promedio (Días)", "Nº Mediciones Realizadas"]
+                
+                st.write("📊 **Tabla de Rendimiento Promedio por Insumo**")
+                st.dataframe(df_promedios, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                col_graf1, col_graf2 = st.columns(2)
+                
+                with col_graf1:
+                    fig_pag = px.bar(
+                        df_promedios,
+                        x="Insumo",
+                        y="Páginas Promedio por Periodo",
+                        title="Promedio de Páginas Impresas por Insumo",
+                        labels={"Páginas Promedio por Periodo": "Páginas Promedio"},
+                        text_auto='.0f',
+                        color="Insumo"
+                    )
+                    st.plotly_chart(fig_pag, use_container_width=True)
+                    
+                with col_graf2:
+                    fig_dias = px.bar(
+                        df_promedios,
+                        x="Insumo",
+                        y="Duración Promedio (Días)",
+                        title="Duración Promedio en Destino (Días)",
+                        labels={"Duración Promedio (Días)": "Días Promedio"},
+                        text_auto='.1f',
+                        color="Insumo"
+                    )
+                    st.plotly_chart(fig_dias, use_container_width=True)
+            else:
+                st.warning("Aún no existen registros de alquiler con lecturas mayores a cero para realizar el análisis de rendimiento.")
+        else:
+            st.info("No se encontraron registros en la pestaña de Alquileres.")
+    except Exception as e:
+        st.error(f"No se pudo cargar el análisis de rendimiento: {e}")
+
+
+# ==========================================
+# 4. PESTAÑA DE REPORTES Y EDICIÓN/ELIMINACIÓN
 # ==========================================
 with tab_reportes:
-    st.subheader("📅 Reportes de Inventario, Ventas y Alquileres")
+    st.subheader("📅 Reportes de Inventario y Herramientas de Edición")
     
-    tab_rep_general, tab_rep_ventas, tab_rep_alquileres = st.tabs([
-        "📊 Historial General (Rango de Fechas)", 
-        "💵 Historial de Ventas (Separado por Mes/Año)", 
-        "🏗️ Historial de Alquileres (Rango de Fechas)"
+    tab_rep_general, tab_rep_ventas, tab_rep_alquileres, tab_admin_borrado = st.tabs([
+        "📊 Historial General", 
+        "💵 Historial de Ventas", 
+        "🏗️ Historial de Alquileres",
+        "🚨 Edición y Borrado (Admin)"
     ])
     
     # --- 1. SUBPESTAÑA GENERAL ---
@@ -690,7 +741,6 @@ with tab_reportes:
     # --- 2. SUBPESTAÑA VENTAS ---
     with tab_rep_ventas:
         st.write("📆 **Segmentación Mensual de Ventas**")
-        
         try:
             datos_v = hoja_ventas.get_all_values()
             if datos_v and len(datos_v) > 1:
@@ -702,7 +752,6 @@ with tab_reportes:
             
         if not df_v.empty and "Fecha" in df_v.columns:
             df_v["Fecha_dt"] = pd.to_datetime(df_v["Fecha"], errors='coerce')
-            
             df_v["Año"] = df_v["Fecha_dt"].dt.year
             df_v["Mes_Num"] = df_v["Fecha_dt"].dt.month
             
@@ -711,7 +760,6 @@ with tab_reportes:
                 7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
             }
             df_v["Mes"] = df_v["Mes_Num"].map(meses_es)
-            
             anos_disponibles = sorted(df_v["Año"].dropna().unique().astype(int).tolist(), reverse=True)
             
             col_v1, col_v2 = st.columns(2)
@@ -725,17 +773,14 @@ with tab_reportes:
                 mes_seleccionado = st.selectbox("Selecciona el Mes:", meses_opciones if meses_opciones else ["Ninguno"])
             
             mes_num_sel = [k for k, v in meses_es.items() if v == mes_seleccionado][0] if mes_seleccionado != "Ninguno" else None
-            
             df_filtrado_v = df_v[(df_v["Año"] == ano_seleccionado) & (df_v["Mes_Num"] == mes_num_sel)]
             
             if df_filtrado_v.empty:
                 st.warning(f"No se registraron ventas en {mes_seleccionado} del {ano_seleccionado}.")
             else:
                 df_v_mostrar = df_filtrado_v.drop(columns=["Fecha_dt", "Año", "Mes_Num", "Mes"], errors='ignore')
-                
                 suma_ventas = pd.to_numeric(df_v_mostrar["Monto Total (Bs.)"], errors='coerce').sum()
                 st.success(f"💰 **Monto Total Facturado en {mes_seleccionado} del {ano_seleccionado}:** {suma_ventas:,.2f} Bs.")
-                
                 st.dataframe(df_v_mostrar, use_container_width=True, hide_index=True)
                 
                 buffer_v = io.BytesIO()
@@ -749,7 +794,7 @@ with tab_reportes:
         else:
             st.info("No se han registrado ventas en la hoja 'Ventas' de Google Sheets todavía.")
 
-    # --- 3. SUBPESTAÑA ALQUILERES (CON DETALLES DE CONTADORES) ---
+    # --- 3. SUBPESTAÑA ALQUILERES ---
     with tab_rep_alquileres:
         st.write("🔍 **Filtro por Rango de Fechas (Alquileres)**")
         col_fa1, col_fa2 = st.columns(2)
@@ -784,8 +829,71 @@ with tab_reportes:
         else:
             st.info("No se han registrado alquileres aún.")
 
+    # --- 4. SUBPESTAÑA ADM BORRADO / MODIFICACIÓN ---
+    with tab_admin_borrado:
+        if st.session_state["rol_actual"] == "Administrador":
+            st.warning("🚨 **Zona de Edición Crítica:** Como Administrador, puedes depurar y eliminar registros del historial general, ventas o alquileres si hubo un error de transcripción.")
+            
+            tipo_tabla_editar = st.selectbox("Selecciona el Historial a depurar:", ["Alquileres", "Ventas", "Historial General"])
+            
+            # Cargamos la tabla seleccionada con sus índices reales para el Sheets
+            try:
+                if tipo_tabla_editar == "Alquileres":
+                    hoja_activa_borrar = hoja_alquileres
+                elif tipo_tabla_editar == "Ventas":
+                    hoja_activa_borrar = hoja_ventas
+                else:
+                    hoja_activa_borrar = hoja_historial
+                
+                datos_crud = hoja_activa_borrar.get_all_values()
+                
+                if datos_crud and len(datos_crud) > 1:
+                    df_crud = pd.DataFrame(datos_crud[1:], columns=datos_crud[0])
+                    # Añadimos una columna temporal de índice real de fila en Google Sheets (las filas en Sheets inician en 1, y la cabecera es la 1, por lo que los datos inician en la fila 2)
+                    df_crud["Fila_Sheet"] = [i for i in range(2, len(df_crud) + 2)]
+                    
+                    st.write("Selecciona el registro que deseas eliminar permanentemente de Google Sheets:")
+                    st.dataframe(df_crud, use_container_width=True, hide_index=True)
+                    
+                    # Generamos una lista legible para el dropdown
+                    opciones_eliminar = []
+                    for index, row in df_crud.iterrows():
+                        fecha_r = row.get("Fecha", "Sin Fecha")
+                        insumo_r = row.get("Insumo", "Sin Insumo")
+                        det_r = row.get("Empresa Destino", row.get("Area Destino", row.get("Motivo", "")))
+                        opciones_eliminar.append(f"Fila {row['Fila_Sheet']} | {fecha_r} | {insumo_r} | {det_r}")
+                        
+                    seleccion_borrado = st.selectbox("Selecciona fila a eliminar:", opciones_eliminar)
+                    
+                    if seleccion_borrado:
+                        # Extraer el número de fila real del string
+                        fila_eliminar_real = int(seleccion_borrado.split(" | ")[0].replace("Fila ", ""))
+                        
+                        st.error(f"⚠️ ¿Estás completamente seguro de eliminar permanentemente la **Fila {fila_eliminar_real}** de Google Sheets?")
+                        
+                        confirmacion_borrado = st.text_input("Escribe 'ELIMINAR' en mayúsculas para proceder:")
+                        
+                        if st.button("Proceder con la Eliminación"):
+                            if confirmacion_borrado == "ELIMINAR":
+                                with st.spinner("Eliminando fila en Google Sheets..."):
+                                    # gspread permite borrar filas por su índice
+                                    hoja_activa_borrar.delete_rows(fila_eliminar_real)
+                                st.success(f"¡Fila {fila_eliminar_real} eliminada exitosamente!")
+                                st.cache_data.clear()
+                                st.cache_resource.clear()
+                                st.rerun()
+                            else:
+                                st.error("Debes ingresar la palabra 'ELIMINAR' para confirmar.")
+                else:
+                    st.info("No hay datos disponibles en este historial para depurar.")
+            except Exception as e:
+                st.error(f"Error al cargar herramientas de borrado: {e}")
+        else:
+            st.info("🔒 Solo la cuenta de Administrador tiene privilegios de eliminación de registros.")
+
+
 # ==========================================
-# 4. PESTAÑA DE CONFIGURACIÓN Y USUARIOS (Exclusivo Admin)
+# 5. PESTAÑA DE CONFIGURACIÓN Y USUARIOS
 # ==========================================
 with tab_usuarios:
     if st.session_state["rol_actual"] == "Administrador":
