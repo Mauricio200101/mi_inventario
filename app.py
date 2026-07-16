@@ -337,47 +337,20 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                         st.session_state["usuario_actual"]
                     ])
                 elif motivo == "Alquiler":
-                    # Intentamos guardar la Agencia de forma estructurada.
-                    cabeceras_alquileres = hoja_alquileres.row_values(1)
-                    
-                    if "Agencia Destino" not in cabeceras_alquileres:
-                        col_nueva_idx = len(cabeceras_alquileres) + 1
-                        hoja_alquileres.update_cell(1, col_nueva_idx, "Agencia Destino")
-                    
-                    # Volvemos a leer cabeceras actualizadas para posicionarla correctamente
-                    cabeceras_actualizadas = hoja_alquileres.row_values(1)
-                    agencia_col_idx = cabeceras_actualizadas.index("Agencia Destino") + 1
-                    
                     fila_registro = [
-                        fecha_actual,
-                        nombre_insumo,
-                        cant_movida,
-                        empresa,
-                        area_o_precio, 
-                        st.session_state["usuario_actual"],
-                        int(contador_anterior),
-                        int(contador_actual),
-                        int(paginas),
-                        int(dias)
-                    ]
-                    
-                    # Rellenamos hasta la columna de la Agencia si es necesario
-                    while len(fila_registro) < agencia_col_idx - 1:
-                        fila_registro.append("")
-                        
-                    fila_registro.insert(agencia_col_idx - 1, agencia)
-                    
-                    hoja_alquileres.append_row(fila_registro)
-        else:
-            st.error("❌ No se encontró el ID del insumo en la hoja de cálculo.")
-    except Exception as e:
-        st.error(f"⚠️ Error al conectar con la base de datos: {e}. Espera unos segundos e intenta nuevamente.")
-
-# --- INTERFAZ PRINCIPAL ---
-st.title("📦 Sistema de Control de Inventario Nube")
-df_insumos = obtener_insumos()
-empresas_disponibles, areas_disponibles, agencias_disponibles = obtener_parametros()
-
+                    fecha_actual,
+                    nombre_insumo,
+                    cant_movida,
+                    empresa,
+                    area_o_precio,
+                    agencia,
+                    st.session_state["usuario_actual"],
+                    int(contador_anterior),
+                    int(contador_actual),
+                    int(paginas),
+                    int(dias)
+                ]
+                hoja_alquileres.append_row(fila_registro)
 # --- PESTAÑAS DEL SISTEMA ---
 tab_operaciones, tab_valorizacion, tab_rendimiento, tab_reportes, tab_usuarios = st.tabs([
     "⚙️ Operaciones de Stock", 
