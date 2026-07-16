@@ -336,7 +336,7 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                         total_venta,
                         st.session_state["usuario_actual"]
                     ])
-                elif motivo == "Alquiler":
+                    elif motivo == "Alquiler":
                     fila_registro = [
                     fecha_actual,
                     nombre_insumo,
@@ -349,10 +349,10 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                     int(contador_actual),
                     int(paginas),
                     int(dias)
-                ]
-                hoja_alquileres.append_row(fila_registro)
-                else:
-                    st.error("No se encontró el ID del insumo en la hoja de cálculo.")
+                    ]
+                    hoja_alquileres.append_row(fila_registro)
+                    else:
+                        st.error("No se encontró el ID del insumo en la hoja de cálculo.")
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
 
