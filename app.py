@@ -1125,11 +1125,11 @@ with tab_usuarios:
                 st.write("### 📋 Destinos Actuales y Configuración de Borrado")
                 st.info("💡 **Acción directa:** Selecciona y elimina cualquier destino que ya no utilices directamente desde su respectiva columna.")
                 
-                c_emp, c_are, c_age = st.columns(3)
+                c_emp, c_age, c_are = st.columns(3)
                 
                 # COLUMNA DE EMPRESAS
                 with c_emp:
-                    st.markdown("🏢 **Empresas**")
+                    st.markdown("🏢 **Empresa**")
                     empresas_filtradas = [e for e in empresas_disponibles if e not in ["Sin Registrar", ""]]
                     for e in empresas_filtradas:
                         st.markdown(f"• {e}")
@@ -1153,7 +1153,7 @@ with tab_usuarios:
 
                 # COLUMNA DE AGENCIAS
                 with c_age:
-                    st.markdown("🏢 **Agencias**")
+                    st.markdown("🏢 **Agencia**")
                     agencias_filtradas = [ag for ag in agencias_disponibles if ag not in ["Sin Registrar", ""]]
                     for ag in agencias_filtradas:
                         st.markdown(f"• {ag}")
@@ -1177,7 +1177,7 @@ with tab_usuarios:
 
                 # COLUMNA DE ÁREAS
                 with c_are:
-                    st.markdown("📍 **Áreas**")
+                    st.markdown("📍 **Área**")
                     areas_filtradas = [a for a in areas_disponibles if a not in ["Sin Registrar", ""]]
                     for a in areas_filtradas:
                         st.markdown(f"• {a}")
