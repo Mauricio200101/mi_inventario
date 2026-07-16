@@ -104,22 +104,21 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     
     fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     # Guarda en el historial el registro inicial auditando el usuario activo
-    hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"]])
+    hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
-def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida):
+def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area=""):
     celda_id = hoja_insumos.find(str(id_insumo))
     if celda_id:
         hoja_insumos.update_cell(celda_id.row, 4, nuevo_stock)
         fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Guarda en el historial auditando al usuario activo
-        hoja_historial.append_row([fecha_actual, nombre_insumo, tipo_mov, cant_movida, nuevo_stock, st.session_state["usuario_actual"]])
+        # Guarda en el historial auditando al usuario activo e incluyendo los nuevos campos de alquiler/venta
+        hoja_historial.append_row([fecha_actual, nombre_insumo, tipo_mov, cant_movida, nuevo_stock, st.session_state["usuario_actual"], motivo, empresa, area])
 
 # --- INTERFAZ PRINCIPAL ---
 st.title("📦 Sistema de Control de Inventario Nube")
 df_insumos = obtener_insumos()
 
 # --- PESTAÑAS DEL SISTEMA ---
-# Agregamos pestañas para ordenar las nuevas funciones
 tab_operaciones, tab_valorizacion, tab_reportes, tab_usuarios = st.tabs([
     "⚙️ Operaciones de Stock", 
     "💰 Valorización del Inventario", 
@@ -216,23 +215,18 @@ with tab_operaciones:
         with col_der:
             st.subheader("🔄 Registrar Movimiento (Entrada/Salida)")
             
-            # --- FUNCIÓN 4: INTEGRACIÓN DE ESCÁNER DE CÓDIGOS DE BARRA / QR ---
             st.markdown("📷 **Lector de Códigos QR/Barra**")
             foto_codigo = st.camera_input("Toma una foto al código de barra para escanearlo")
             insumo_detectado = None
             
             if foto_codigo is not None:
-                # Simulación de detección: en una app real aquí se decodifica la imagen con ZBar / PyQRCode.
-                # Como demostración interactiva, permitimos seleccionar qué detectó el "escáner virtual"
                 st.success("¡Código capturado con éxito!")
-                # Buscamos coincidencias con nombres de nuestros insumos existentes
                 insumo_detectado = st.selectbox("🔍 Confirmar insumo detectado por la cámara:", df_insumos["Nombre"].tolist())
 
             st.markdown("---")
             if not df_insumos.empty:
                 opciones = df_insumos["Nombre"].tolist()
                 
-                # Si el escáner de cámara detectó un insumo, lo pre-seleccionamos
                 indice_defecto = opciones.index(insumo_detectado) if insumo_detectado in opciones else 0
                 seleccionado = st.selectbox("Selecciona el insumo a modificar:", opciones, index=indice_defecto, key="sel_mov")
                 
@@ -242,26 +236,62 @@ with tab_operaciones:
                     cant_actual = int(datos_insumo["Cantidad"])
                     
                     st.info(f"Cantidad actual en bodega: **{cant_actual}** unidades.")
-                    
-                    # Mostrar precios informativos del insumo seleccionado
                     st.markdown(f"💰 **Precios:** Técnico: *{datos_insumo['Precio Técnico']} Bs.* | Cliente: *{datos_insumo['Precio Cliente']} Bs.* | Facturado: *{datos_insumo['Precio Facturado']} Bs.*")
                     
                     tipo_movimiento = st.radio("Tipo de movimiento:", ["Agregar Stock (Entrada)", "Restar Stock (Salida)"], horizontal=True)
+                    
+                    # --- Lógica Dinámica de Alquiler / Venta ---
+                    motivo_salida = ""
+                    empresa_destino = ""
+                    area_destino = ""
+                    
+                    if tipo_movimiento == "Restar Stock (Salida)":
+                        col_mot1, col_mot2 = st.columns(2)
+                        with col_mot1:
+                            motivo_salida = st.selectbox("Motivo de la Salida:", ["Venta", "Alquiler"])
+                        
+                        if motivo_salida == "Alquiler":
+                            with col_mot2:
+                                empresa_destino = st.text_input("🏢 Empresa de Destino:", placeholder="Ej: Constructora Alfa")
+                            area_destino = st.text_input("📍 Área de Destino:", placeholder="Ej: Obra Central")
+                    
                     cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1)
                     
                     if st.button("Aplicar Movimiento"):
-                        if tipo_movimiento == "Agregar Stock (Entrada)":
-                            nueva_cantidad = cant_actual + cantidad_mov
-                            tipo_historial = "Entrada"
-                        else:
-                            nueva_cantidad = max(0, cant_actual - cantidad_mov)
-                            tipo_historial = "Salida"
+                        es_valido = True
+                        if tipo_movimiento == "Restar Stock (Salida)" and cantidad_mov > cant_actual:
+                            st.error(f"❌ Error: No puedes retirar {cantidad_mov} unidades porque solo quedan {cant_actual} en stock.")
+                            es_valido = False
                         
-                        with st.spinner("Actualizando datos en la nube..."):
-                            actualizar_stock_sheet(id_insumo, nueva_cantidad, seleccionado, tipo_historial, cantidad_mov)
-                        st.success(f"¡Stock actualizado! Ahora tienes {nueva_cantidad} unidades de '{seleccionado}'.")
-                        st.cache_resource.clear()
-                        st.rerun()
+                        if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Alquiler":
+                            if not empresa_destino.strip() or not area_destino.strip():
+                                st.error("❌ Error: Para registrar un alquiler debes ingresar la Empresa y el Área de destino.")
+                                es_valido = False
+                                
+                        if es_valido:
+                            if tipo_movimiento == "Agregar Stock (Entrada)":
+                                nueva_cantidad = cant_actual + cantidad_mov
+                                tipo_historial = "Entrada"
+                                motivo_final = "Abastecimiento"
+                            else:
+                                nueva_cantidad = cant_actual - cantidad_mov
+                                tipo_historial = "Salida"
+                                motivo_final = motivo_salida
+                            
+                            with st.spinner("Actualizando datos en la nube..."):
+                                actualizar_stock_sheet(
+                                    id_insumo, 
+                                    nueva_cantidad, 
+                                    seleccionado, 
+                                    tipo_historial, 
+                                    cantidad_mov,
+                                    motivo=motivo_final,
+                                    empresa=empresa_destino,
+                                    area=area_destino
+                                )
+                            st.success(f"¡Stock actualizado! Ahora tienes {nueva_cantidad} unidades de '{seleccionado}'.")
+                            st.cache_resource.clear()
+                            st.rerun()
             else:
                 st.info("Registra un insumo para habilitar los movimientos.")
 
@@ -290,7 +320,6 @@ with tab_operaciones:
 with tab_valorizacion:
     st.subheader("💰 Resumen Monetario del Inventario")
     if not df_insumos.empty:
-        # Cálculos de valorización total en base a las existencias y los 3 tipos de precio
         df_insumos["Val_Tecnico"] = df_insumos["Cantidad"] * df_insumos["Precio Técnico"]
         df_insumos["Val_Cliente"] = df_insumos["Cantidad"] * df_insumos["Precio Cliente"]
         df_insumos["Val_Facturado"] = df_insumos["Cantidad"] * df_insumos["Precio Facturado"]
@@ -307,7 +336,6 @@ with tab_valorizacion:
         st.markdown("---")
         st.write("📊 **Comparativa de Valorización por Insumo**")
         
-        # Gráfico dinámico de barras comparando los tres tipos de valor total
         df_melted = df_insumos.melt(
             id_vars=["Nombre"], 
             value_vars=["Val_Tecnico", "Val_Cliente", "Val_Facturado"],
@@ -340,11 +368,10 @@ with tab_reportes:
     try:
         registros_hist = hoja_historial.get_all_records()
         df_hist = pd.DataFrame(registros_hist)
-    except:
+    except Exception as e:
         df_hist = pd.DataFrame()
         
-    if not df_hist.empty:
-        # Convertir columna Fecha a datetime para filtros exactos
+    if not df_hist.empty and "Fecha" in df_hist.columns:
         df_hist["Fecha_dt"] = pd.to_datetime(df_hist["Fecha"], errors='coerce')
         
         col_f1, col_f2 = st.columns(2)
@@ -353,7 +380,6 @@ with tab_reportes:
         with col_f2:
             fecha_fin = st.date_input("Hasta:", value=datetime.today())
             
-        # Filtrar el DataFrame en base a las fechas seleccionadas
         df_filtrado_fecha = df_hist[
             (df_hist["Fecha_dt"].dt.date >= fecha_inicio) & 
             (df_hist["Fecha_dt"].dt.date <= fecha_fin)
@@ -362,14 +388,11 @@ with tab_reportes:
         if df_filtrado_fecha.empty:
             st.warning("No se registraron movimientos en el rango de fechas seleccionado.")
         else:
-            # Quitamos la columna de control interna antes de mostrar
             df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore')
             
-            # --- FUNCIÓN 1: AUDITORÍA DE "QUIÉN HIZO QUÉ" ---
             st.write(f"📝 Se encontraron **{len(df_mostrar)}** movimientos registrados:")
             st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
             
-            # Exportación directa en base al filtro seleccionado
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 df_mostrar.to_excel(writer, sheet_name='Movimientos Filtrados', index=False)
@@ -381,7 +404,7 @@ with tab_reportes:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
     else:
-        st.info("El historial de movimientos se encuentra vacío.")
+        st.info("ℹ️ El historial de movimientos se encuentra vacío o la pestaña 'Historial' no tiene la columna 'Fecha'. Realiza un movimiento (Entrada/Salida) para comenzar a ver registros aquí.")
 
 # ==========================================
 # 4. PESTAÑA DE GESTIÓN DE USUARIOS (Exclusivo Admin)
