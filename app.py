@@ -116,8 +116,8 @@ def obtener_parametros():
 def registrar_parametro(nuevo_valor, tipo):
     registros = hoja_parametros.get_all_values()
     if not registros:
-        hoja_parametros.append_row(["Empresa", "Area", "Agencia"])
-        registros = [["Empresa", "Areas", "Agencias"]]
+        hoja_parametros.append_row(["Empresa", "Agencia", "Area"])
+        registros = [["Empresa", "Area", "Agencia"]]
         
     df = pd.DataFrame(registros[1:], columns=registros[0])
     
@@ -127,14 +127,14 @@ def registrar_parametro(nuevo_valor, tipo):
         lista_actual.append(nuevo_valor)
         col_index = 1
         nueva_lista = lista_actual
-    elif tipo == "Area":
-        lista_actual = df["Area"].dropna().tolist()
+    elif tipo == "Agencia":
+        lista_actual = df["Agencia"].dropna().tolist() if "Agencia" in df.columns else []
         lista_actual = [x for x in lista_actual if x != ""]
         lista_actual.append(nuevo_valor)
         col_index = 2
         nueva_lista = lista_actual
-    else: # Agencia
-        lista_actual = df["Agencias"].dropna().tolist() if "Agencias" in df.columns else []
+    else: # Area
+        lista_actual = df["Area"].dropna().tolist()
         lista_actual = [x for x in lista_actual if x != ""]
         lista_actual.append(nuevo_valor)
         col_index = 3
