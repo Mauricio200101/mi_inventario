@@ -10,7 +10,7 @@ import time
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
 
-# --- CONEXIÓN CON GOOGLE SHEETS (CON REINTENTOS AUTOMÁTICOS) ---
+# --- CONEXIÓN CON GOOGLE SHEETS (OPTIMIZADA CON CACHÉ DE SESIÓN) ---
 @st.cache_resource
 def conectar_google_sheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -25,31 +25,47 @@ def conectar_google_sheets():
     cliente = gspread.authorize(creds)
     return cliente.open("Inventario_Empresa")
 
-# Intentar abrir el documento y sus pestañas con tolerancia a saturaciones de Google
-def inicializar_pestanas():
-    max_intentos = 3
-    for intento in range(max_intentos):
-        try:
-            sh = conectar_google_sheets()
-            pestanas = {
-                "Insumos": sh.worksheet("Insumos"),
-                "Historial": sh.worksheet("Historial"),
-                "Usuarios": sh.worksheet("Usuarios"),
-                "Parametros": sh.worksheet("Parametros"),
-                "Ventas": sh.worksheet("Ventas"),
-                "Alquileres": sh.worksheet("Alquileres")
-            }
-            return pestanas
-        except gspread.exceptions.APIError as e:
-            if "429" in str(e) and intento < max_intentos - 1:
-                time.sleep(2)
-                continue
-            else:
-                st.error(f"🚨 Google Sheets está saturado o sin respuesta. Por favor, espera 10 segundos y recarga la página. (Error: {e})")
+# Inicializar pestañas guardándolas en st.session_state para no llamar a la API en cada rerun
+def inicializar_pestanas_seguras():
+    if "pestanas" not in st.session_state:
+        max_intentos = 5
+        for intento in range(max_intentos):
+            try:
+                sh = conectar_google_sheets()
+                st.session_state["pestanas"] = {
+                    "Insumos": sh.worksheet("Insumos"),
+                    "Historial": sh.worksheet("Historial"),
+                    "Usuarios": sh.worksheet("Usuarios"),
+                    "Parametros": sh.worksheet("Parametros"),
+                    "Ventas": sh.worksheet("Ventas"),
+                    "Alquileres": sh.worksheet("Alquileres")
+                }
+                break # Éxito, salimos del bucle
+            except gspread.exceptions.APIError as e:
+                if "429" in str(e):
+                    if intento < max_intentos - 1:
+                        # Espera exponencial para darle un respiro a la API de Google
+                        tiempo_espera = (intento + 1) * 3
+                        st.warning(f"⚠️ Google Sheets saturado. Reintentando conexión en {tiempo_espera} segundos...")
+                        time.sleep(tiempo_espera)
+                        continue
+                    else:
+                        st.error("🚨 Se superó el límite de solicitudes a Google Sheets. Por favor, espera 30 segundos y recarga la página manualmente.")
+                        st.stop()
+            except Exception as e:
+                st.error(f"❌ Error crítico de conexión: {e}")
                 st.stop()
-        except Exception as e:
-            st.error(f"❌ Error crítico al conectar con las pestañas de Google Sheets: {e}")
-            st.stop()
+                
+    return st.session_state["pestanas"]
+
+# Obtener las pestañas desde la sesión de forma ultra rápida
+pestanas_activas = inicializar_pestanas_seguras()
+hoja_insumos = pestanas_activas["Insumos"]
+hoja_historial = pestanas_activas["Historial"]
+hoja_usuarios = pestanas_activas["Usuarios"]
+hoja_parametros = pestanas_activas["Parametros"]
+hoja_ventas = pestanas_activas["Ventas"]
+hoja_alquileres = pestanas_activas["Alquileres"]
 
 # Inicializamos las hojas de trabajo de forma segura
 pestanas_activas = inicializar_pestanas()
