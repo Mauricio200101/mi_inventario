@@ -72,6 +72,7 @@ hoja_usuarios = pestanas_activas["Usuarios"]
 hoja_parametros = pestanas_activas["Parametros"]
 hoja_ventas = pestanas_activas["Ventas"]
 hoja_alquileres = pestanas_activas["Alquileres"]
+df_insumos = obtener_insumos()
 
 # --- FUNCIONES DE GESTIÓN DE USUARIOS ---
 @st.cache_data(ttl=60)
