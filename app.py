@@ -480,7 +480,7 @@ with tab_operaciones:
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
                             
-                            # Intentar buscar el último registro idéntico para extraer el contador
+                            # Intentar buscar el último registro idéntico para extraer el contador anterior
                             ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino)
                             
                             sugerencia_anterior = 0
@@ -488,19 +488,26 @@ with tab_operaciones:
                             
                             if ultimo_registro_alq is not None:
                                 try:
-                                    # La columna "Contador Actual" es la posición 7 (index 7 en lista de 0 a 9 si el layout coincide)
-                                    # Para ir a lo seguro, extraemos usando el nombre de columna del DataFrame
                                     sugerencia_anterior = int(ultimo_registro_alq["Contador Actual"])
                                     fecha_ultimo_alquiler = pd.to_datetime(ultimo_registro_alq["Fecha"], errors='coerce')
                                     st.success(f"🔍 ¡Historial Encontrado! Último contador registrado: **{sugerencia_anterior}** el {ultimo_registro_alq['Fecha']}")
                                 except:
                                     pass
                             else:
-                                st.warning("⚠️ No se encontró un alquiler previo idéntico para este Insumo, Empresa y Área. Se iniciará un nuevo historial.")
+                                st.warning("⚠️ No se encontró un alquiler previo idéntico para este Insumo, Empresa y Área. Se iniciará con contador base 0.")
                             
+                            # --- CONTROL DE SEGURIDAD PARA CONTADOR ANTERIOR ---
                             col_c1, col_c2 = st.columns(2)
                             with col_c1:
-                                cont_anterior = st.number_input("Contador Anterior:", min_value=0, step=1, value=sugerencia_anterior)
+                                if st.session_state["rol_actual"] == "Administrador":
+                                    # Solo el administrador puede modificar el Contador Anterior
+                                    cont_anterior = st.number_input("Contador Anterior (Editable - Admin):", min_value=0, step=1, value=sugerencia_anterior)
+                                else:
+                                    # Otros roles (Secretaria, etc.) solo lo ven de forma informativa y se bloquea
+                                    cont_anterior = sugerencia_anterior
+                                    st.metric(label="Contador Anterior (Bloqueado)", value=cont_anterior)
+                                    st.caption("🔒 El contador anterior es automático. Solo un Administrador puede cambiarlo.")
+                            
                             with col_c2:
                                 cont_actual = st.number_input("Contador Actual (Lectura de hoy):", min_value=cont_anterior, step=1, value=cont_anterior)
                             
@@ -510,7 +517,6 @@ with tab_operaciones:
                             # Calcular tiempo (días)
                             hoy = obtener_hora_local_bo()
                             if fecha_ultimo_alquiler is not None and not pd.isna(fecha_ultimo_alquiler):
-                                # Convertimos fecha_ultimo_alquiler a timezone aware si no lo está para poder restar
                                 if fecha_ultimo_alquiler.tzinfo is None:
                                     fecha_ultimo_alquiler = fecha_ultimo_alquiler.replace(tzinfo=timezone(timedelta(hours=-4)))
                                 dif_tiempo = hoy - fecha_ultimo_alquiler
@@ -757,7 +763,6 @@ with tab_reportes:
             if datos_a and len(datos_a) > 1:
                 df_a = pd.DataFrame(datos_a[1:], columns=datos_a[0])
             else:
-                # Actualizamos las columnas esperadas en el reporte
                 df_a = pd.DataFrame(columns=["Fecha", "Insumo", "Cantidad", "Empresa Destino", "Area Destino", "Usuario", "Contador Anterior", "Contador Actual", "Páginas Impresas", "Días Transcurridos"])
         except:
             df_a = pd.DataFrame()
