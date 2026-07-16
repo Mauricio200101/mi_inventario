@@ -29,6 +29,8 @@ try:
     hoja_insumos = sh.worksheet("Insumos")
     hoja_historial = sh.worksheet("Historial")
     hoja_usuarios = sh.worksheet("Usuarios")
+    # Pestaña para parámetros dinámicos (Empresas y Áreas)
+    hoja_parametros = sh.worksheet("Parametros")
 except Exception as e:
     st.error("❌ Error al conectar con Google Sheets. Verifica tus credenciales y pestañas.")
     st.stop()
@@ -43,6 +45,51 @@ def obtener_usuarios():
 
 def registrar_usuario(usuario, contrasenia, rol):
     hoja_usuarios.append_row([usuario, contrasenia, rol])
+
+# --- FUNCIONES DE PARÁMETROS (EMPRESAS Y ÁREAS) ---
+def obtener_parametros():
+    try:
+        registros = hoja_parametros.get_all_records()
+        df = pd.DataFrame(registros)
+        
+        # Filtrar valores vacíos y convertirlos en listas limpias
+        lista_empresas = df["Empresas"].dropna().astype(str).str.strip().tolist() if "Empresas" in df.columns else []
+        lista_areas = df["Areas"].dropna().astype(str).str.strip().tolist() if "Areas" in df.columns else []
+        
+        lista_empresas = [x for x in lista_empresas if x != ""]
+        lista_areas = [x for x in lista_areas if x != ""]
+    except Exception as e:
+        lista_empresas = ["Sin Registrar"]
+        lista_areas = ["Sin Registrar"]
+        
+    return lista_empresas, lista_areas
+
+def registrar_parametro(nuevo_valor, tipo):
+    # Obtener registros actuales para no sobreescribir la estructura
+    registros = hoja_parametros.get_all_values()
+    if not registros:
+        # Si la hoja estuviera completamente vacía, se inicializa
+        hoja_parametros.append_row(["Empresas", "Areas"])
+        registros = [["Empresas", "Areas"]]
+        
+    df = pd.DataFrame(registros[1:], columns=registros[0])
+    
+    if tipo == "Empresa":
+        lista_actual = df["Empresas"].dropna().tolist()
+        lista_actual = [x for x in lista_actual if x != ""]
+        lista_actual.append(nuevo_valor)
+        col_index = 1
+        nueva_lista = lista_actual
+    else:
+        lista_actual = df["Areas"].dropna().tolist()
+        lista_actual = [x for x in lista_actual if x != ""]
+        lista_actual.append(nuevo_valor)
+        col_index = 2
+        nueva_lista = lista_actual
+
+    # Sobreescribir o añadir en la celda correcta para mantener las listas organizadas en columnas
+    row_to_write = len(nueva_lista) + 1  # +1 por el encabezado
+    hoja_parametros.update_cell(row_to_write, col_index, nuevo_valor)
 
 # --- CONTROL DE ACCESO (LOGIN) ---
 def check_password():
@@ -117,13 +164,14 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
 # --- INTERFAZ PRINCIPAL ---
 st.title("📦 Sistema de Control de Inventario Nube")
 df_insumos = obtener_insumos()
+empresas_disponibles, areas_disponibles = obtener_parametros()
 
 # --- PESTAÑAS DEL SISTEMA ---
 tab_operaciones, tab_valorizacion, tab_reportes, tab_usuarios = st.tabs([
     "⚙️ Operaciones de Stock", 
     "💰 Valorización del Inventario", 
     "📅 Reportes por Fecha", 
-    "👥 Gestión de Usuarios"
+    "👥 Configuración y Usuarios"
 ])
 
 # ==========================================
@@ -240,7 +288,7 @@ with tab_operaciones:
                     
                     tipo_movimiento = st.radio("Tipo de movimiento:", ["Agregar Stock (Entrada)", "Restar Stock (Salida)"], horizontal=True)
                     
-                    # --- Lógica Dinámica de Alquiler / Venta ---
+                    # --- Lógica Dinámica de Alquiler / Venta con Parámetros Predefinidos ---
                     motivo_salida = ""
                     empresa_destino = ""
                     area_destino = ""
@@ -252,8 +300,16 @@ with tab_operaciones:
                         
                         if motivo_salida == "Alquiler":
                             with col_mot2:
-                                empresa_destino = st.text_input("🏢 Empresa de Destino:", placeholder="Ej: Constructora Alfa")
-                            area_destino = st.text_input("📍 Área de Destino:", placeholder="Ej: Obra Central")
+                                # Selectores desplegables dinámicos
+                                if empresas_disponibles:
+                                    empresa_destino = st.selectbox("🏢 Empresa de Destino:", empresas_disponibles)
+                                else:
+                                    empresa_destino = st.text_input("🏢 Empresa de Destino (Escribe manual, no hay predefinidas):")
+                            
+                            if areas_disponibles:
+                                area_destino = st.selectbox("📍 Área de Destino:", areas_disponibles)
+                            else:
+                                area_destino = st.text_input("📍 Área de Destino (Escribe manual, no hay predefinidas):")
                     
                     cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1)
                     
@@ -264,8 +320,8 @@ with tab_operaciones:
                             es_valido = False
                         
                         if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Alquiler":
-                            if not empresa_destino.strip() or not area_destino.strip():
-                                st.error("❌ Error: Para registrar un alquiler debes ingresar la Empresa y el Área de destino.")
+                            if not str(empresa_destino).strip() or not str(area_destino).strip():
+                                st.error("❌ Error: Para registrar un alquiler debes seleccionar la Empresa y el Área de destino.")
                                 es_valido = False
                                 
                         if es_valido:
@@ -407,36 +463,100 @@ with tab_reportes:
         st.info("ℹ️ El historial de movimientos se encuentra vacío o la pestaña 'Historial' no tiene la columna 'Fecha'. Realiza un movimiento (Entrada/Salida) para comenzar a ver registros aquí.")
 
 # ==========================================
-# 4. PESTAÑA DE GESTIÓN DE USUARIOS (Exclusivo Admin)
+# 4. PESTAÑA DE CONFIGURACIÓN Y USUARIOS (Exclusivo Admin)
 # ==========================================
 with tab_usuarios:
     if st.session_state["rol_actual"] == "Administrador":
-        st.subheader("👥 Configuración de Cuentas del Sistema")
-        col_user_izq, col_user_der = st.columns([1, 1.5])
+        st.subheader("⚙️ Configuración y Gestión de Usuarios")
         
-        with col_user_izq:
-            st.write("➕ **Crear Nuevo Usuario**")
-            with st.form("nuevo_usuario_form", clear_on_submit=True):
-                nuevo_user = st.text_input("Nombre de Usuario", placeholder="Ej: tecnico.juan")
-                nuevo_pass = st.text_input("Contraseña", type="password", placeholder="Ej: t1234")
-                nuevo_rol = st.selectbox("Asignar Rol:", ["Administrador", "Secretaria", "Técnico"])
-                crear_user_btn = st.form_submit_button("Crear Usuario")
-                
-            if crear_user_btn:
-                df_actual_users = obtener_usuarios()
-                if nuevo_user.strip() == "" or nuevo_pass.strip() == "":
-                    st.error("Todos los campos son obligatorios.")
-                elif nuevo_user in df_actual_users["Usuario"].values:
-                    st.warning("Este nombre de usuario ya está registrado.")
-                else:
-                    with st.spinner("Registrando nuevo usuario..."):
-                        registrar_usuario(nuevo_user, nuevo_pass, nuevo_rol)
-                    st.success(f"¡Usuario '{nuevo_user}' registrado exitosamente como '{nuevo_rol}'!")
-                    st.rerun()
+        # Sub-pestañas internas para organizar mejor la pantalla del Administrador
+        tab_sub_usuarios, tab_sub_parametros = st.tabs(["👥 Cuentas de Usuarios", "🏢 Parámetros de Alquiler (Empresas/Áreas)"])
+        
+        # --- SUBPESTAÑA 1: GESTIÓN DE USUARIOS ---
+        with tab_sub_usuarios:
+            col_user_izq, col_user_der = st.columns([1, 1.5])
+            
+            with col_user_izq:
+                st.write("➕ **Crear Nuevo Usuario**")
+                with st.form("nuevo_usuario_form", clear_on_submit=True):
+                    nuevo_user = st.text_input("Nombre de Usuario", placeholder="Ej: tecnico.juan")
+                    nuevo_pass = st.text_input("Contraseña", type="password", placeholder="Ej: t1234")
+                    nuevo_rol = st.selectbox("Asignar Rol:", ["Administrador", "Secretaria", "Técnico"])
+                    crear_user_btn = st.form_submit_button("Crear Usuario")
                     
-        with col_user_der:
-            st.write("📋 **Usuarios Registrados**")
-            df_lista_usuarios = obtener_usuarios()
-            st.dataframe(df_lista_usuarios[["Usuario", "Rol"]], use_container_width=True, hide_index=True)
+                if crear_user_btn:
+                    df_actual_users = obtener_usuarios()
+                    if nuevo_user.strip() == "" or nuevo_pass.strip() == "":
+                        st.error("Todos los campos son obligatorios.")
+                    elif nuevo_user in df_actual_users["Usuario"].values:
+                        st.warning("Este nombre de usuario ya está registrado.")
+                    else:
+                        with st.spinner("Registrando nuevo usuario..."):
+                            registrar_usuario(nuevo_user, nuevo_pass, nuevo_rol)
+                        st.success(f"¡Usuario '{nuevo_user}' registrado exitosamente como '{nuevo_rol}'!")
+                        st.rerun()
+                        
+            with col_user_der:
+                st.write("📋 **Usuarios Registrados**")
+                df_lista_usuarios = obtener_usuarios()
+                st.dataframe(df_lista_usuarios[["Usuario", "Rol"]], use_container_width=True, hide_index=True)
+                
+        # --- SUBPESTAÑA 2: GESTIÓN DE EMPRESAS Y ÁREAS ---
+        with tab_sub_parametros:
+            col_param_izq, col_param_der = st.columns([1, 1.5])
+            
+            with col_param_izq:
+                st.write("➕ **Añadir Nuevo Destino de Alquiler**")
+                
+                # Formulario para Empresas
+                with st.form("nueva_empresa_form", clear_on_submit=True):
+                    nueva_emp = st.text_input("Nombre de la Empresa / Cliente:", placeholder="Ej: Constructora Gamma")
+                    guardar_emp_btn = st.form_submit_button("Añadir Empresa")
+                    
+                if guardar_emp_btn:
+                    if nueva_emp.strip() == "":
+                        st.error("Por favor, escribe un nombre válido.")
+                    elif nueva_emp.strip() in empresas_disponibles:
+                        st.warning("Esta empresa ya se encuentra registrada.")
+                    else:
+                        with st.spinner("Guardando empresa..."):
+                            registrar_parametro(nueva_emp.strip(), "Empresa")
+                        st.success(f"¡Empresa '{nueva_emp}' añadida correctamente!")
+                        st.cache_resource.clear()
+                        st.rerun()
+                        
+                st.markdown("---")
+                
+                # Formulario para Áreas
+                with st.form("nueva_area_form", clear_on_submit=True):
+                    nueva_ar = st.text_input("Nombre del Área / Obra:", placeholder="Ej: Proyecto Norte")
+                    guardar_ar_btn = st.form_submit_button("Añadir Área")
+                    
+                if guardar_ar_btn:
+                    if nueva_ar.strip() == "":
+                        st.error("Por favor, escribe un nombre de área válido.")
+                    elif nueva_ar.strip() in areas_disponibles:
+                        st.warning("Esta área ya se encuentra registrada.")
+                    else:
+                        with st.spinner("Guardando área..."):
+                            registrar_parametro(nueva_ar.strip(), "Area")
+                        st.success(f"¡Área '{nueva_ar}' añadida correctamente!")
+                        st.cache_resource.clear()
+                        st.rerun()
+                        
+            with col_param_der:
+                st.write("📋 **Lista de Destinos Actuales**")
+                
+                # Mostrar en dos columnas ordenadas las opciones cargadas
+                c_emp, c_are = st.columns(2)
+                with c_emp:
+                    st.info("**🏢 Empresas Registradas:**")
+                    for e in empresas_disponibles:
+                        st.write(f"- {e}")
+                with c_are:
+                    st.info("**📍 Áreas Registradas:**")
+                    for a in areas_disponibles:
+                        st.write(f"- {a}")
+                        
     else:
         st.warning("🔒 Esta sección es exclusiva para el Administrador de la plataforma.")
