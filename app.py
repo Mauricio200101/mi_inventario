@@ -143,6 +143,54 @@ def registrar_parametro(nuevo_valor, tipo):
     row_to_write = len(nueva_lista) + 1
     hoja_parametros.update_cell(row_to_write, col_index, nuevo_valor)
 
+def eliminar_parametro(valor_a_eliminar, tipo):
+    """Elimina de forma segura un parámetro de la lista reescribiendo la columna sin dejar celdas fantasmas."""
+    try:
+        registros = hoja_parametros.get_all_values()
+        if not registros:
+            return
+            
+        cabeceras = registros[0]
+        df = pd.DataFrame(registros[1:], columns=cabeceras)
+        
+        # Filtrado y estructuración por tipo
+        if tipo == "Empresa" and "Empresas" in df.columns:
+            lista_actual = df["Empresas"].dropna().astype(str).str.strip().tolist()
+            lista_actual = [x for x in lista_actual if x != ""]
+            if valor_a_eliminar in lista_actual:
+                lista_actual.remove(valor_a_eliminar)
+            col_index = 1
+            col_letra = "A"
+            nueva_lista = lista_actual
+        elif tipo == "Area" and "Areas" in df.columns:
+            lista_actual = df["Areas"].dropna().astype(str).str.strip().tolist()
+            lista_actual = [x for x in lista_actual if x != ""]
+            if valor_a_eliminar in lista_actual:
+                lista_actual.remove(valor_a_eliminar)
+            col_index = 2
+            col_letra = "B"
+            nueva_lista = lista_actual
+        elif tipo == "Agencia" and "Agencias" in df.columns:
+            lista_actual = df["Agencias"].dropna().astype(str).str.strip().tolist()
+            lista_actual = [x for x in lista_actual if x != ""]
+            if valor_a_eliminar in lista_actual:
+                lista_actual.remove(valor_a_eliminar)
+            col_index = 3
+            col_letra = "C"
+            nueva_lista = lista_actual
+        else:
+            return
+            
+        # 1. Limpiamos la columna entera del Google Sheet para evitar que queden datos duplicados abajo
+        hoja_parametros.batch_clear([f"{col_letra}2:{col_letra}500"])
+        
+        # 2. Escribimos ordenadamente la nueva lista resultante
+        for idx, val in enumerate(nueva_lista):
+            hoja_parametros.update_cell(idx + 2, col_index, val)
+            
+    except Exception as e:
+        st.error(f"Error al eliminar parámetro en base de datos: {e}")
+
 # --- CONTROL DE ACCESO (LOGIN) ---
 def check_password():
     if "logged_in" not in st.session_state:
@@ -1092,6 +1140,52 @@ with tab_usuarios:
                         st.success(f"¡Agencia '{nueva_ag}' añadida correctamente!")
                         st.cache_data.clear()
                         st.rerun()
+                
+                st.markdown("---")
+                
+                # --- NUEVA SECCIÓN DE ELIMINACIÓN DE PARAMETROS (EXPANDER DE SEGURIDAD) ---
+                with st.expander("🚨 Zona de Peligro: Eliminar Destinos (Empresas, Áreas o Agencias)"):
+                    st.warning("⚠️ **Atención:** Eliminar un destino lo quitará definitivamente de las opciones desplegables para futuros movimientos. Esto no afectará los registros ya guardados en tu historial.")
+                    
+                    tipo_eliminar = st.selectbox(
+                        "Selecciona qué tipo de destino deseas eliminar:", 
+                        ["Empresa", "Area", "Agencia"], 
+                        key="tipo_eliminar_select"
+                    )
+                    
+                    # Cargar opciones existentes excluyendo marcadores por defecto
+                    if tipo_eliminar == "Empresa":
+                        opciones_eliminar = [e for e in empresas_disponibles if e not in ["Sin Registrar", ""]]
+                    elif tipo_eliminar == "Area":
+                        opciones_eliminar = [a for a in areas_disponibles if a not in ["Sin Registrar", ""]]
+                    else:
+                        opciones_eliminar = [ag for ag in agencias_disponibles if ag not in ["Sin Registrar", ""]]
+                    
+                    if opciones_eliminar:
+                        valor_a_eliminar = st.selectbox(
+                            f"Selecciona la {tipo_eliminar} a eliminar permanentemente:", 
+                            opciones_eliminar,
+                            key="valor_eliminar_select"
+                        )
+                        
+                        confirmar_accion = st.checkbox(
+                            f"Confirmo que deseo borrar permanentemente '{valor_a_eliminar}'", 
+                            key="confirmar_eliminar_check"
+                        )
+                        
+                        if st.button("Eliminar Destino Seleccionado", type="primary", key="btn_ejecutar_eliminar"):
+                            if confirmar_accion:
+                                with st.spinner("Eliminando destino en base de datos..."):
+                                    eliminar_parametro(valor_a_eliminar, tipo_eliminar)
+                                st.success(f"¡La {tipo_eliminar} '{valor_a_eliminar}' ha sido eliminada correctamente!")
+                                st.cache_data.clear()
+                                st.cache_resource.clear()
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Por favor, marca la casilla de confirmación para autorizar el borrado.")
+                    else:
+                        st.info(f"No hay registros disponibles de tipo '{tipo_eliminar}' para eliminar.")
                         
             with col_param_der:
                 st.write("📋 **Lista de Destinos Actuales**")
