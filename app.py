@@ -10,7 +10,7 @@ import time
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
 
-# --- CONEXIÓN CON GOOGLE SHEETS (OPTIMIZADA CON CACHÉ DE SESIÓN) ---
+# --- CONEXIÓN CON GOOGLE SHEETS (CON REINTENTOS AUTOMÁTICOS Y CACHÉ) ---
 @st.cache_resource
 def conectar_google_sheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -58,17 +58,8 @@ def inicializar_pestanas_seguras():
                 
     return st.session_state["pestanas"]
 
-# Obtener las pestañas desde la sesión de forma ultra rápida
+# Inicializamos las hojas de trabajo de forma segura usando la sesión
 pestanas_activas = inicializar_pestanas_seguras()
-hoja_insumos = pestanas_activas["Insumos"]
-hoja_historial = pestanas_activas["Historial"]
-hoja_usuarios = pestanas_activas["Usuarios"]
-hoja_parametros = pestanas_activas["Parametros"]
-hoja_ventas = pestanas_activas["Ventas"]
-hoja_alquileres = pestanas_activas["Alquileres"]
-
-# Inicializamos las hojas de trabajo de forma segura
-pestanas_activas = inicializar_pestanas()
 hoja_insumos = pestanas_activas["Insumos"]
 hoja_historial = pestanas_activas["Historial"]
 hoja_usuarios = pestanas_activas["Usuarios"]
@@ -177,6 +168,8 @@ if st.sidebar.button("Cerrar Sesión"):
     st.session_state["usuario_actual"] = ""
     st.session_state["rol_actual"] = ""
     st.cache_data.clear()
+    if "pestanas" in st.session_state:
+        del st.session_state["pestanas"]
     st.rerun()
 
 # --- FUNCIONES DE SOPORTES DE INVENTARIO ---
@@ -365,7 +358,7 @@ with tab_operaciones:
             if "camara_activa" not in st.session_state:
                 st.session_state["camara_activa"] = False
                 
-            # Renderizamos un interruptor visual para prender o apagar la cámara
+            # Un control interactivo rápido para prender o apagar la cámara físicamente
             st.session_state["camara_activa"] = st.checkbox(
                 "🎥 Activar / Encender Cámara", 
                 value=st.session_state["camara_activa"],
