@@ -214,10 +214,10 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
-def obtener_ultimo_alquiler(insumo, empresa, area):
+def obtener_ultimo_alquiler(insumo, empresa, area, agencia):
     """
     Busca en la pestaña de Alquileres el último registro que coincida 
-    con el Insumo, la Empresa y el Área especificados para extraer su contador y su fecha.
+    con el Insumo, la Empresa, el Área y la Agencia especificados para extraer su contador y su fecha.
     """
     try:
         datos = hoja_alquileres.get_all_values()
@@ -225,11 +225,22 @@ def obtener_ultimo_alquiler(insumo, empresa, area):
             return None
         
         df_alq = pd.DataFrame(datos[1:], columns=datos[0])
-        df_filtrado = df_alq[
-            (df_alq["Insumo"].str.strip() == str(insumo).strip()) & 
-            (df_alq["Empresa Destino"].str.strip() == str(empresa).strip()) & 
-            (df_alq["Area Destino"].str.strip() == str(area).strip())
-        ]
+        
+        # Filtramos asegurándonos de contemplar la columna de Agencia Destino (si existe)
+        if "Agencia Destino" in df_alq.columns:
+            df_filtrado = df_alq[
+                (df_alq["Insumo"].str.strip() == str(insumo).strip()) & 
+                (df_alq["Empresa Destino"].str.strip() == str(empresa).strip()) & 
+                (df_alq["Area Destino"].str.strip() == str(area).strip()) &
+                (df_alq["Agencia Destino"].str.strip() == str(agencia).strip())
+            ]
+        else:
+            # Fallback en caso de que la hoja de alquileres aún no tenga la columna Agencia Destino
+            df_filtrado = df_alq[
+                (df_alq["Insumo"].str.strip() == str(insumo).strip()) & 
+                (df_alq["Empresa Destino"].str.strip() == str(empresa).strip()) & 
+                (df_alq["Area Destino"].str.strip() == str(area).strip())
+            ]
         
         if not df_filtrado.empty:
             ultimo_registro = df_filtrado.iloc[-1]
@@ -238,7 +249,7 @@ def obtener_ultimo_alquiler(insumo, empresa, area):
         st.error(f"Error al buscar historial de contadores: {e}")
     return None
 
-def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0, contador_anterior=0, contador_actual=0, paginas=0, dias=0):
+def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0, contador_anterior=0, contador_actual=0, paginas=0, dias=0, agencia=""):
     try:
         df_local = obtener_insumos()
         idx_lista = df_local[df_local["ID"].astype(str) == str(id_insumo)].index
@@ -249,6 +260,11 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
             hoja_insumos.update_cell(fila_sheet, 4, nuevo_stock)
             fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
             
+            # Para el historial, unimos dinámicamente Area y Agencia si corresponde
+            detalle_destino = area_o_precio
+            if agencia and agencia != "Sin Registrar" and "Agencia:" not in area_o_precio:
+                detalle_destino = f"{area_o_precio} - Agencia: {agencia}"
+                
             hoja_historial.append_row([
                 fecha_actual, 
                 nombre_insumo, 
@@ -258,7 +274,7 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                 st.session_state["usuario_actual"], 
                 motivo, 
                 empresa, 
-                area_o_precio
+                detalle_destino
             ])
             
             if tipo_mov == "Salida":
@@ -273,7 +289,18 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                         st.session_state["usuario_actual"]
                     ])
                 elif motivo == "Alquiler":
-                    hoja_alquileres.append_row([
+                    # Intentamos guardar la Agencia de forma estructurada.
+                    cabeceras_alquileres = hoja_alquileres.row_values(1)
+                    
+                    if "Agencia Destino" not in cabeceras_alquileres:
+                        col_nueva_idx = len(cabeceras_alquileres) + 1
+                        hoja_alquileres.update_cell(1, col_nueva_idx, "Agencia Destino")
+                    
+                    # Volvemos a leer cabeceras actualizadas para posicionarla correctamente
+                    cabeceras_actualizadas = hoja_alquileres.row_values(1)
+                    agencia_col_idx = cabeceras_actualizadas.index("Agencia Destino") + 1
+                    
+                    fila_registro = [
                         fecha_actual,
                         nombre_insumo,
                         cant_movida,
@@ -284,7 +311,15 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                         int(contador_actual),
                         int(paginas),
                         int(dias)
-                    ])
+                    ]
+                    
+                    # Rellenamos hasta la columna de la Agencia si es necesario
+                    while len(fila_registro) < agencia_col_idx - 1:
+                        fila_registro.append("")
+                        
+                    fila_registro.insert(agencia_col_idx - 1, agencia)
+                    
+                    hoja_alquileres.append_row(fila_registro)
         else:
             st.error("❌ No se encontró el ID del insumo en la hoja de cálculo.")
     except Exception as e:
@@ -433,6 +468,7 @@ with tab_operaciones:
                     motivo_salida = ""
                     empresa_destino = ""
                     area_o_precio_destino = ""
+                    agencia_destino = ""
                     val_unit = 0.0
                     
                     cont_anterior = 0
@@ -462,7 +498,7 @@ with tab_operaciones:
                                 st.caption(f"Valor Unitario: *{val_unit} Bs.*")
                         
                         elif motivo_salida == "Alquiler":
-                            # Ahora el formulario incluye también la selección de Agencia si aplica
+                            # Selección estructurada de Empresa, Área y Agencia
                             with col_mot2:
                                 if empresas_disponibles:
                                     empresa_destino = st.selectbox("🏢 Empresa de Destino:", empresas_disponibles)
@@ -481,16 +517,12 @@ with tab_operaciones:
                                     agencia_destino = st.selectbox("🏢 Agencia de Destino:", agencias_disponibles)
                                 else:
                                     agencia_destino = st.text_input("🏢 Agencia de Destino (Escribe manual):")
-                                    
-                            # Para mantener la compatibilidad con el esquema actual de tu historial sin cambiar la BD,
-                            # unimos dinámicamente el Área y la Agencia en la descripción del destino:
-                            if agencia_destino and agencia_destino != "Sin Registrar":
-                                area_o_precio_destino = f"{area_o_precio_destino} - Agencia: {agencia_destino}"
                             
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
                             
-                            ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino)
+                            # Obtenemos el último alquiler buscando de forma precisa por Empresa, Área y Agencia
+                            ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
                             
                             sugerencia_anterior = 0
                             fecha_ultimo_alquiler = None
@@ -503,7 +535,7 @@ with tab_operaciones:
                                 except:
                                     pass
                             else:
-                                st.warning("⚠️ No se encontró un alquiler previo idéntico para este Insumo, Empresa y Área. Se iniciará con contador base 0.")
+                                st.warning("⚠️ No se encontró un alquiler previo idéntico para este Insumo, Empresa, Área y Agencia. Se iniciará con contador base 0.")
                             
                             # --- CONTROL DE SEGURIDAD PARA CONTADOR ANTERIOR ---
                             col_c1, col_c2 = st.columns(2)
@@ -582,7 +614,8 @@ with tab_operaciones:
                                     contador_anterior=cont_anterior,
                                     contador_actual=cont_actual,
                                     paginas=paginas_calculadas,
-                                    dias=dias_calculados
+                                    dias=dias_calculados,
+                                    agencia=agencia_destino
                                 )
                             st.success(f"¡Stock actualizado! Ahora tienes {nueva_cantidad} unidades de '{seleccionado}'.")
                             st.cache_data.clear()
@@ -608,7 +641,6 @@ with tab_operaciones:
     if df_filtrado.empty:
         st.warning("No se encontraron insumos.")
     else:
-        # Añadimos la columna N° a la visualización de existencias de manera similar
         df_filtrado_con_num = df_filtrado.copy()
         df_filtrado_con_num.insert(0, "N°", range(1, len(df_filtrado_con_num) + 1))
         st.dataframe(df_filtrado_con_num, use_container_width=True, hide_index=True)
@@ -680,19 +712,16 @@ with tab_rendimiento:
             df_rend_filtrado = df_rend[(df_rend["Páginas Impresas"] > 0) | (df_rend["Días Transcurridos"] > 0)]
             
             if not df_rend_filtrado.empty:
-                # Agrupamos por insumo para obtener el promedio
                 df_promedios = df_rend_filtrado.groupby("Insumo").agg(
                     Promedio_Paginas=("Páginas Impresas", "mean"),
                     Promedio_Dias=("Días Transcurridos", "mean"),
                     Total_Registros=("Insumo", "count")
                 ).reset_index()
                 
-                # Renombrar columnas para la interfaz
                 df_promedios.columns = ["Insumo", "Páginas Promedio por Periodo", "Duración Promedio (Días)", "Nº Mediciones Realizadas"]
                 
                 st.write("📊 **Tabla de Rendimiento Promedio por Insumo**")
                 
-                # Insertamos la columna de índice visual N°
                 df_promedios_con_num = df_promedios.copy()
                 df_promedios_con_num.insert(0, "N°", range(1, len(df_promedios_con_num) + 1))
                 st.dataframe(df_promedios_con_num, use_container_width=True, hide_index=True)
@@ -770,8 +799,6 @@ with tab_reportes:
                 st.warning("No se registraron movimientos en este rango.")
             else:
                 df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore').copy()
-                
-                # Modificado: Se añade la columna N° secuencial
                 df_mostrar.insert(0, "N°", range(1, len(df_mostrar) + 1))
                 st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
                 
@@ -826,7 +853,6 @@ with tab_reportes:
                 suma_ventas = pd.to_numeric(df_v_mostrar["Monto Total (Bs.)"], errors='coerce').sum()
                 st.success(f"💰 **Monto Total Facturado en {mes_seleccionado} del {ano_seleccionado}:** {suma_ventas:,.2f} Bs.")
                 
-                # Modificado: Se añade la columna N° secuencial
                 df_v_mostrar.insert(0, "N°", range(1, len(df_v_mostrar) + 1))
                 st.dataframe(df_v_mostrar, use_container_width=True, hide_index=True)
                 
@@ -867,8 +893,6 @@ with tab_reportes:
                 st.warning("No se registraron salidas por alquiler en este rango.")
             else:
                 df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore').copy()
-                
-                # Modificado: Se añade la columna N° secuencial
                 df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
                 st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
                 
@@ -886,7 +910,6 @@ with tab_reportes:
             
             tipo_tabla_editar = st.selectbox("Selecciona el Historial a depurar:", ["Alquileres", "Ventas", "Historial General"])
             
-            # Cargamos la tabla seleccionada con sus índices reales para el Sheets
             try:
                 if tipo_tabla_editar == "Alquileres":
                     hoja_activa_borrar = hoja_alquileres
@@ -899,17 +922,14 @@ with tab_reportes:
                 
                 if datos_crud and len(datos_crud) > 1:
                     df_crud = pd.DataFrame(datos_crud[1:], columns=datos_crud[0]).copy()
-                    # Añadimos una columna temporal de índice real de fila en Google Sheets
                     df_crud["Fila_Sheet"] = [i for i in range(2, len(df_crud) + 2)]
                     
                     st.write("Selecciona el registro que deseas eliminar permanentemente de Google Sheets:")
                     
-                    # Modificado: Se añade la columna N° secuencial para esta visualización también
                     df_crud_visual = df_crud.copy()
                     df_crud_visual.insert(0, "N°", range(1, len(df_crud_visual) + 1))
                     st.dataframe(df_crud_visual, use_container_width=True, hide_index=True)
                     
-                    # Generamos una lista legible para el dropdown
                     opciones_eliminar = []
                     for index, row in df_crud.iterrows():
                         fecha_r = row.get("Fecha", "Sin Fecha")
@@ -920,17 +940,13 @@ with tab_reportes:
                     seleccion_borrado = st.selectbox("Selecciona fila a eliminar:", opciones_eliminar)
                     
                     if seleccion_borrado:
-                        # Extraer el número de fila real del string
                         fila_eliminar_real = int(seleccion_borrado.split(" | ")[0].replace("Fila ", ""))
-                        
                         st.error(f"⚠️ ¿Estás completamente seguro de eliminar permanentemente la **Fila {fila_eliminar_real}** de Google Sheets?")
-                        
                         confirmacion_borrado = st.text_input("Escribe 'ELIMINAR' en mayúsculas para proceder:")
                         
                         if st.button("Proceder con la Eliminación"):
                             if confirmacion_borrado == "ELIMINAR":
                                 with st.spinner("Eliminando fila en Google Sheets..."):
-                                    # gspread permite borrar filas por su índice
                                     hoja_activa_borrar.delete_rows(fila_eliminar_real)
                                 st.success(f"¡Fila {fila_eliminar_real} eliminada exitosamente!")
                                 st.cache_data.clear()
@@ -1026,13 +1042,17 @@ with tab_usuarios:
                 
                 st.markdown("---")
                 
-                # --- NUEVO FORMULARIO: REGISTRO DE AGENCIA ---
+                # --- NUEVO FORMULARIO: REGISTRO DE AGENCIA (SOLO EDITABLE POR EL ADMINISTRADOR) ---
+                st.info("🔐 **Gestión de Agencias**: Solo disponible para cuentas con rol de Administrador.")
                 with st.form("nueva_agencia_form", clear_on_submit=True):
                     nueva_ag = st.text_input("Nombre de la Agencia:", placeholder="Ej: Agencia Norte")
                     guardar_ag_btn = st.form_submit_button("Añadir Agencia")
                     
                 if guardar_ag_btn:
-                    if nueva_ag.strip() == "":
+                    # Una validación extra por código para asegurar que sólo el Administrador lo guarde
+                    if st.session_state["rol_actual"] != "Administrador":
+                        st.error("❌ Acción no permitida. Solo el Administrador puede registrar o editar agencias.")
+                    elif nueva_ag.strip() == "":
                         st.error("Por favor, escribe un nombre de agencia válido.")
                     elif nueva_ag.strip() in agencias_disponibles:
                         st.warning("Esta agencia ya se encuentra registrada.")
