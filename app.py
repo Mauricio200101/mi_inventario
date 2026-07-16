@@ -498,7 +498,7 @@ with tab_operaciones:
                                 st.caption(f"Valor Unitario: *{val_unit} Bs.*")
                         
                         elif motivo_salida == "Alquiler":
-                            # Selección estructurada de Empresa, Área y Agencia
+                            # Selección estructurada de Empresa, Área y Agencia con relación dinámica
                             with col_mot2:
                                 if empresas_disponibles:
                                     empresa_destino = st.selectbox("🏢 Empresa de Destino:", empresas_disponibles)
@@ -508,27 +508,16 @@ with tab_operaciones:
                             col_al_dest1, col_al_dest2 = st.columns(2)
                             
                             # --- FILTRADO DINÁMICO DE ÁREAS Y AGENCIAS POR EMPRESA SELECCIONADA ---
-                            # Si se seleccionó una empresa, buscamos áreas y agencias que empiecen con su nombre o convención
-                            areas_filtradas = [
-                                area for area in areas_disponibles 
-                                if area.lower().startswith(empresa_destino.lower() + " -") or area.lower() == area.lower()
-                            ]
-                            # Intentamos un filtrado estricto por formato "Empresa - Área"
                             areas_estrictas = [a for a in areas_disponibles if a.strip().startswith(empresa_destino.strip() + " -")]
-                            if areas_estrictas:
-                                areas_mostrar = areas_estrictas
-                            else:
-                                areas_mostrar = areas_disponibles
+                            areas_mostrar = areas_estrictas if areas_estrictas else areas_disponibles
 
                             agencias_estrictas = [ag for ag in agencias_disponibles if ag.strip().startswith(empresa_destino.strip() + " -")]
-                            if agencias_estrictas:
-                                agencias_mostrar = agencias_estrictas
-                            else:
-                                agencias_mostrar = agencias_disponibles
+                            agencias_mostrar = agencias_estrictas if agencias_estrictas else agencias_disponibles
 
+                            # Selector dinámico de Área
                             with col_al_dest1:
                                 if areas_mostrar:
-                                    # Limpiamos el texto de prefijo de empresa para que el usuario visualice solo el Área real
+                                    # Limpiamos visualmente el prefijo para mostrar solo el nombre real del Área
                                     opciones_area_formateadas = {
                                         a: a.replace(empresa_destino + " -", "").strip() for a in areas_mostrar
                                     }
@@ -541,9 +530,10 @@ with tab_operaciones:
                                 else:
                                     area_o_precio_destino = st.text_input("📍 Área de Destino (Escribe manual):")
                             
+                            # Selector dinámico de Agencia
                             with col_al_dest2:
                                 if agencias_mostrar:
-                                    # Limpiamos el texto de prefijo de empresa para visualizar solo el nombre de la Agencia real
+                                    # Limpiamos visualmente el prefijo para mostrar solo el nombre de la Agencia
                                     opciones_agencia_formateadas = {
                                         ag: ag.replace(empresa_destino + " -", "").strip() for ag in agencias_mostrar
                                     }
@@ -554,7 +544,7 @@ with tab_operaciones:
                                     )
                                     agencia_destino = agencia_seleccionada_clave
                                 else:
-                                    # Si no hay agencias pre-cargadas para esta empresa, sugerimos el formato automático y permitimos edición
+                                    # Propuesta automática inteligente si no hay registros pre-cargados
                                     valor_automatico_agencia = f"{empresa_destino} - {area_o_precio_destino.replace(empresa_destino + ' -', '').strip()}"
                                     agencia_destino = st.text_input(
                                         "🏢 Agencia de Destino (Escribe manual):", 
@@ -564,7 +554,7 @@ with tab_operaciones:
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
                             
-                            # Obtenemos el último alquiler buscando de forma precisa por Empresa, Área y Agencia
+                            # Buscar historial de contadores filtrando por Empresa, Área y Agencia de manera precisa
                             ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
                             
                             sugerencia_anterior = 0
@@ -596,7 +586,6 @@ with tab_operaciones:
                                     st.caption("🔒 El contador anterior es automático. Solo un Administrador puede cambiarlo.")
                             
                             with col_c2:
-                                # Sincronizado dinámicamente con cont_anterior
                                 cont_actual = st.number_input(
                                     "Contador Actual (Lectura de hoy):", 
                                     min_value=int(cont_anterior), 
@@ -747,11 +736,9 @@ with tab_rendimiento:
         if datos_rend and len(datos_rend) > 1:
             df_rend = pd.DataFrame(datos_rend[1:], columns=datos_rend[0])
             
-            # Convertir columnas a numéricas
             df_rend["Páginas Impresas"] = pd.to_numeric(df_rend["Páginas Impresas"], errors="coerce").fillna(0)
             df_rend["Días Transcurridos"] = pd.to_numeric(df_rend["Días Transcurridos"], errors="coerce").fillna(0)
             
-            # Solo analizamos registros donde hubo uso (páginas > 0 o días > 0)
             df_rend_filtrado = df_rend[(df_rend["Páginas Impresas"] > 0) | (df_rend["Días Transcurridos"] > 0)]
             
             if not df_rend_filtrado.empty:
@@ -1086,7 +1073,6 @@ with tab_usuarios:
                 
                 st.markdown("---")
                 
-                # --- NUEVO FORMULARIO: REGISTRO DE AGENCIA (SOLO EDITABLE POR EL ADMINISTRADOR) ---
                 st.info("🔐 **Gestión de Agencias**: Solo disponible para cuentas con rol de Administrador.")
                 with st.form("nueva_agencia_form", clear_on_submit=True):
                     st.write("**Para asociar una agencia a una empresa, regístrala con el formato:** `Empresa - Agencia` (Ej: *Constructora Gamma - Agencia Norte*)")
@@ -1094,7 +1080,6 @@ with tab_usuarios:
                     guardar_ag_btn = st.form_submit_button("Añadir Agencia")
                     
                 if guardar_ag_btn:
-                    # Una validación extra por código para asegurar que sólo el Administrador lo guarde
                     if st.session_state["rol_actual"] != "Administrador":
                         st.error("❌ Acción no permitida. Solo el Administrador puede registrar o editar agencias.")
                     elif nueva_ag.strip() == "":
