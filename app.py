@@ -72,7 +72,6 @@ hoja_usuarios = pestanas_activas["Usuarios"]
 hoja_parametros = pestanas_activas["Parametros"]
 hoja_ventas = pestanas_activas["Ventas"]
 hoja_alquileres = pestanas_activas["Alquileres"]
-df_insumos = obtener_insumos()
 
 # --- FUNCIONES DE GESTIÓN DE USUARIOS ---
 @st.cache_data(ttl=60)
@@ -359,6 +358,7 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
 
 # --- PESTAÑAS DEL SISTEMA ---
 # Asegúrate de que esto esté totalmente a la izquierda (sin sangría/indentación)
+df_insumos = obtener_insumos()
 tab_operaciones, tab_valorizacion, tab_rendimiento, tab_reportes, tab_usuarios = st.tabs([
     "Operaciones de Stock",
     "Valorización del Inventario",
