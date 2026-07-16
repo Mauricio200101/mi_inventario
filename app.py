@@ -344,12 +344,28 @@ with tab_operaciones:
             st.subheader("🔄 Registrar Movimiento (Entrada/Salida)")
             
             st.markdown("📷 **Lector de Códigos QR/Barra**")
-            foto_codigo = st.camera_input("Toma una foto al código de barra para escanearlo")
+            
+            # --- NUEVO BOTÓN DE ENCENDIDO / APAGADO DE CÁMARA ---
+            if "camara_activa" not in st.session_state:
+                st.session_state["camara_activa"] = False
+                
+            # Renderizamos un interruptor visual para prender o apagar la cámara
+            st.session_state["camara_activa"] = st.checkbox(
+                "🎥 Activar / Encender Cámara", 
+                value=st.session_state["camara_activa"],
+                help="Marca esta casilla para encender la cámara y desmárcala para apagarla por completo."
+            )
+            
             insumo_detectado = None
             
-            if foto_codigo is not None:
-                st.success("¡Código capturado con éxito!")
-                insumo_detectado = st.selectbox("🔍 Confirmar insumo detectado por la cámara:", df_insumos["Nombre"].tolist())
+            # Solo si el usuario decide activarla, mostramos el componente de cámara
+            if st.session_state["camara_activa"]:
+                foto_codigo = st.camera_input("Toma una foto al código de barra para escanearlo")
+                if foto_codigo is not None:
+                    st.success("¡Código capturado con éxito!")
+                    insumo_detectado = st.selectbox("🔍 Confirmar insumo detectado por la cámara:", df_insumos["Nombre"].tolist())
+            else:
+                st.info("📷 La cámara está actualmente apagada. Marca la casilla de arriba para encenderla.")
 
             st.markdown("---")
             if not df_insumos.empty:
