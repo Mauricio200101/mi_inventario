@@ -26,15 +26,46 @@ def conectar_google_sheets():
 
 try:
     sh = conectar_google_sheets()
-    hoja_insumos = sh.worksheet("Insumos")
-    hoja_historial = sh.worksheet("Historial")
-    hoja_usuarios = sh.worksheet("Usuarios")
-    hoja_parametros = sh.worksheet("Parametros")
-    # Hojas de historial específico
-    hoja_ventas = sh.worksheet("Ventas")
-    hoja_alquileres = sh.worksheet("Alquileres")
+    
+    # Intentamos cargar cada pestaña por separado para identificar errores fácilmente
+    try:
+        hoja_insumos = sh.worksheet("Insumos")
+    except Exception:
+        st.error("❌ No se encontró la pestaña llamada **'Insumos'** en tu Google Sheets. Revisa el nombre.")
+        st.stop()
+        
+    try:
+        hoja_historial = sh.worksheet("Historial")
+    except Exception:
+        st.error("❌ No se encontró la pestaña llamada **'Historial'** en tu Google Sheets. Revisa el nombre.")
+        st.stop()
+        
+    try:
+        hoja_usuarios = sh.worksheet("Usuarios")
+    except Exception:
+        st.error("❌ No se encontró la pestaña llamada **'Usuarios'** en tu Google Sheets. Revisa el nombre.")
+        st.stop()
+        
+    try:
+        hoja_parametros = sh.worksheet("Parametros")
+    except Exception:
+        st.error("❌ No se encontró la pestaña llamada **'Parametros'** en tu Google Sheets. Revisa el nombre.")
+        st.stop()
+        
+    try:
+        hoja_ventas = sh.worksheet("Ventas")
+    except Exception:
+        st.error("❌ No se encontró la pestaña llamada **'Ventas'** en tu Google Sheets. Revisa que no tenga espacios adicionales.")
+        st.stop()
+        
+    try:
+        hoja_alquileres = sh.worksheet("Alquileres")
+    except Exception:
+        st.error("❌ No se encontró la pestaña llamada **'Alquileres'** en tu Google Sheets. Revisa que no tenga espacios adicionales.")
+        st.stop()
+
 except Exception as e:
-    st.error("❌ Error al conectar con Google Sheets. Verifica tus credenciales y pestañas.")
+    st.error(f"❌ Error crítico al conectar con Google Drive / Sheets: {e}")
     st.stop()
 
 # --- FUNCIONES DE GESTIÓN DE USUARIOS ---
@@ -130,7 +161,7 @@ if st.sidebar.button("Cerrar Sesión"):
     st.session_state["rol_actual"] = ""
     st.rerun()
 
-# --- FUNCIONES DE SOPORTE DE INVENTARIO ---
+# --- FUNCIONES DE SOPORES DE INVENTARIO ---
 def obtener_insumos():
     registros = hoja_insumos.get_all_records()
     df = pd.DataFrame(registros)
@@ -173,23 +204,21 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
         if tipo_mov == "Salida":
             if motivo == "Venta":
                 total_venta = float(cant_movida) * float(precio_unitario)
-                # Formato Ventas: [Fecha, Insumo, Cantidad, Precio Aplicado, Monto Total, Usuario]
                 hoja_ventas.append_row([
                     fecha_actual,
                     nombre_insumo,
                     cant_movida,
-                    area_o_precio, # Contiene el nombre del esquema (ej. "Precio Cliente")
+                    area_o_precio, 
                     total_venta,
                     st.session_state["usuario_actual"]
                 ])
             elif motivo == "Alquiler":
-                # Formato Alquileres: [Fecha, Insumo, Cantidad, Empresa Destino, Area Destino, Usuario]
                 hoja_alquileres.append_row([
                     fecha_actual,
                     nombre_insumo,
                     cant_movida,
                     empresa,
-                    area_o_precio, # Contiene el área seleccionada
+                    area_o_precio, 
                     st.session_state["usuario_actual"]
                 ])
 
@@ -210,7 +239,6 @@ tab_operaciones, tab_valorizacion, tab_reportes, tab_usuarios = st.tabs([
 # 1. PESTAÑA DE OPERACIONES DE STOCK
 # ==========================================
 with tab_operaciones:
-    # --- ALERTAS DE STOCK CRÍTICO ---
     if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
         st.subheader("⚠️ Alertas de Stock Crítico")
         alertas_activas = False
@@ -518,36 +546,29 @@ with tab_reportes:
             df_v = pd.DataFrame()
             
         if not df_v.empty and "Fecha" in df_v.columns:
-            # Convertimos la columna Fecha en formato Datetime para operar con ella
             df_v["Fecha_dt"] = pd.to_datetime(df_v["Fecha"], errors='coerce')
             
-            # Creamos columnas auxiliares para extraer el Año y el Mes
             df_v["Año"] = df_v["Fecha_dt"].dt.year
             df_v["Mes_Num"] = df_v["Fecha_dt"].dt.month
             
-            # Diccionario para mostrar los meses en texto legible en español
             meses_es = {
                 1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
                 7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
             }
             df_v["Mes"] = df_v["Mes_Num"].map(meses_es)
             
-            # Obtenemos dinámicamente las listas de años y meses disponibles en tus datos reales
             anos_disponibles = sorted(df_v["Año"].dropna().unique().astype(int).tolist(), reverse=True)
             
             col_v1, col_v2 = st.columns(2)
             with col_v1:
-                # Si por alguna razón no hay años registrados, usamos el año actual
                 ano_seleccionado = st.selectbox("Selecciona el Año:", anos_disponibles if anos_disponibles else [datetime.today().year])
             
-            # Filtramos los meses que efectivamente tienen ventas en ese año seleccionado
             meses_del_ano = df_v[df_v["Año"] == ano_seleccionado]["Mes_Num"].unique()
             meses_opciones = [meses_es[m] for m in sorted(meses_del_ano)]
             
             with col_v2:
                 mes_seleccionado = st.selectbox("Selecciona el Mes:", meses_opciones if meses_opciones else ["Ninguno"])
             
-            # Filtrar DataFrame según selección
             mes_num_sel = [k for k, v in meses_es.items() if v == mes_seleccionado][0] if mes_seleccionado != "Ninguno" else None
             
             df_filtrado_v = df_v[(df_v["Año"] == ano_seleccionado) & (df_v["Mes_Num"] == mes_num_sel)]
@@ -557,13 +578,11 @@ with tab_reportes:
             else:
                 df_v_mostrar = df_filtrado_v.drop(columns=["Fecha_dt", "Año", "Mes_Num", "Mes"], errors='ignore')
                 
-                # Muestra los datos totales de forma muy visible
                 suma_ventas = pd.to_numeric(df_v_mostrar["Monto Total (Bs.)"], errors='coerce').sum()
                 st.success(f"💰 **Monto Total Facturado en {mes_seleccionado} del {ano_seleccionado}:** {suma_ventas:,.2f} Bs.")
                 
                 st.dataframe(df_v_mostrar, use_container_width=True, hide_index=True)
                 
-                # Botón de descarga de este mes específico
                 buffer_v = io.BytesIO()
                 with pd.ExcelWriter(buffer_v, engine='openpyxl') as writer:
                     df_v_mostrar.to_excel(writer, sheet_name=f'Ventas_{mes_seleccionado}_{ano_seleccionado}', index=False)
