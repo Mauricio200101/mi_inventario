@@ -566,8 +566,8 @@ with tab_operaciones:
                         format_func=lambda x: x.replace(agencia_destino + " - ", "")
                         )
             
-            st.markdown("---")
-            st.markdown("📊 **Control de Contadores (Alquiler)**")
+                        st.markdown("---")
+                        st.markdown("📊 **Control de Contadores (Alquiler)**")
             
             # Solo buscar el historial si el motivo es Alquiler
             ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
