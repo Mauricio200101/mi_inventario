@@ -351,8 +351,8 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                     int(dias)
                 ]
                 hoja_alquileres.append_row(fila_registro)
-    else:
-        st.error("No se encontró el ID del insumo en la hoja de cálculo.")
+                else:
+                    st.error("No se encontró el ID del insumo en la hoja de cálculo.")
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
 
