@@ -359,6 +359,7 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
 # --- PESTAÑAS DEL SISTEMA ---
 # Asegúrate de que esto esté totalmente a la izquierda (sin sangría/indentación)
 df_insumos = obtener_insumos()
+empresas_disponibles, areas_disponibles, agencias_disponibles = obtener_parametros()
 tab_operaciones, tab_valorizacion, tab_rendimiento, tab_reportes, tab_usuarios = st.tabs([
     "Operaciones de Stock",
     "Valorización del Inventario",
@@ -995,6 +996,7 @@ with tab_reportes:
 # ==========================================
 with tab_usuarios:
     if st.session_state["rol_actual"] == "Administrador":
+        
         st.subheader("⚙️ Configuración y Gestión de Usuarios")
         
         tab_sub_usuarios, tab_sub_parametros = st.tabs(["👥 Cuentas de Usuarios", "🏢 Parámetros de Alquiler (Empresas/Áreas/Agencias)"])
