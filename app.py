@@ -546,6 +546,9 @@ with tab_operaciones:
                                 st.caption(f"Valor Unitario: *{val_unit} Bs.*")
                         
                         elif motivo_salida == "Alquiler":
+                            # Añade esta línea aquí:
+                            col_al_dest1, col_al_dest2 = st.columns(2)
+                            
                             # Selección estructurada de Empresa, Área y Agencia con relación dinámica
                             with col_al_dest1:
                                 # 1. Selector de Empresa
