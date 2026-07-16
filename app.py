@@ -193,47 +193,59 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
+# --- ESTA ES LA FUNCIÓN NUEVA Y OPTIMIZADA ---
 def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0):
-    celda_id = hoja_insumos.find(str(id_insumo))
-    if celda_id:
-        # 1. Actualizar Stock en la pestaña "Insumos"
-        hoja_insumos.update_cell(celda_id.row, 4, nuevo_stock)
-        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        # 1. Buscamos la fila localmente para evitar hacer un .find() en Google Sheets
+        df_local = obtener_insumos()
+        # Encontramos la fila correspondiente (Google Sheets empieza en 1, sumamos 2 por cabecera)
+        idx_lista = df_local[df_local["ID"].astype(str) == str(id_insumo)].index
         
-        # 2. Registrar en el Historial General (Auditoría)
-        hoja_historial.append_row([
-            fecha_actual, 
-            nombre_insumo, 
-            tipo_mov, 
-            cant_movida, 
-            nuevo_stock, 
-            st.session_state["usuario_actual"], 
-            motivo, 
-            empresa, 
-            area_o_precio
-        ])
-        
-        # 3. Registrar en Historiales Específicos
-        if tipo_mov == "Salida":
-            if motivo == "Venta":
-                total_venta = float(cant_movida) * float(precio_unitario)
-                hoja_ventas.append_row([
-                    fecha_actual,
-                    nombre_insumo,
-                    cant_movida,
-                    area_o_precio, 
-                    total_venta,
-                    st.session_state["usuario_actual"]
-                ])
-            elif motivo == "Alquiler":
-                hoja_alquileres.append_row([
-                    fecha_actual,
-                    nombre_insumo,
-                    cant_movida,
-                    empresa,
-                    area_o_precio, 
-                    st.session_state["usuario_actual"]
-                ])
+        if not idx_lista.empty:
+            fila_sheet = int(idx_lista[0]) + 2 # +2 porque los índices de pandas empiezan en 0 y la fila 1 es la cabecera
+            
+            # 2. Actualizar Stock en la pestaña "Insumos"
+            hoja_insumos.update_cell(fila_sheet, 4, nuevo_stock)
+            fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 3. Registrar en el Historial General (Auditoría)
+            hoja_historial.append_row([
+                fecha_actual, 
+                nombre_insumo, 
+                tipo_mov, 
+                cant_movida, 
+                nuevo_stock, 
+                st.session_state["usuario_actual"], 
+                motivo, 
+                empresa, 
+                area_o_precio
+            ])
+            
+            # 4. Registrar en Historiales Específicos
+            if tipo_mov == "Salida":
+                if motivo == "Venta":
+                    total_venta = float(cant_movida) * float(precio_unitario)
+                    hoja_ventas.append_row([
+                        fecha_actual,
+                        nombre_insumo,
+                        cant_movida,
+                        area_o_precio, 
+                        total_venta,
+                        st.session_state["usuario_actual"]
+                    ])
+                elif motivo == "Alquiler":
+                    hoja_alquileres.append_row([
+                        fecha_actual,
+                        nombre_insumo,
+                        cant_movida,
+                        empresa,
+                        area_o_precio, 
+                        st.session_state["usuario_actual"]
+                    ])
+        else:
+            st.error("❌ No se encontró el ID del insumo en la hoja de cálculo.")
+    except Exception as e:
+        st.error(f"⚠️ Error al conectar con la base de datos: {e}. Espera unos segundos e intenta nuevamente.")
 
 # --- INTERFAZ PRINCIPAL ---
 st.title("📦 Sistema de Control de Inventario Nube")
