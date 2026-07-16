@@ -547,58 +547,19 @@ with tab_operaciones:
                         
                         elif motivo_salida == "Alquiler":
                             # Selección estructurada de Empresa, Área y Agencia con relación dinámica
-                            with col_mot2:
-                                if empresas_disponibles:
-                                    empresa_destino = st.selectbox("🏢 Empresa de Destino:", empresas_disponibles)
-                                else:
-                                    empresa_destino = st.text_input("🏢 Empresa de Destino (Escribe manual):")
-                            
-                            col_al_dest1, col_al_dest2 = st.columns(2)
-                            
-                            # --- FILTRADO DINÁMICO DE ÁREAS Y AGENCIAS POR EMPRESA SELECCIONADA ---
-                            areas_estrictas = [a for a in areas_disponibles if a.strip().startswith(empresa_destino.strip() + " -")]
-                            areas_mostrar = areas_estrictas if areas_estrictas else areas_disponibles
-
-                            agencias_estrictas = [ag for ag in agencias_disponibles if ag.strip().startswith(empresa_destino.strip() + " -")]
-                            agencias_mostrar = agencias_estrictas if agencias_estrictas else agencias_disponibles
-
-                            # Selector dinámico de Área
                             with col_al_dest1:
-                                if areas_mostrar:
-                                    # Limpiamos visualmente el prefijo para mostrar solo el nombre real del Área
-                                    opciones_area_formateadas = {
-                                        a: a.replace(empresa_destino + " -", "").strip() for a in areas_mostrar
-                                    }
-                                    area_seleccionada_clave = st.selectbox(
-                                        "📍 Área de Destino:", 
-                                        options=list(opciones_area_formateadas.keys()),
-                                        format_func=lambda x: opciones_area_formateadas[x]
-                                    )
-                                    area_o_precio_destino = area_seleccionada_clave
-                                else:
-                                    area_o_precio_destino = st.text_input("📍 Área de Destino (Escribe manual):")
-                            
-                            # Selector dinámico de Agencia
-                            with col_al_dest2:
-                                if agencias_mostrar:
-                                    # Limpiamos visualmente el prefijo para mostrar solo el nombre de la Agencia
-                                    opciones_agencia_formateadas = {
-                                        ag: ag.replace(empresa_destino + " -", "").strip() for ag in agencias_mostrar
-                                    }
-                                    agencia_seleccionada_clave = st.selectbox(
-                                        "🏢 Agencia de Destino:", 
-                                        options=list(opciones_agencia_formateadas.keys()),
-                                        format_func=lambda x: opciones_agencia_formateadas[x]
-                                    )
-                                    agencia_destino = agencia_seleccionada_clave
-                                else:
-                                    # Propuesta automática inteligente si no hay registros pre-cargados
-                                    valor_automatico_agencia = f"{empresa_destino} - {area_o_precio_destino.replace(empresa_destino + ' -', '').strip()}"
-                                    agencia_destino = st.text_input(
-                                        "🏢 Agencia de Destino (Escribe manual):", 
-                                        value=valor_automatico_agencia
-                                    )
-                            
+    # 1. Selector de Empresa
+    empresa_destino = st.selectbox("🏢 Empresa:", empresas_disponibles)
+    
+    # 2. Filtro de Agencias basado en la Empresa
+    # Buscamos elementos que comiencen con el nombre de la empresa
+    agencias_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_destino.strip())]
+    agencia_destino = st.selectbox("🏢 Agencia:", agencias_filtradas)
+
+with col_al_dest2:
+    # 3. Filtro de Áreas basado en la Agencia
+    areas_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_destino)]
+    area_o_precio_destino = st.selectbox("📍 Área:", areas_filtradas)
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
                             
