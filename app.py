@@ -1053,9 +1053,32 @@ with tab_usuarios:
         tab_sub_usuarios, tab_sub_estructura = st.tabs(["👥 Cuentas de Usuarios", "🏢 Estructura: Empresa > Agencia > Área"])
         
         with tab_sub_estructura:
-            st.info("💡 **Regla de Oro:** Crea primero la Empresa, luego la Agencia para esa empresa, y finalmente el Área para esa agencia.")
-            
-            c1, c2, c3 = st.columns(3)
+    # 1. Definimos las columnas AQUÍ, justo antes de usarlas
+    col_param_izq, col_param_der = st.columns([1, 1.5])
+    
+    # 2. Obtenemos los datos y validamos columnas
+    datos_params = hoja_parametros.get_all_records()
+    if datos_params:
+        df_p = pd.DataFrame(datos_params)
+        # Aseguramos que los nombres coincidan con los de tu hoja
+        empresas = df_p["Empresa"].unique().tolist() if "Empresa" in df_p.columns else []
+    else:
+        df_p = pd.DataFrame()
+        empresas = []
+
+    # 3. Usamos col_param_izq dentro de este mismo bloque
+    with col_param_izq:
+        st.write("### ➕ Añadir Nuevo Destino")
+        with st.form("nueva_empresa_form"):
+            nueva_emp = st.text_input("Nombre de la Empresa:")
+            if st.form_submit_button("Añadir Empresa"):
+                registrar_parametro(nueva_emp, "Empresa")
+                st.rerun()
+    
+    # 4. Usamos col_param_der dentro de este mismo bloque
+    with col_param_der:
+        st.write("### 📋 Destinos Actuales")
+        st.write("Empresas:", empresas)
             
             # --- NIVEL 1: EMPRESAS ---
             with c1:
