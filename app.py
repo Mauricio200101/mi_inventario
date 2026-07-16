@@ -70,10 +70,14 @@ except Exception as e:
 
 # --- FUNCIONES DE GESTIÓN DE USUARIOS ---
 def obtener_usuarios():
-    registros = hoja_usuarios.get_all_records()
-    df = pd.DataFrame(registros)
-    if df.empty:
-        df = pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
+    try:
+        datos = hoja_usuarios.get_all_values()
+        if not datos or len(datos) <= 1:
+            return pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
+        df = pd.DataFrame(datos[1:], columns=datos[0])
+    except Exception as e:
+        st.warning(f"Aviso al leer Usuarios: {e}")
+        return pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
     return df
 
 def registrar_usuario(usuario, contrasenia, rol):
@@ -82,8 +86,11 @@ def registrar_usuario(usuario, contrasenia, rol):
 # --- FUNCIONES DE PARÁMETROS (EMPRESAS Y ÁREAS) ---
 def obtener_parametros():
     try:
-        registros = hoja_parametros.get_all_records()
-        df = pd.DataFrame(registros)
+        datos = hoja_parametros.get_all_values()
+        if not datos or len(datos) <= 1:
+            return ["Sin Registrar"], ["Sin Registrar"]
+            
+        df = pd.DataFrame(datos[1:], columns=datos[0])
         
         lista_empresas = df["Empresas"].dropna().astype(str).str.strip().tolist() if "Empresas" in df.columns else []
         lista_areas = df["Areas"].dropna().astype(str).str.strip().tolist() if "Areas" in df.columns else []
@@ -161,12 +168,18 @@ if st.sidebar.button("Cerrar Sesión"):
     st.session_state["rol_actual"] = ""
     st.rerun()
 
-# --- FUNCIONES DE SOPORES DE INVENTARIO ---
+# --- FUNCIONES DE SOPORTES DE INVENTARIO ---
 def obtener_insumos():
-    registros = hoja_insumos.get_all_records()
-    df = pd.DataFrame(registros)
-    if df.empty:
-        df = pd.DataFrame(columns=["ID", "Nombre", "Categoría", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
+    try:
+        datos = hoja_insumos.get_all_values()
+        if not datos or len(datos) <= 1:
+            return pd.DataFrame(columns=["ID", "Nombre", "Categoría", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
+        
+        df = pd.DataFrame(datos[1:], columns=datos[0])
+    except Exception as e:
+        st.warning(f"Aviso al leer Insumos: {e}")
+        return pd.DataFrame(columns=["ID", "Nombre", "Categoría", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
+        
     for col in ["Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -515,7 +528,11 @@ with tab_reportes:
             fecha_fin_gen = st.date_input("Hasta (General):", value=datetime.today(), key="f_gen_fin")
             
         try:
-            df_hist = pd.DataFrame(hoja_historial.get_all_records())
+            datos_hist = hoja_historial.get_all_values()
+            if datos_hist and len(datos_hist) > 1:
+                df_hist = pd.DataFrame(datos_hist[1:], columns=datos_hist[0])
+            else:
+                df_hist = pd.DataFrame(columns=["Fecha", "Insumo", "Movimiento", "Cantidad", "Stock Resultante", "Usuario", "Motivo", "Empresa/Precio", "Detalle"])
         except:
             df_hist = pd.DataFrame()
             
@@ -541,7 +558,11 @@ with tab_reportes:
         st.write("📆 **Segmentación Mensual de Ventas**")
         
         try:
-            df_v = pd.DataFrame(hoja_ventas.get_all_records())
+            datos_v = hoja_ventas.get_all_values()
+            if datos_v and len(datos_v) > 1:
+                df_v = pd.DataFrame(datos_v[1:], columns=datos_v[0])
+            else:
+                df_v = pd.DataFrame(columns=["Fecha", "Insumo", "Cantidad", "Precio Aplicado", "Monto Total (Bs.)", "Usuario"])
         except:
             df_v = pd.DataFrame()
             
@@ -604,7 +625,11 @@ with tab_reportes:
             fecha_fin_alq = st.date_input("Hasta (Alquileres):", value=datetime.today(), key="f_alq_fin")
             
         try:
-            df_a = pd.DataFrame(hoja_alquileres.get_all_records())
+            datos_a = hoja_alquileres.get_all_values()
+            if datos_a and len(datos_a) > 1:
+                df_a = pd.DataFrame(datos_a[1:], columns=datos_a[0])
+            else:
+                df_a = pd.DataFrame(columns=["Fecha", "Insumo", "Cantidad", "Empresa Destino", "Area Destino", "Usuario"])
         except:
             df_a = pd.DataFrame()
             
