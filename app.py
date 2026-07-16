@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 import io
 import plotly.express as px
-import time  # <--- Importante para manejar las esperas por saturación
+import time
 
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
@@ -25,7 +25,7 @@ def conectar_google_sheets():
     cliente = gspread.authorize(creds)
     return cliente.open("Inventario_Empresa")
 
-# Intentar abrir el documento y sus pestañas con tolerancia a saturaciones de Google (reintentos)
+# Intentar abrir el documento y sus pestañas con tolerancia a saturaciones de Google
 def inicializar_pestanas():
     max_intentos = 3
     for intento in range(max_intentos):
@@ -42,7 +42,6 @@ def inicializar_pestanas():
             return pestanas
         except gspread.exceptions.APIError as e:
             if "429" in str(e) and intento < max_intentos - 1:
-                # Si es un error de cuota, esperamos un poco y reintentamos
                 time.sleep(2)
                 continue
             else:
@@ -62,6 +61,7 @@ hoja_ventas = pestanas_activas["Ventas"]
 hoja_alquileres = pestanas_activas["Alquileres"]
 
 # --- FUNCIONES DE GESTIÓN DE USUARIOS ---
+@st.cache_data(ttl=60)
 def obtener_usuarios():
     try:
         datos = hoja_usuarios.get_all_values()
@@ -77,6 +77,7 @@ def registrar_usuario(usuario, contrasenia, rol):
     hoja_usuarios.append_row([usuario, contrasenia, rol])
 
 # --- FUNCIONES DE PARÁMETROS (EMPRESAS Y ÁREAS) ---
+@st.cache_data(ttl=60)
 def obtener_parametros():
     try:
         datos = hoja_parametros.get_all_values()
@@ -159,9 +160,11 @@ if st.sidebar.button("Cerrar Sesión"):
     st.session_state["logged_in"] = False
     st.session_state["usuario_actual"] = ""
     st.session_state["rol_actual"] = ""
+    st.cache_data.clear()
     st.rerun()
 
 # --- FUNCIONES DE SOPORTES DE INVENTARIO ---
+@st.cache_data(ttl=15)
 def obtener_insumos():
     try:
         datos = hoja_insumos.get_all_values()
@@ -186,22 +189,20 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
-# --- ESTA ES LA FUNCIÓN NUEVA Y OPTIMIZADA ---
 def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0):
     try:
-        # 1. Buscamos la fila localmente para evitar hacer un .find() en Google Sheets
+        # Buscamos la fila localmente en el DataFrame para optimizar la cuota
         df_local = obtener_insumos()
-        # Encontramos la fila correspondiente (Google Sheets empieza en 1, sumamos 2 por cabecera)
         idx_lista = df_local[df_local["ID"].astype(str) == str(id_insumo)].index
         
         if not idx_lista.empty:
-            fila_sheet = int(idx_lista[0]) + 2 # +2 porque los índices de pandas empiezan en 0 y la fila 1 es la cabecera
+            fila_sheet = int(idx_lista[0]) + 2
             
-            # 2. Actualizar Stock en la pestaña "Insumos"
+            # Actualizar en la pestaña "Insumos"
             hoja_insumos.update_cell(fila_sheet, 4, nuevo_stock)
             fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # 3. Registrar en el Historial General (Auditoría)
+            # Registrar en el Historial General
             hoja_historial.append_row([
                 fecha_actual, 
                 nombre_insumo, 
@@ -214,7 +215,7 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                 area_o_precio
             ])
             
-            # 4. Registrar en Historiales Específicos
+            # Registrar en Historiales Específicos
             if tipo_mov == "Salida":
                 if motivo == "Venta":
                     total_venta = float(cant_movida) * float(precio_unitario)
@@ -304,6 +305,7 @@ with tab_operaciones:
                             with st.spinner("Guardando en Google Sheets..."):
                                 registrar_insumo(nombre, categoria, cantidad_ini, stock_min, p_tecnico, p_cliente, p_facturado)
                             st.success(f"¡Insumo '{nombre}' registrado correctamente!")
+                            st.cache_data.clear()
                             st.cache_resource.clear()
                             st.rerun()
                 
@@ -332,6 +334,7 @@ with tab_operaciones:
                                 hoja_insumos.update_cell(celda_id.row, 7, nuevo_pc)
                                 hoja_insumos.update_cell(celda_id.row, 8, nuevo_pf)
                                 st.success("¡Datos actualizados con éxito!")
+                                st.cache_data.clear()
                                 st.cache_resource.clear()
                                 st.rerun()
             else:
@@ -442,6 +445,7 @@ with tab_operaciones:
                                     precio_unitario=val_unit
                                 )
                             st.success(f"¡Stock actualizado! Ahora tienes {nueva_cantidad} unidades de '{seleccionado}'.")
+                            st.cache_data.clear()
                             st.cache_resource.clear()
                             st.rerun()
             else:
@@ -558,7 +562,7 @@ with tab_reportes:
         else:
             st.info("Historial vacío.")
 
-    # --- 2. SUBPESTAÑA VENTAS (SEPARADO POR MES Y AÑO) ---
+    # --- 2. SUBPESTAÑA VENTAS ---
     with tab_rep_ventas:
         st.write("📆 **Segmentación Mensual de Ventas**")
         
@@ -685,6 +689,7 @@ with tab_usuarios:
                         with st.spinner("Registrando nuevo usuario..."):
                             registrar_usuario(nuevo_user, nuevo_pass, nuevo_rol)
                         st.success(f"¡Usuario '{nuevo_user}' registrado exitosamente como '{nuevo_rol}'!")
+                        st.cache_data.clear()
                         st.rerun()
                         
             with col_user_der:
@@ -711,7 +716,7 @@ with tab_usuarios:
                         with st.spinner("Guardando empresa..."):
                             registrar_parametro(nueva_emp.strip(), "Empresa")
                         st.success(f"¡Empresa '{nueva_emp}' añadida correctamente!")
-                        st.cache_resource.clear()
+                        st.cache_data.clear()
                         st.rerun()
                         
                 st.markdown("---")
@@ -729,7 +734,7 @@ with tab_usuarios:
                         with st.spinner("Guardando área..."):
                             registrar_parametro(nueva_ar.strip(), "Area")
                         st.success(f"¡Área '{nueva_ar}' añadida correctamente!")
-                        st.cache_resource.clear()
+                        st.cache_data.clear()
                         st.rerun()
                         
             with col_param_der:
