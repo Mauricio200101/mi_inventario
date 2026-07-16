@@ -206,7 +206,34 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
-def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0):
+# --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
+def obtener_ultimo_alquiler(insumo, empresa, area):
+    """
+    Busca en la pestaña de Alquileres el último registro que coincida 
+    con el Insumo, la Empresa y el Área especificados para extraer su contador y su fecha.
+    """
+    try:
+        datos = hoja_alquileres.get_all_values()
+        if not datos or len(datos) <= 1:
+            return None
+        
+        df_alq = pd.DataFrame(datos[1:], columns=datos[0])
+        # Filtrar por coincidencia exacta
+        df_filtrado = df_alq[
+            (df_alq["Insumo"].str.strip() == str(insumo).strip()) & 
+            (df_alq["Empresa Destino"].str.strip() == str(empresa).strip()) & 
+            (df_alq["Area Destino"].str.strip() == str(area).strip())
+        ]
+        
+        if not df_filtrado.empty:
+            # Obtener la última fila (el registro más reciente)
+            ultimo_registro = df_filtrado.iloc[-1]
+            return ultimo_registro
+    except Exception as e:
+        st.error(f"Error al buscar historial de contadores: {e}")
+    return None
+
+def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0, contador_anterior=0, contador_actual=0, paginas=0, dias=0):
     try:
         # Buscamos la fila localmente en el DataFrame para optimizar la cuota
         df_local = obtener_insumos()
@@ -247,13 +274,18 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                         st.session_state["usuario_actual"]
                     ])
                 elif motivo == "Alquiler":
+                    # REGISTRAR EN ALQUILERES CON CONTADORES, PÁGINAS Y TIEMPO (DÍAS)
                     hoja_alquileres.append_row([
                         fecha_actual,
                         nombre_insumo,
                         cant_movida,
                         empresa,
                         area_o_precio, 
-                        st.session_state["usuario_actual"]
+                        st.session_state["usuario_actual"],
+                        int(contador_anterior),
+                        int(contador_actual),
+                        int(paginas),
+                        int(dias)
                     ])
         else:
             st.error("❌ No se encontró el ID del insumo en la hoja de cálculo.")
@@ -305,7 +337,7 @@ with tab_operaciones:
                     with st.form("nuevo_insumo_form", clear_on_submit=True):
                         nombre = st.text_input("Nombre del Insumo", placeholder="Ej: GPR-57")
                         categoria = st.text_input("Categoría", placeholder="Ej: Toner")
-                        cantidad_ini = st.number_input("Cantidad Inicial", min_value=0, step=1, value=0)
+                        amount_ini = st.number_input("Cantidad Inicial", min_value=0, step=1, value=0)
                         stock_min = st.number_input("Stock Mínimo (Alerta)", min_value=1, step=1, value=5)
                         
                         st.markdown("**💰 Configuración de Precios (Bs.)**")
@@ -322,7 +354,7 @@ with tab_operaciones:
                             st.warning("Ese insumo ya existe en la lista.")
                         else:
                             with st.spinner("Guardando en Google Sheets..."):
-                                registrar_insumo(nombre, categoria, cantidad_ini, stock_min, p_tecnico, p_cliente, p_facturado)
+                                registrar_insumo(nombre, categoria, amount_ini, stock_min, p_tecnico, p_cliente, p_facturado)
                             st.success(f"¡Insumo '{nombre}' registrado correctamente!")
                             st.cache_data.clear()
                             st.cache_resource.clear()
@@ -406,6 +438,12 @@ with tab_operaciones:
                     area_o_precio_destino = ""
                     val_unit = 0.0
                     
+                    # Variables para cálculos de alquiler
+                    cont_anterior = 0
+                    cont_actual = 0
+                    paginas_calculadas = 0
+                    dias_calculados = 0
+                    
                     if tipo_movimiento == "Restar Stock (Salida)":
                         col_mot1, col_mot2 = st.columns(2)
                         with col_mot1:
@@ -438,6 +476,50 @@ with tab_operaciones:
                                 area_o_precio_destino = st.selectbox("📍 Área de Destino:", areas_disponibles)
                             else:
                                 area_o_precio_destino = st.text_input("📍 Área de Destino (Escribe manual):")
+                            
+                            st.markdown("---")
+                            st.markdown("📊 **Control de Contadores (Alquiler)**")
+                            
+                            # Intentar buscar el último registro idéntico para extraer el contador
+                            ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino)
+                            
+                            sugerencia_anterior = 0
+                            fecha_ultimo_alquiler = None
+                            
+                            if ultimo_registro_alq is not None:
+                                try:
+                                    # La columna "Contador Actual" es la posición 7 (index 7 en lista de 0 a 9 si el layout coincide)
+                                    # Para ir a lo seguro, extraemos usando el nombre de columna del DataFrame
+                                    sugerencia_anterior = int(ultimo_registro_alq["Contador Actual"])
+                                    fecha_ultimo_alquiler = pd.to_datetime(ultimo_registro_alq["Fecha"], errors='coerce')
+                                    st.success(f"🔍 ¡Historial Encontrado! Último contador registrado: **{sugerencia_anterior}** el {ultimo_registro_alq['Fecha']}")
+                                except:
+                                    pass
+                            else:
+                                st.warning("⚠️ No se encontró un alquiler previo idéntico para este Insumo, Empresa y Área. Se iniciará un nuevo historial.")
+                            
+                            col_c1, col_c2 = st.columns(2)
+                            with col_c1:
+                                cont_anterior = st.number_input("Contador Anterior:", min_value=0, step=1, value=sugerencia_anterior)
+                            with col_c2:
+                                cont_actual = st.number_input("Contador Actual (Lectura de hoy):", min_value=cont_anterior, step=1, value=cont_anterior)
+                            
+                            # Calcular páginas
+                            paginas_calculadas = cont_actual - cont_anterior
+                            
+                            # Calcular tiempo (días)
+                            hoy = obtener_hora_local_bo()
+                            if fecha_ultimo_alquiler is not None and not pd.isna(fecha_ultimo_alquiler):
+                                # Convertimos fecha_ultimo_alquiler a timezone aware si no lo está para poder restar
+                                if fecha_ultimo_alquiler.tzinfo is None:
+                                    fecha_ultimo_alquiler = fecha_ultimo_alquiler.replace(tzinfo=timezone(timedelta(hours=-4)))
+                                dif_tiempo = hoy - fecha_ultimo_alquiler
+                                dias_calculados = max(0, dif_tiempo.days)
+                            else:
+                                dias_calculados = 0 # Primer registro de alquiler
+                                
+                            # Mostrar resumen de métricas
+                            st.info(f"📑 **Páginas Impresas:** {paginas_calculadas} págs. | 📅 **Duración del Periodo:** {dias_calculados} días.")
                     
                     cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1)
                     
@@ -475,7 +557,11 @@ with tab_operaciones:
                                     motivo=motivo_final,
                                     empresa=empresa_destino,
                                     area_o_precio=area_o_precio_destino,
-                                    precio_unitario=val_unit
+                                    precio_unitario=val_unit,
+                                    contador_anterior=cont_anterior,
+                                    contador_actual=cont_actual,
+                                    paginas=paginas_calculadas,
+                                    dias=dias_calculados
                                 )
                             st.success(f"¡Stock actualizado! Ahora tienes {nueva_cantidad} unidades de '{seleccionado}'.")
                             st.cache_data.clear()
@@ -565,10 +651,8 @@ with tab_reportes:
         st.write("🔍 **Filtro por Rango de Fechas**")
         col_fg1, col_fg2 = st.columns(2)
         with col_fg1:
-            # Sincronizamos la fecha de inicio del selector con la fecha de Bolivia por defecto
             fecha_inicio_gen = st.date_input("Desde (General):", value=obtener_hora_local_bo().date(), key="f_gen_ini")
         with col_fg2:
-            # Sincronizamos la fecha de fin del selector con la fecha de Bolivia por defecto
             fecha_fin_gen = st.date_input("Hasta (General):", value=obtener_hora_local_bo().date(), key="f_gen_fin")
             
         try:
@@ -626,7 +710,6 @@ with tab_reportes:
             
             col_v1, col_v2 = st.columns(2)
             with col_v1:
-                # El año por defecto se asocia al año local de Bolivia
                 ano_seleccionado = st.selectbox("Selecciona el Año:", anos_disponibles if anos_disponibles else [obtener_hora_local_bo().year])
             
             meses_del_ano = df_v[df_v["Año"] == ano_seleccionado]["Mes_Num"].unique()
@@ -660,15 +743,13 @@ with tab_reportes:
         else:
             st.info("No se han registrado ventas en la hoja 'Ventas' de Google Sheets todavía.")
 
-    # --- 3. SUBPESTAÑA ALQUILERES ---
+    # --- 3. SUBPESTAÑA ALQUILERES (CON DETALLES DE CONTADORES) ---
     with tab_rep_alquileres:
-        st.write("🔍 **Filtro por Rango de Fechas**")
+        st.write("🔍 **Filtro por Rango de Fechas (Alquileres)**")
         col_fa1, col_fa2 = st.columns(2)
         with col_fa1:
-            # Sincronizamos la fecha de inicio del alquiler con el día actual en Bolivia
             fecha_inicio_alq = st.date_input("Desde (Alquileres):", value=obtener_hora_local_bo().date(), key="f_alq_ini")
         with col_fa2:
-            # Sincronizamos la fecha de fin del alquiler con el día actual en Bolivia
             fecha_fin_alq = st.date_input("Hasta (Alquileres):", value=obtener_hora_local_bo().date(), key="f_alq_fin")
             
         try:
@@ -676,7 +757,8 @@ with tab_reportes:
             if datos_a and len(datos_a) > 1:
                 df_a = pd.DataFrame(datos_a[1:], columns=datos_a[0])
             else:
-                df_a = pd.DataFrame(columns=["Fecha", "Insumo", "Cantidad", "Empresa Destino", "Area Destino", "Usuario"])
+                # Actualizamos las columnas esperadas en el reporte
+                df_a = pd.DataFrame(columns=["Fecha", "Insumo", "Cantidad", "Empresa Destino", "Area Destino", "Usuario", "Contador Anterior", "Contador Actual", "Páginas Impresas", "Días Transcurridos"])
         except:
             df_a = pd.DataFrame()
             
