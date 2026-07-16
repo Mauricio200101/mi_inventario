@@ -1045,41 +1045,66 @@ with tab_reportes:
 # ==========================================
 with tab_usuarios:
     if st.session_state["rol_actual"] == "Administrador":
-        st.subheader("⚙️ Configuración y Gestión de Usuarios")
+        st.subheader("⚙️ Configuración y Estructura Organizacional")
         
-        tab_sub_usuarios, tab_sub_parametros = st.tabs(["👥 Cuentas de Usuarios", "🏢 Parámetros de Alquiler (Empresas/Áreas/Agencias)"])
+        # Necesitamos obtener los datos organizados
+        # Supongamos que la hoja 'Parametros' tiene columnas: Empresa, Agencia, Area
         
-        with tab_sub_usuarios:
-            col_user_izq, col_user_der = st.columns([1, 1.5])
+        tab_sub_usuarios, tab_sub_estructura = st.tabs(["👥 Cuentas de Usuarios", "🏢 Estructura: Empresa > Agencia > Área"])
+        
+        with tab_sub_estructura:
+            st.info("💡 **Regla de Oro:** Crea primero la Empresa, luego la Agencia para esa empresa, y finalmente el Área para esa agencia.")
             
-            with col_user_izq:
-                st.write("➕ **Crear Nuevo Usuario**")
-                with st.form("nuevo_usuario_form", clear_on_submit=True):
-                    nuevo_user = st.text_input("Nombre de Usuario", placeholder="Ej: tecnico.juan")
-                    nuevo_pass = st.text_input("Contraseña", type="password", placeholder="Ej: t1234")
-                    nuevo_rol = st.selectbox("Asignar Rol:", ["Administrador", "Secretaria", "Técnico"])
-                    crear_user_btn = st.form_submit_button("Crear Usuario")
-                    
-                if crear_user_btn:
-                    df_actual_users = obtener_usuarios()
-                    if nuevo_user.strip() == "" or nuevo_pass.strip() == "":
-                        st.error("Todos los campos son obligatorios.")
-                    elif nuevo_user in df_actual_users["Usuario"].values:
-                        st.warning("Este nombre de usuario ya está registrado.")
-                    else:
-                        with st.spinner("Registrando nuevo usuario..."):
-                            registrar_usuario(nuevo_user, nuevo_pass, nuevo_rol)
-                        st.success(f"¡Usuario '{nuevo_user}' registrado exitosamente como '{nuevo_rol}'!")
-                        st.cache_data.clear()
+            c1, c2, c3 = st.columns(3)
+            
+            # --- NIVEL 1: EMPRESAS ---
+            with c1:
+                st.write("### 🏢 1. Empresas")
+                nueva_emp = st.text_input("Nueva Empresa", key="n_emp")
+                if st.button("Guardar Empresa"):
+                    if nueva_emp:
+                        hoja_parametros.append_row([nueva_emp, "", ""]) # Solo columna empresa
+                        st.rerun()
+                
+                # Listado y borrado
+                df_p = pd.DataFrame(hoja_parametros.get_all_records())
+                empresas = df_p["Empresa"].unique().tolist()
+                empresas = [e for e in empresas if e != ""]
+                for e in empresas:
+                    st.write(f"🔹 {e}")
+            
+            # --- NIVEL 2: AGENCIAS ---
+            with c2:
+                st.write("### 🏠 2. Agencias")
+                emp_sel = st.selectbox("Seleccionar Empresa", empresas)
+                nueva_age = st.text_input("Nueva Agencia", key="n_age")
+                if st.button("Guardar Agencia"):
+                    if emp_sel and nueva_age:
+                        hoja_parametros.append_row([emp_sel, nueva_age, ""])
+                        st.rerun()
+                
+                # Filtrar agencias por empresa
+                agencias = df_p[df_p["Empresa"] == emp_sel]["Agencia"].unique().tolist()
+                agencias = [a for a in agencias if a != ""]
+                for a in agencias:
+                    st.write(f"🔸 {a}")
+
+            # --- NIVEL 3: ÁREAS ---
+            with c3:
+                st.write("### 📍 3. Áreas")
+                # El usuario ya seleccionó la empresa, ahora filtramos las agencias de esa empresa
+                age_sel = st.selectbox("Seleccionar Agencia", agencias)
+                nueva_area = st.text_input("Nueva Área", key="n_area")
+                if st.button("Guardar Área"):
+                    if age_sel and nueva_area:
+                        hoja_parametros.append_row([emp_sel, age_sel, nueva_area])
                         st.rerun()
                         
-            with col_user_der:
-                st.write("📋 **Usuarios Registrados**")
-                df_lista_usuarios = obtener_usuarios()
-                st.dataframe(df_lista_usuarios[["Usuario", "Rol"]], use_container_width=True, hide_index=True)
-                
-        with tab_sub_parametros:
-            col_param_izq, col_param_der = st.columns([1.2, 2.0])
+                # Listar áreas
+                areas = df_p[(df_p["Empresa"] == emp_sel) & (df_p["Agencia"] == age_sel)]["Area"].tolist()
+                areas = [ar for ar in areas if ar != ""]
+                for ar in areas:
+                    st.write(f"▪️ {ar}")
             
             # --- COLUMNA IZQUIERDA: FORMULARIOS DE REGISTRO INTELIGENTE (RELACIONAL) ---
             with col_param_izq:
