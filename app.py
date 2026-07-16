@@ -546,15 +546,11 @@ with tab_operaciones:
                                 st.caption(f"Valor Unitario: *{val_unit} Bs.*")
                         
                         elif motivo_salida == "Alquiler":
-                            # Añade esta línea aquí:
+                            # Estas columnas SOLO se crean si el motivo es Alquiler
                             col_al_dest1, col_al_dest2 = st.columns(2)
-                            
-                            # Selección estructurada de Empresa, Área y Agencia con relación dinámica
+            
                         with col_al_dest1:
-                        # 1. Selector de Empresa
                             empresa_destino = st.selectbox("🏢 Empresa:", empresas_disponibles)
-
-                        # 2. Filtro de Agencias
                             agencias_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_destino.strip())]
                             agencia_destino = st.selectbox(
                             "🏢 Agencia:", 
@@ -563,15 +559,18 @@ with tab_operaciones:
                             )
 
                         with col_al_dest2:
-                        # 3. Filtro de Áreas
-                            areas_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_destino)]
-                            area_o_precio_destino = st.selectbox(
-                            "📍 Área:", 
-                            areas_filtradas, 
-                            format_func=lambda x: x.replace(agencia_destino + " - ", "")
-                            )
-                            st.markdown("---")
-                            st.markdown("📊 **Control de Contadores (Alquiler)**")
+                        areas_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_destino)]
+                        area_o_precio_destino = st.selectbox(
+                        "📍 Área:", 
+                        areas_filtradas, 
+                        format_func=lambda x: x.replace(agencia_destino + " - ", "")
+                        )
+            
+            st.markdown("---")
+            st.markdown("📊 **Control de Contadores (Alquiler)**")
+            
+            # Solo buscar el historial si el motivo es Alquiler
+            ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
                             
                             # Buscar historial de contadores filtrando por Empresa, Área y Agencia de manera precisa
                             ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
