@@ -569,8 +569,8 @@ with tab_operaciones:
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
             
-            # Solo buscar el historial si el motivo es Alquiler
-            ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
+                            # Solo buscar el historial si el motivo es Alquiler
+                            ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
                             
                             # Buscar historial de contadores filtrando por Empresa, Área y Agencia de manera precisa
                             ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
