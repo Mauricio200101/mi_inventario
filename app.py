@@ -89,32 +89,35 @@ def obtener_usuarios():
 def registrar_usuario(usuario, contrasenia, rol):
     hoja_usuarios.append_row([usuario, contrasenia, rol])
 
-# --- FUNCIONES DE PARÁMETROS (EMPRESAS Y ÁREAS) ---
+# --- FUNCIONES DE PARÁMETROS (EMPRESAS, ÁREAS Y AGENCIAS) ---
 @st.cache_data(ttl=60)
 def obtener_parametros():
     try:
         datos = hoja_parametros.get_all_values()
         if not datos or len(datos) <= 1:
-            return ["Sin Registrar"], ["Sin Registrar"]
+            return ["Sin Registrar"], ["Sin Registrar"], ["Sin Registrar"]
             
         df = pd.DataFrame(datos[1:], columns=datos[0])
         
         lista_empresas = df["Empresas"].dropna().astype(str).str.strip().tolist() if "Empresas" in df.columns else []
         lista_areas = df["Areas"].dropna().astype(str).str.strip().tolist() if "Areas" in df.columns else []
+        lista_agencias = df["Agencias"].dropna().astype(str).str.strip().tolist() if "Agencias" in df.columns else []
         
         lista_empresas = [x for x in lista_empresas if x != ""]
         lista_areas = [x for x in lista_areas if x != ""]
+        lista_agencias = [x for x in lista_agencias if x != ""]
     except Exception as e:
         lista_empresas = ["Sin Registrar"]
         lista_areas = ["Sin Registrar"]
+        lista_agencias = ["Sin Registrar"]
         
-    return lista_empresas, lista_areas
+    return lista_empresas, lista_areas, lista_agencias
 
 def registrar_parametro(nuevo_valor, tipo):
     registros = hoja_parametros.get_all_values()
     if not registros:
-        hoja_parametros.append_row(["Empresas", "Areas"])
-        registros = [["Empresas", "Areas"]]
+        hoja_parametros.append_row(["Empresas", "Areas", "Agencias"])
+        registros = [["Empresas", "Areas", "Agencias"]]
         
     df = pd.DataFrame(registros[1:], columns=registros[0])
     
@@ -124,11 +127,17 @@ def registrar_parametro(nuevo_valor, tipo):
         lista_actual.append(nuevo_valor)
         col_index = 1
         nueva_lista = lista_actual
-    else:
+    elif tipo == "Area":
         lista_actual = df["Areas"].dropna().tolist()
         lista_actual = [x for x in lista_actual if x != ""]
         lista_actual.append(nuevo_valor)
         col_index = 2
+        nueva_lista = lista_actual
+    else: # Agencia
+        lista_actual = df["Agencias"].dropna().tolist() if "Agencias" in df.columns else []
+        lista_actual = [x for x in lista_actual if x != ""]
+        lista_actual.append(nuevo_valor)
+        col_index = 3
         nueva_lista = lista_actual
 
     row_to_write = len(nueva_lista) + 1
@@ -284,7 +293,7 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
 # --- INTERFAZ PRINCIPAL ---
 st.title("📦 Sistema de Control de Inventario Nube")
 df_insumos = obtener_insumos()
-empresas_disponibles, areas_disponibles = obtener_parametros()
+empresas_disponibles, areas_disponibles, agencias_disponibles = obtener_parametros()
 
 # --- PESTAÑAS DEL SISTEMA ---
 tab_operaciones, tab_valorizacion, tab_rendimiento, tab_reportes, tab_usuarios = st.tabs([
@@ -453,16 +462,30 @@ with tab_operaciones:
                                 st.caption(f"Valor Unitario: *{val_unit} Bs.*")
                         
                         elif motivo_salida == "Alquiler":
+                            # Ahora el formulario incluye también la selección de Agencia si aplica
                             with col_mot2:
                                 if empresas_disponibles:
                                     empresa_destino = st.selectbox("🏢 Empresa de Destino:", empresas_disponibles)
                                 else:
                                     empresa_destino = st.text_input("🏢 Empresa de Destino (Escribe manual):")
                             
-                            if areas_disponibles:
-                                area_o_precio_destino = st.selectbox("📍 Área de Destino:", areas_disponibles)
-                            else:
-                                area_o_precio_destino = st.text_input("📍 Área de Destino (Escribe manual):")
+                            col_al_dest1, col_al_dest2 = st.columns(2)
+                            with col_al_dest1:
+                                if areas_disponibles:
+                                    area_o_precio_destino = st.selectbox("📍 Área de Destino:", areas_disponibles)
+                                else:
+                                    area_o_precio_destino = st.text_input("📍 Área de Destino (Escribe manual):")
+                            
+                            with col_al_dest2:
+                                if agencias_disponibles:
+                                    agencia_destino = st.selectbox("🏢 Agencia de Destino:", agencias_disponibles)
+                                else:
+                                    agencia_destino = st.text_input("🏢 Agencia de Destino (Escribe manual):")
+                                    
+                            # Para mantener la compatibilidad con el esquema actual de tu historial sin cambiar la BD,
+                            # unimos dinámicamente el Área y la Agencia en la descripción del destino:
+                            if agencia_destino and agencia_destino != "Sin Registrar":
+                                area_o_precio_destino = f"{area_o_precio_destino} - Agencia: {agencia_destino}"
                             
                             st.markdown("---")
                             st.markdown("📊 **Control de Contadores (Alquiler)**")
@@ -930,7 +953,7 @@ with tab_usuarios:
     if st.session_state["rol_actual"] == "Administrador":
         st.subheader("⚙️ Configuración y Gestión de Usuarios")
         
-        tab_sub_usuarios, tab_sub_parametros = st.tabs(["👥 Cuentas de Usuarios", "🏢 Parámetros de Alquiler (Empresas/Áreas)"])
+        tab_sub_usuarios, tab_sub_parametros = st.tabs(["👥 Cuentas de Usuarios", "🏢 Parámetros de Alquiler (Empresas/Áreas/Agencias)"])
         
         with tab_sub_usuarios:
             col_user_izq, col_user_der = st.columns([1, 1.5])
@@ -1000,11 +1023,30 @@ with tab_usuarios:
                         st.success(f"¡Área '{nueva_ar}' añadida correctamente!")
                         st.cache_data.clear()
                         st.rerun()
+                
+                st.markdown("---")
+                
+                # --- NUEVO FORMULARIO: REGISTRO DE AGENCIA ---
+                with st.form("nueva_agencia_form", clear_on_submit=True):
+                    nueva_ag = st.text_input("Nombre de la Agencia:", placeholder="Ej: Agencia Norte")
+                    guardar_ag_btn = st.form_submit_button("Añadir Agencia")
+                    
+                if guardar_ag_btn:
+                    if nueva_ag.strip() == "":
+                        st.error("Por favor, escribe un nombre de agencia válido.")
+                    elif nueva_ag.strip() in agencias_disponibles:
+                        st.warning("Esta agencia ya se encuentra registrada.")
+                    else:
+                        with st.spinner("Guardando agencia..."):
+                            registrar_parametro(nueva_ag.strip(), "Agencia")
+                        st.success(f"¡Agencia '{nueva_ag}' añadida correctamente!")
+                        st.cache_data.clear()
+                        st.rerun()
                         
             with col_param_der:
                 st.write("📋 **Lista de Destinos Actuales**")
                 
-                c_emp, c_are = st.columns(2)
+                c_emp, c_are, c_age = st.columns(3)
                 with c_emp:
                     st.info("**🏢 Empresas Registradas:**")
                     for e in empresas_disponibles:
@@ -1013,6 +1055,10 @@ with tab_usuarios:
                     st.info("**📍 Áreas Registradas:**")
                     for a in areas_disponibles:
                         st.write(f"- {a}")
+                with c_age:
+                    st.info("**🏢 Agencias Registradas:**")
+                    for ag in agencias_disponibles:
+                        st.write(f"- {ag}")
                         
     else:
         st.warning("🔒 Esta sección es exclusiva para el Administrador de la plataforma.")
