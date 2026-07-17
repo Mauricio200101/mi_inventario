@@ -411,67 +411,68 @@ with tab_operaciones:
         col_izq, col_der = st.columns([1, 1])
 
         with col_izq:
-            if st.session_state["rol_actual"] == "Administrador":
-                tab_reg, tab_edit = st.tabs(["➕ Registrar Insumo", "✏️ Editar Stock Mínimo/Precios"])
+            if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
+                if st.session_state["rol_actual"] == "Administrador":
+                    tab_reg, tab_edit = st.tabs(["➕ Registrar Insumo", "✏️ Editar Stock Mínimo/Precios"])
+                else:
+                    tab_reg = st.tabs(["➕ Registrar Insumo"])[0]
                 
                 with tab_reg:
+                    # Aquí mantienes tu código de registro actual (líneas 418 a 443)
                     st.write("**Registrar Nuevo Insumo**")
                     with st.form("nuevo_insumo_form", clear_on_submit=True):
                         nombre = st.text_input("Nombre del Insumo", placeholder="Ej: GPR-57")
-                        categoria = st.text_input("Categoría", placeholder="Ej: Toner")
+                        categoria = st.text_input("Categoria", placeholder="Ej: Toner")
                         amount_ini = st.number_input("Cantidad Inicial", min_value=0, step=1, value=0)
                         stock_min = st.number_input("Stock Mínimo (Alerta)", min_value=1, step=1, value=5)
                         
                         st.markdown("**💰 Configuración de Precios (Bs.)**")
                         p_tecnico = st.number_input("Precio Técnico", min_value=0.0, step=0.1, value=0.0)
                         p_cliente = st.number_input("Precio Cliente", min_value=0.0, step=0.1, value=0.0)
-                        p_facturado = st.number_input("Precio Facturado", min_value=0.0, step=0.1, value=0.0)
+                        p_faclurado = st.number_input("Precio Facturado", min_value=0.0, step=0.1, value=0.0)
                         
                         guardado = st.form_submit_button("Guardar Insumo")
+                        
+                        if guardado:
+                            if nombre.strip() == "":
+                                st.error("Por favor, ingresa el nombre del insumo.")
+                            elif not df_insumos.empty and nombre.lower() in df_insumos["Nombre"].str.lower().values:
+                                st.warning("Ese insumo ya existe en la lista.")
+                            else:
+                                with st.spinner("Guardando en Google Sheets..."):
+                                    registrar_insumo(nombre, categoria, amount_ini, stock_min, p_tecnico, p_cliente, p_faclurado)
+                                    st.success(f"Insumo {nombre} registrado correctamente!")
+                                    st.rerun()
 
-                    if guardado:
-                        if nombre.strip() == "":
-                            st.error("Por favor, ingresa el nombre del insumo.")
-                        elif not df_insumos.empty and nombre.lower() in df_insumos["Nombre"].str.lower().values:
-                            st.warning("Ese insumo ya existe en la lista.")
-                        else:
-                            with st.spinner("Guardando en Google Sheets..."):
-                                registrar_insumo(nombre, categoria, amount_ini, stock_min, p_tecnico, p_cliente, p_facturado)
-                            st.success(f"¡Insumo '{nombre}' registrado correctamente!")
-                            st.cache_data.clear()
-                            st.cache_resource.clear()
-                            st.rerun()
-                
-                with tab_edit:
-                    st.write("**Modificar Alerta o Precios**")
-                    if not df_insumos.empty:
-                        insumo_editar = st.selectbox("Selecciona el insumo a editar:", df_insumos["Nombre"].tolist(), key="sel_edit")
-                        datos_insumo_editar = df_insumos[df_insumos["Nombre"] == insumo_editar].iloc[0]
-                        
-                        cel_id = datos_insumo_editar["ID"]
-                        min_actual = int(datos_insumo_editar["Stock Mínimo"])
-                        pt_act = float(datos_insumo_editar["Precio Técnico"])
-                        pc_act = float(datos_insumo_editar["Precio Cliente"])
-                        pf_act = float(datos_insumo_editar["Precio Facturado"])
-                        
-                        nuevo_minimo = st.number_input("Nuevo Stock Mínimo:", min_value=1, step=1, value=min_actual)
-                        nuevo_pt = st.number_input("Nuevo Precio Técnico:", min_value=0.0, step=0.1, value=pt_act)
-                        nuevo_pc = st.number_input("Nuevo Precio Cliente:", min_value=0.0, step=0.1, value=pc_act)
-                        nuevo_pf = st.number_input("Nuevo Precio Facturado:", min_value=0.0, step=0.1, value=pf_act)
-                        
-                        if st.button("Actualizar Parámetros"):
-                            celda_id = hoja_insumos.find(str(cel_id))
-                            if celda_id:
-                                hoja_insumos.update_cell(celda_id.row, 5, nuevo_minimo)
-                                hoja_insumos.update_cell(celda_id.row, 6, nuevo_pt)
-                                hoja_insumos.update_cell(celda_id.row, 7, nuevo_pc)
-                                hoja_insumos.update_cell(celda_id.row, 8, nuevo_pf)
-                                st.success("¡Datos actualizados con éxito!")
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
-                                st.rerun()
-            else:
-                st.info("🔒 Las funciones de creación o edición de parámetros son exclusivas del Administrador.")
+                # Solo si es Administrador, mostramos el contenido de la pestaña de edición
+                if st.session_state["rol_actual"] == "Administrador":
+                    with tab_edit:
+                        st.write("**Modificar Alerta o Precios**")
+                        # Aquí va el código que tenías para editar (líneas 446 a 472 de tu archivo original)
+                        if not df_insumos.empty:
+                            insumo_editar = st.selectbox("Selecciona el insumo a editar:", df_insumos["Nombre"].tolist(), key="sel_edit")
+                            datos_insumo_editar = df_insumos[df_insumos["Nombre"] == insumo_editar].iloc[0]
+                            
+                            cel_id = datos_insumo_editar["ID"]
+                            min_actual = int(datos_insumo_editar["Stock Mínimo"])
+                            pt_act = float(datos_insumo_editar["Precio Técnico"])
+                            pc_act = float(datos_insumo_editar["Precio Cliente"])
+                            pf_act = float(datos_insumo_editar["Precio Facturado"])
+                            
+                            nuevo_minimo = st.number_input("Nuevo Stock Mínimo:", min_value=1, step=1, value=min_actual)
+                            nuevo_pt = st.number_input("Nuevo Precio Técnico:", min_value=0.0, step=0.1, value=pt_act)
+                            nuevo_pc = st.number_input("Nuevo Precio Cliente:", min_value=0.0, step=0.1, value=pc_act)
+                            nuevo_pf = st.number_input("Nuevo Precio Facturado:", min_value=0.0, step=0.1, value=pf_act)
+                            
+                            if st.button("Actualizar Parámetros"):
+                                celda_id = hoja_insumos.find(str(cel_id))
+                                if celda_id:
+                                    hoja_insumos.update_cell(celda_id.row, 5, nuevo_minimo)
+                                    hoja_insumos.update_cell(celda_id.row, 6, nuevo_pt)
+                                    hoja_insumos.update_cell(celda_id.row, 7, nuevo_pc)
+                                    hoja_insumos.update_cell(celda_id.row, 8, nuevo_pf)
+                                    st.success("¡Datos actualizados con éxito!")
+                                    st.rerun()
 
         with col_der:
             st.subheader("🔄 Registrar Movimiento (Entrada/Salida)")
