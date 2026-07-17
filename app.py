@@ -701,46 +701,50 @@ with tab_operaciones:
 # 2. PESTAÑA DE VALORIZACIÓN DEL INVENTARIO
 # ==========================================
 with tab_valorizacion:
-    st.subheader("💰 Resumen Monetario del Inventario")
-    if not df_insumos.empty:
-        df_insumos["Val_Tecnico"] = df_insumos["Cantidad"] * df_insumos["Precio Técnico"]
-        df_insumos["Val_Cliente"] = df_insumos["Cantidad"] * df_insumos["Precio Cliente"]
-        df_insumos["Val_Facturado"] = df_insumos["Cantidad"] * df_insumos["Precio Facturado"]
-        
-        total_tecnico = df_insumos["Val_Tecnico"].sum()
-        total_cliente = df_insumos["Val_Cliente"].sum()
-        total_facturado = df_insumos["Val_Facturado"].sum()
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric(label="Total Valor Técnico", value=f"{total_tecnico:,.2f} Bs.")
-        c2.metric(label="Total Valor Cliente", value=f"{total_cliente:,.2f} Bs.")
-        c3.metric(label="Total Valor Facturado", value=f"{total_facturado:,.2f} Bs.")
-        
-        st.markdown("---")
-        st.write("📊 **Comparativa de Valorización por Insumo**")
-        
-        df_melted = df_insumos.melt(
-            id_vars=["Nombre"], 
-            value_vars=["Val_Tecnico", "Val_Cliente", "Val_Facturado"],
-            var_name="Tipo de Precio", 
-            value_name="Valor Total (Bs.)"
-        )
-        df_melted["Tipo de Precio"] = df_melted["Tipo de Precio"].replace({
-            "Val_Tecnico": "Técnico", "Val_Cliente": "Cliente", "Val_Facturado": "Facturado"
-        })
-        
-        fig_val = px.bar(
-            df_melted, 
-            x="Nombre", 
-            y="Valor Total (Bs.)", 
-            color="Tipo de Precio", 
-            barmode="group",
-            title="Valor total de existencias por esquema de precios",
-            text_auto=True
-        )
-        st.plotly_chart(fig_val, use_container_width=True)
+    if st.session_state["rol_actual"] == "Administrador":
+        st.subheader("💰 Resumen Monetario del Inventario")
+        if not df_insumos.empty:
+            df_insumos["Val_Tecnico"] = df_insumos["Cantidad"] * df_insumos["Precio Técnico"]
+            df_insumos["Val_Cliente"] = df_insumos["Cantidad"] * df_insumos["Precio Cliente"]
+            df_insumos["Val_Facturado"] = df_insumos["Cantidad"] * df_insumos["Precio Facturado"]
+            
+            total_tecnico = df_insumos["Val_Tecnico"].sum()
+            total_cliente = df_insumos["Val_Cliente"].sum()
+            total_facturado = df_insumos["Val_Facturado"].sum()
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric(label="Total Valor Técnico", value=f"{total_tecnico:,.2f} Bs.")
+            c2.metric(label="Total Valor Cliente", value=f"{total_cliente:,.2f} Bs.")
+            c3.metric(label="Total Valor Facturado", value=f"{total_facturado:,.2f} Bs.")
+            
+            st.markdown("---")
+            st.write("📊 **Comparativa de Valorización por Insumo**")
+            
+            df_melted = df_insumos.melt(
+                id_vars=["Nombre"], 
+                value_vars=["Val_Tecnico", "Val_Cliente", "Val_Facturado"],
+                var_name="Tipo de Precio", 
+                value_name="Valor Total (Bs.)"
+            )
+            df_melted["Tipo de Precio"] = df_melted["Tipo de Precio"].replace({
+                "Val_Tecnico": "Técnico", "Val_Cliente": "Cliente", "Val_Facturado": "Facturado"
+            })
+            
+            fig_val = px.bar(
+                df_melted, 
+                x="Nombre", 
+                y="Valor Total (Bs.)", 
+                color="Tipo de Precio", 
+                barmode="group",
+                title="Valor total de existencias por esquema de precios",
+                text_auto=True
+            )
+            st.plotly_chart(fig_val, use_container_width=True)
+        else:
+            st.info("No hay datos de insumos para calcular la valorización.")
     else:
-        st.info("No hay datos de insumos para calcular la valorización.")
+        # Mensaje para la Secretaria o el Técnico
+        st.warning("🔒 Esta sección es exclusiva para Administradores.")
 
 
 # ==========================================
