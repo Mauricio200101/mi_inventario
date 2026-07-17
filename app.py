@@ -262,7 +262,7 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
-def obtener_ultimo_alquiler(insumo, empresa, area, agencia):
+def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
     """
     Busca en la pestaña de Alquileres el último registro que coincida 
     con el Insumo, la Empresa, el Área y la Agencia especificados para extraer su contador y su fecha.
@@ -279,8 +279,8 @@ def obtener_ultimo_alquiler(insumo, empresa, area, agencia):
             df_filtrado = df_alq[
                 (df_alq["Insumo"].str.strip() == str(insumo).strip()) & 
                 (df_alq["Empresa Destino"].str.strip() == str(empresa).strip()) & 
-                (df_alq["Area Destino"].str.strip() == str(area).strip()) &
-                (df_alq["Agencia Destino"].str.strip() == str(agencia).strip())
+                (df_alq["Agencia Destino"].str.strip() == str(agencia).strip()) &
+                (df_alq["Area Destino"].str.strip() == str(area).strip())
             ]
         else:
             # Fallback en caso de que la hoja de alquileres aún no tenga la columna Agencia Destino
