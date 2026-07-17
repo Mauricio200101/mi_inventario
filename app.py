@@ -89,6 +89,25 @@ def obtener_usuarios():
 def registrar_usuario(usuario, contrasenia, rol):
     hoja_usuarios.append_row([usuario, contrasenia, rol])
 
+def editar_usuario(usuario_viejo, nuevo_usuario, nueva_contrasenia, nuevo_rol):
+    """Edita un registro de usuario existente."""
+    datos = hoja_usuarios.get_all_values()
+    for i, fila in enumerate(datos):
+        if fila[0] == usuario_viejo:
+            fila_idx = i + 1
+            hoja_usuarios.update_cell(fila_idx, 1, nuevo_usuario)
+            hoja_usuarios.update_cell(fila_idx, 2, nueva_contrasenia)
+            hoja_usuarios.update_cell(fila_idx, 3, nuevo_rol)
+            break
+
+def eliminar_usuario(usuario_a_eliminar):
+    """Elimina un usuario de la hoja."""
+    datos = hoja_usuarios.get_all_values()
+    for i, fila in enumerate(datos):
+        if fila[0] == usuario_a_eliminar:
+            hoja_usuarios.delete_rows(i + 1)
+            break
+
 # --- FUNCIONES DE PARÁMETROS (EMPRESAS, ÁREAS Y AGENCIAS) ---
 @st.cache_data(ttl=60)
 def obtener_parametros():
@@ -1025,10 +1044,34 @@ with tab_usuarios:
                         st.cache_data.clear()
                         st.rerun()
                         
-            with col_user_der:
-                st.write("📋 **Usuarios Registrados**")
-                df_lista_usuarios = obtener_usuarios()
-                st.dataframe(df_lista_usuarios[["Usuario", "Rol"]], use_container_width=True, hide_index=True)
+            st.write("📋 **Gestionar Usuarios**")
+            df_usuarios = obtener_usuarios()
+            
+            # Selector para elegir el usuario a gestionar
+            user_sel = st.selectbox("Selecciona usuario para gestionar:", df_usuarios["Usuario"].tolist())
+            
+            if user_sel:
+                datos_user = df_usuarios[df_usuarios["Usuario"] == user_sel].iloc[0]
+                
+                with st.expander("✏️ Editar Usuario"):
+                    with st.form("form_editar_user"):
+                        new_u = st.text_input("Nuevo Nombre", value=datos_user["Usuario"])
+                        new_p = st.text_input("Nueva Contraseña", value=datos_user["Contraseña"])
+                        new_r = st.selectbox("Nuevo Rol", ["Administrador", "Secretaria", "Técnico"], 
+                                           index=["Administrador", "Secretaria", "Técnico"].index(datos_user["Rol"]))
+                        
+                        if st.form_submit_button("Guardar Cambios"):
+                            editar_usuario(user_sel, new_u, new_p, new_r)
+                            st.success("Usuario actualizado")
+                            st.rerun()
+
+                if st.button("🗑️ Eliminar este usuario"):
+                    if user_sel == st.session_state["usuario_actual"]:
+                        st.error("No puedes eliminar tu propio usuario mientras estás conectado.")
+                    else:
+                        eliminar_usuario(user_sel)
+                        st.warning(f"Usuario {user_sel} eliminado")
+                        st.rerun()
                 
         with tab_sub_parametros:
             col_param_izq, col_param_der = st.columns([1.2, 2.0])
