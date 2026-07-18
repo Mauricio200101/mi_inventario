@@ -937,9 +937,21 @@ with tab_reportes:
             # Filtrado intermedio por Empresa
             df_temp = df_a if empresa_sel == "Todas" else df_a[df_a["Empresa Destino"] == empresa_sel]
             
-            # 2. Selector de Agencia
-            lista_agencias = ["Todas"] + sorted(df_temp["Area Destino"].unique().tolist())
-            agencia_sel = st.selectbox("Seleccione Agencia:", lista_agencias)
+            # 2. Selector de Agencia (Limpiando el texto para mostrar solo el nombre del área)
+            # Obtenemos los valores únicos de la columna
+            agencias_raw = sorted(df_temp["Area Destino"].unique().tolist())
+            
+            # Creamos una lista limpia para mostrar (quitando el nombre de la empresa antes del guion)
+            agencias_limpias = [a.split(" - ")[-1] if " - " in a else a for a in agencias_raw]
+            
+            # Diccionario para mapear nombre limpio -> nombre original completo
+            mapeo_agencias = dict(zip(agencias_limpias, agencias_raw))
+            
+            # Selector usando los nombres limpios
+            agencia_display = st.selectbox("Seleccione Agencia:", ["Todas"] + agencias_limpias)
+            
+            # Filtramos usando el nombre original completo
+            agencia_sel = "Todas" if agencia_display == "Todas" else mapeo_agencias[agencia_display]
             
             # Filtrado final por Empresa y Agencia
             df_filtrado_a = df_temp if agencia_sel == "Todas" else df_temp[df_temp["Area Destino"] == agencia_sel]
