@@ -699,7 +699,7 @@ with tab_operaciones:
     if not df_insumos.empty:
         df_filtrado = df_insumos[
             df_insumos["Nombre"].str.lower().str.contains(busqueda.lower()) | 
-            df_filtrado["Categoría"].str.lower().str.contains(busqueda.lower())
+            df_insumos["Categoría"].str.lower().str.contains(busqueda.lower()) # <--- AQUÍ ESTABA EL ERROR
         ]
         
         # Bloque de eliminación solo para Administradores
