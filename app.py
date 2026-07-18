@@ -274,6 +274,7 @@ def obtener_insumos():
 
 def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado):
     df = obtener_insumos()
+    df["ID"] = pd.to_numeric(df["ID"], errors='coerce')
     nuevo_id = int(df["ID"].max() + 1) if not df.empty and pd.notna(df["ID"].max()) else 1
     hoja_insumos.append_row([nuevo_id, nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado])
     
