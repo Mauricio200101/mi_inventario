@@ -921,40 +921,48 @@ with tab_reportes:
             st.info("No se han registrado ventas en la hoja 'Ventas' de Google Sheets todavía.")
 
     # --- 3. SUBPESTAÑA ALQUILERES ---
-    with tab_rep_alquileres:
-        st.write("🔍 **Filtro por Rango de Fechas (Alquileres)**")
+   with tab_rep_alquileres:
+    st.write("🔍 **Búsqueda Filtrada de Alquileres**")
+    
+    try:
+        datos_a = hoja_alquileres.get_all_values()
+        df_a = pd.DataFrame(datos_a[1:], columns=datos_a[0]) if len(datos_a) > 1 else pd.DataFrame()
+    except:
+        df_a = pd.DataFrame()
+
+    if not df_a.empty:
+        # 1. Selector de Empresa
+        lista_empresas = ["Todas"] + sorted(df_a["Empresa Destino"].unique().tolist())
+        empresa_sel = st.selectbox("Filtrar por Empresa:", lista_empresas)
+        
+        # Filtrado inicial por Empresa
+        df_filtrado_a = df_a if empresa_sel == "Todas" else df_a[df_a["Empresa Destino"] == empresa_sel]
+        
+        # 2. Fechas
         col_fa1, col_fa2 = st.columns(2)
         with col_fa1:
-            fecha_inicio_alq = st.date_input("Desde (Alquileres):", value=obtener_hora_local_bo().date(), key="f_alq_ini")
+            fecha_inicio_alq = st.date_input("Desde:", value=obtener_hora_local_bo().date(), key="f_alq_ini_new")
         with col_fa2:
-            fecha_fin_alq = st.date_input("Hasta (Alquileres):", value=obtener_hora_local_bo().date(), key="f_alq_fin")
-            
-        try:
-            datos_a = hoja_alquileres.get_all_values()
-            if datos_a and len(datos_a) > 1:
-                df_a = pd.DataFrame(datos_a[1:], columns=datos_a[0])
-            else:
-                df_a = pd.DataFrame(columns=["Fecha", "Insumo", "Cantidad", "Empresa Destino", "Area Destino", "Usuario", "Contador Anterior", "Contador Actual", "Páginas Impresas", "Días Transcurridos"])
-        except:
-            df_a = pd.DataFrame()
-            
-        if not df_a.empty and "Fecha" in df_a.columns:
-            df_a["Fecha_dt"] = pd.to_datetime(df_a["Fecha"], errors='coerce')
-            df_filtrado_a = df_a[(df_a["Fecha_dt"].dt.date >= fecha_inicio_alq) & (df_a["Fecha_dt"].dt.date <= fecha_fin_alq)]
-            
-            if df_filtrado_a.empty:
-                st.warning("No se registraron salidas por alquiler en este rango.")
-            else:
-                df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore').copy()
-                df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
-                st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
-                
-                buffer_a = io.BytesIO()
-                with pd.ExcelWriter(buffer_a, engine='openpyxl') as writer:
-                    df_a_mostrar.to_excel(writer, sheet_name='Alquileres', index=False)
-                st.download_button("Descargar Reporte de Alquileres (Excel)", data=buffer_a.getvalue(), file_name=f"Reporte_Alquileres_{fecha_inicio_alq}_a_{fecha_fin_alq}.xlsx")
+            fecha_fin_alq = st.date_input("Hasta:", value=obtener_hora_local_bo().date(), key="f_alq_fin_new")
+
+        # Filtro de fecha
+        df_filtrado_a["Fecha_dt"] = pd.to_datetime(df_filtrado_a["Fecha"], errors='coerce')
+        df_filtrado_a = df_filtrado_a[(df_filtrado_a["Fecha_dt"].dt.date >= fecha_inicio_alq) & 
+                                      (df_filtrado_a["Fecha_dt"].dt.date <= fecha_fin_alq)]
+
+        if df_filtrado_a.empty:
+            st.warning("No se encontraron registros con los filtros seleccionados.")
         else:
-            st.info("No se han registrado alquileres aún.")
+            df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore')
+            df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
+            st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
+            
+            buffer_a = io.BytesIO()
+            with pd.ExcelWriter(buffer_a, engine='openpyxl') as writer:
+                df_a_mostrar.to_excel(writer, index=False)
+            st.download_button("Descargar Reporte (Excel)", data=buffer_a.getvalue(), file_name="Reporte_Alquileres.xlsx")
+    else:
+        st.info("No hay datos en la pestaña de Alquileres.")
 
     # --- 4. SUBPESTAÑA ADM BORRADO / MODIFICACIÓN ---
     with tab_admin_borrado:
