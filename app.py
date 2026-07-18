@@ -931,31 +931,31 @@ with tab_reportes:
 
         if not df_a.empty:
             if not df_a.empty:
-        # 1. Selector de Empresa
-        lista_empresas = ["Todas"] + sorted(df_a["Empresa Destino"].unique().tolist())
-        empresa_sel = st.selectbox("1. Filtrar por Empresa:", lista_empresas)
-        
-        # Filtrado intermedio por Empresa
-        df_temp = df_a if empresa_sel == "Todas" else df_a[df_a["Empresa Destino"] == empresa_sel]
-        
-        # 2. Selector de Agencia (Dependiente de Empresa)
-        lista_agencias = ["Todas"] + sorted(df_temp["Area Destino"].unique().tolist())
-        agencia_sel = st.selectbox("2. Filtrar por Agencia:", lista_agencias)
-        
-        # Filtrado final por Empresa y Agencia
-        df_filtrado_a = df_temp if agencia_sel == "Todas" else df_temp[df_temp["Area Destino"] == agencia_sel]
-        
-        # 3. Fechas
-        col_fa1, col_fa2 = st.columns(2)
-        with col_fa1:
-            fecha_inicio_alq = st.date_input("Desde:", value=obtener_hora_local_bo().date(), key="f_alq_ini_new")
-        with col_fa2:
-            fecha_fin_alq = st.date_input("Hasta:", value=obtener_hora_local_bo().date(), key="f_alq_fin_new")
-            
-        # Filtro de fecha
-        df_filtrado_a["Fecha_dt"] = pd.to_datetime(df_filtrado_a["Fecha"], errors='coerce')
-        df_filtrado_a = df_filtrado_a[(df_filtrado_a["Fecha_dt"].dt.date >= fecha_inicio_alq) & 
-                                      (df_filtrado_a["Fecha_dt"].dt.date <= fecha_fin_alq)]
+                # 1. Selector de Empresa
+                lista_empresas = ["Todas"] + sorted(df_a["Empresa Destino"].unique().tolist())
+                empresa_sel = st.selectbox("1. Filtrar por Empresa:", lista_empresas)
+                
+                # Filtrado intermedio por Empresa
+                df_temp = df_a if empresa_sel == "Todas" else df_a[df_a["Empresa Destino"] == empresa_sel]
+                
+                # 2. Selector de Agencia (Dependiente de Empresa)
+                lista_agencias = ["Todas"] + sorted(df_temp["Area Destino"].unique().tolist())
+                agencia_sel = st.selectbox("2. Filtrar por Agencia:", lista_agencias)
+                
+                # Filtrado final por Empresa y Agencia
+                df_filtrado_a = df_temp if agencia_sel == "Todas" else df_temp[df_temp["Area Destino"] == agencia_sel]
+                
+                # 3. Fechas
+                col_fa1, col_fa2 = st.columns(2)
+                with col_fa1:
+                    fecha_inicio_alq = st.date_input("Desde:", value=obtener_hora_local_bo().date(), key="f_alq_ini_new")
+                with col_fa2:
+                    fecha_fin_alq = st.date_input("Hasta:", value=obtener_hora_local_bo().date(), key="f_alq_fin_new")
+                    
+                # Filtro de fecha
+                df_filtrado_a["Fecha_dt"] = pd.to_datetime(df_filtrado_a["Fecha"], errors='coerce')
+                df_filtrado_a = df_filtrado_a[(df_filtrado_a["Fecha_dt"].dt.date >= fecha_inicio_alq) & 
+                                            (df_filtrado_a["Fecha_dt"].dt.date <= fecha_fin_alq)]
             if df_filtrado_a.empty:
                 st.warning("No se encontraron registros con los filtros seleccionados.")
             else:
