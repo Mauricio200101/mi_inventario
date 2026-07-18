@@ -286,6 +286,14 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     
     fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
+def eliminar_insumo(id_insumo):
+    """Elimina un insumo de la hoja por su ID."""
+    celda = hoja_insumos.find(str(id_insumo))
+    if celda:
+        hoja_insumos.delete_rows(celda.row)
+        st.cache_data.clear() 
+        return True
+    return False
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
@@ -691,17 +699,26 @@ with tab_operaciones:
     if not df_insumos.empty:
         df_filtrado = df_insumos[
             df_insumos["Nombre"].str.lower().str.contains(busqueda.lower()) | 
-            df_insumos["Categoría"].str.lower().str.contains(busqueda.lower())
+            df_filtrado["Categoría"].str.lower().str.contains(busqueda.lower())
         ]
-    else:
-        df_filtrado = df_insumos
-
-    if df_filtrado.empty:
-        st.warning("No se encontraron insumos.")
-    else:
+        
+        # Bloque de eliminación solo para Administradores
+        if st.session_state["rol_actual"] == "Administrador":
+            with st.expander("🚨 Zona de Administración: Eliminar Insumos"):
+                insumo_a_borrar = st.selectbox("Selecciona insumo a eliminar:", df_filtrado["Nombre"].tolist())
+                if st.button("Confirmar Eliminación"):
+                    id_a_borrar = df_filtrado[df_filtrado["Nombre"] == insumo_a_borrar]["ID"].values[0]
+                    if eliminar_insumo(id_a_borrar):
+                        st.success(f"Insumo '{insumo_a_borrar}' eliminado.")
+                        st.rerun()
+                    else:
+                        st.error("No se pudo eliminar.")
+        
         df_filtrado_con_num = df_filtrado.copy()
         df_filtrado_con_num.insert(0, "N°", range(1, len(df_filtrado_con_num) + 1))
         st.dataframe(df_filtrado_con_num, use_container_width=True, hide_index=True)
+    else:
+        st.warning("No se encontraron insumos.")
 
 
 # ==========================================
