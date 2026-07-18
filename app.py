@@ -275,8 +275,14 @@ def obtener_insumos():
 def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado):
     df = obtener_insumos()
     df["ID"] = pd.to_numeric(df["ID"], errors='coerce')
-    nuevo_id = int(df["ID"].max() + 1) if not df.empty and pd.notna(df["ID"].max()) else 1
+    
+    # Calculamos el ID de forma segura
+    max_id = df["ID"].max()
+    nuevo_id = int(max_id) + 1 if pd.notna(max_id) else 1
+    
+    # Añadimos la fila y forzamos la limpieza de caché
     hoja_insumos.append_row([nuevo_id, nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado])
+    st.cache_data.clear()
     
     fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
     hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
