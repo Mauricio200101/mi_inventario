@@ -960,8 +960,8 @@ with tab_reportes:
                 with pd.ExcelWriter(buffer_a, engine='openpyxl') as writer:
                     df_a_mostrar.to_excel(writer, index=False)
                 st.download_button("Descargar Reporte (Excel)", data=buffer_a.getvalue(), file_name="Reporte_Alquileres.xlsx")
-    else:
-        st.info("No hay datos en la pestaña de Alquileres.")
+        else:
+            st.info("No hay datos en la pestaña de Alquileres.")
 
     # --- 4. SUBPESTAÑA ADM BORRADO / MODIFICACIÓN ---
     with tab_admin_borrado:
