@@ -940,12 +940,13 @@ with tab_reportes:
             # 2. Selector de Agencia (Limpiado para mostrar solo el último segmento)
             # Obtenemos las agencias únicas disponibles para la empresa seleccionada
             agencias_raw = sorted(df_temp["Area Destino"].unique().tolist())
-            
-            # Limpiamos: tomamos solo lo que está después del ÚLTIMO guion encontrado
-            agencias_limpias = [a.split(" - ")[-1].strip() for a in agencias_raw]
+           # Limpiamos: tomamos solo lo que está después del ÚLTIMO guion encontrado
+            # Usamos set() para eliminar duplicados y volvemos a ordenar
+            agencias_limpias = sorted(list(set([a.split(" - ")[-1].strip() for a in agencias_raw])))
             
             # Diccionario para mantener el mapeo original
-            mapeo_agencias = dict(zip(agencias_limpias, agencias_raw))
+            # Esto asegura que al seleccionar un nombre limpio, el filtro sepa el original
+            mapeo_agencias = {a.split(" - ")[-1].strip(): a for a in agencias_raw}
             
             # Selector usando los nombres limpios
             agencia_display = st.selectbox("Seleccione Agencia:", ["Todas"] + agencias_limpias)
