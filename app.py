@@ -942,7 +942,7 @@ with tab_reportes:
             agencias_raw = sorted(df_temp["Area Destino"].unique().tolist())
             
             # Creamos una lista limpia para mostrar (quitando el nombre de la empresa antes del guion)
-            agencias_limpias = [a.split(" - ")[-1] if " - " in a else a for a in agencias_raw]
+            agencias_limpias = [a.split(" - ")[-1].strip() for a in agencias_raw]
             
             # Diccionario para mapear nombre limpio -> nombre original completo
             mapeo_agencias = dict(zip(agencias_limpias, agencias_raw))
