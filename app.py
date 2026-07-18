@@ -922,7 +922,7 @@ with tab_reportes:
 
     # --- 3. SUBPESTAÑA ALQUILERES ---
     with tab_rep_alquileres:
-    st.write("🔍 **Búsqueda Filtrada de Alquileres**")
+        st.write("🔍 **Búsqueda Filtrada de Alquileres**")
         try:
             datos_a = hoja_alquileres.get_all_values()
             df_a = pd.DataFrame(datos_a[1:], columns=datos_a[0]) if len(datos_a) > 1 else pd.DataFrame()
