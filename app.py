@@ -921,7 +921,7 @@ with tab_reportes:
             st.info("No se han registrado ventas en la hoja 'Ventas' de Google Sheets todavía.")
 
     # --- 3. SUBPESTAÑA ALQUILERES ---
-   with tab_rep_alquileres:
+    with tab_rep_alquileres:
     st.write("🔍 **Búsqueda Filtrada de Alquileres**")
         try:
             datos_a = hoja_alquileres.get_all_values()
