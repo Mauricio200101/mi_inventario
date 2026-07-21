@@ -342,21 +342,21 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
             hoja_insumos.update_cell(fila_sheet, 4, nuevo_stock)
             fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Para el historial, unimos dinámicamente Area y Agencia si corresponde
-            detalle_destino = area_o_precio
-            if agencia and agencia != "Sin Registrar" and "Agencia:" not in area_o_precio:
-                detalle_destino = f"{area_o_precio} - Agencia: {agencia}"
-                
+            # Separamos la agencia y el área de forma limpia para el historial
+            agencia_para_historial = agencia if agencia else ""
+            area_para_historial = area_o_precio if area_o_precio else ""
+            
             hoja_historial.append_row([
-                fecha_actual, 
-                nombre_insumo, 
-                tipo_mov, 
-                cant_movida, 
-                nuevo_stock, 
-                st.session_state["usuario_actual"], 
-                motivo, 
-                empresa, 
-                detalle_destino
+                fecha_actual,
+                nombre_insumo,
+                tipo_mov,
+                cant_movida,
+                nuevo_stock,
+                st.session_state["usuario_actual"],
+                motivo,
+                empresa,
+                agencia_para_historial,
+                area_para_historial
             ])
             
             if tipo_mov == "Salida":
