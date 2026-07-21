@@ -1437,7 +1437,7 @@ with tab_respaldo:
                         pass
 
                     # Mostramos la fecha del último cambio detectada
-                    st.info(última fecha de cambio registrada para este insumo: **{fecha_anterior_sugerida}**)
+                    st.info(f"última fecha de cambio registrada para este insumo: **{fecha_anterior_sugerida}**")
                     
                     # Permite confirmar o ajustar la fecha del cambio anterior y la fecha de hoy
                     col_f1, col_f2 = st.columns(2)
