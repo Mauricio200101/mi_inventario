@@ -1386,7 +1386,7 @@ with tab_respaldo:
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
                     
-                  # 1. Filtramos estrictamente las agencias de la hoja de Parámetros solo para la empresa elegida
+                  # 1. Filtro estricto y limpio basado directamente en la columna 'Empresa' de la hoja Parámetros
                     agencias_empresa = []
                     areas_empresa = []
                     df_param_local = pd.DataFrame()
@@ -1395,15 +1395,18 @@ with tab_respaldo:
                         datos_param = hoja_parametros.get_all_values()
                         if len(datos_param) > 1:
                             df_param_local = pd.DataFrame(datos_param[1:], columns=datos_param[0])
-                            # Filtro estricto por la empresa seleccionada arriba
-                            df_emp = df_param_local[df_param_local["Empresa"].str.strip() == empresa_elegida.strip()]
+                            
+                            # Limpiamos espacios en blanco de la columna Empresa para que coincida perfecto
+                            df_param_local["Empresa_Clean"] = df_param_local["Empresa"].astype(str).str.strip()
+                            df_emp = df_param_local[df_param_local["Empresa_Clean"] == empresa_elegida.strip()]
                             
                             if not df_emp.empty:
+                                # Tomamos las agencias que corresponden a esta empresa
                                 raw_ags = df_emp["Agencia"].dropna().unique().tolist()
                                 agencias_limpias = []
                                 for ag in raw_ags:
                                     t_ag = str(ag).strip()
-                                    # Limpiamos si trae el nombre de la empresa al inicio
+                                    # Si el texto de la agencia incluye el nombre de la empresa, lo extraemos limpiamente
                                     if empresa_elegida.strip() in t_ag:
                                         t_ag = t_ag.replace(empresa_elegida.strip(), "").strip(" -")
                                     if t_ag and t_ag not in agencias_limpias:
@@ -1419,10 +1422,10 @@ with tab_respaldo:
                     with col1:
                         agencia_destino = st.selectbox("Agencia:", agencias_empresa, key="backup_agencia_destino")
                         
-                    # 2. Filtramos las áreas estrictamente para la empresa y la agencia elegida
+                    # 2. Filtramos las áreas asociadas a esa agencia específica dentro de la empresa seleccionada
                     try:
-                        if not df_param_local.empty:
-                            # Buscamos en el DataFrame filtrado de la empresa aquellas filas que contengan la agencia seleccionada
+                        if not df_emp.empty:
+                            # Buscamos filas de la empresa donde la agencia contenga la agencia seleccionada
                             df_filtered = df_emp[df_emp["Agencia"].str.contains(agencia_destino, na=False)]
                             if not df_filtered.empty:
                                 raw_areas = df_filtered["Area"].dropna().unique().tolist()
@@ -1445,7 +1448,7 @@ with tab_respaldo:
                     with col2:
                         area_destino_uso = st.selectbox("Área:", areas_empresa, key="backup_area_destino")
                         areas_empresa = area_destino_uso
-                        
+
                     st.markdown("#### Control por Fechas y Duración:")
                     
                     # 2. Buscamos automáticamente la última fecha del cambio anterior para este insumo/agencia
