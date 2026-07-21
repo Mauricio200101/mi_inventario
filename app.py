@@ -1386,22 +1386,25 @@ with tab_respaldo:
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
                     
-                    # 1. Filtramos las agencias y áreas asociadas a esta empresa
+                    # 1. Leemos las agencias y áreas directamente desde la hoja de Parámetros según la empresa elegida
                     agencias_empresa = []
                     areas_empresa = []
                     
                     try:
-                        datos_alq_hist = hoja_alquileres.get_all_values()
-                        if len(datos_alq_hist) > 1:
-                            df_alq_hist = pd.DataFrame(datos_alq_hist[1:], columns=datos_alq_hist[0])
-                            df_alq_empresa = df_alq_hist[df_alq_hist["Empresa"].str.strip() == empresa_elegida.strip()]
+                        datos_param = hoja_parametros.get_all_values()
+                        if len(datos_param) > 1:
+                            df_param = pd.DataFrame(datos_param[1:], columns=datos_param[0])
                             
-                            if not df_alq_empresa.empty:
-                                agencias_empresa = sorted(df_alq_empresa["Agencia"].dropna().unique().tolist())
-                                areas_empresa = sorted(df_alq_empresa["Area"].dropna().unique().tolist())
+                            # Filtramos las filas que coincidan con la empresa seleccionada arriba
+                            df_filtrada_param = df_param[df_param["Empresa"].str.strip() == empresa_elegida.strip()]
+                            
+                            if not df_filtrada_param.empty:
+                                agencias_empresa = sorted(df_filtrada_param["Agencia"].dropna().unique().tolist())
+                                areas_empresa = sorted(df_filtrada_param["Area"].dropna().unique().tolist())
                     except Exception:
                         pass
                     
+                    # Respaldo por si acaso
                     if not agencias_empresa:
                         agencias_empresa = ["Principal"]
                     if not areas_empresa:
