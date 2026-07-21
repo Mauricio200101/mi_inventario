@@ -1414,12 +1414,6 @@ with tab_respaldo:
                         )
                         areas_empresa = area_destino_uso
                         
-                    if not areas_empresa:
-                        areas_empresa = ["General"]
-
-                    with col2:
-                        area_destino_uso = st.selectbox("Área Destino:", areas_empresa)
-
                     st.markdown("#### Control por Fechas y Duración:")
                     
                     # 2. Buscamos automáticamente la última fecha del cambio anterior para este insumo/agencia
