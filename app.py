@@ -376,8 +376,8 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                     nombre_insumo,
                     cant_movida,
                     empresa,
-                    agencia,
-                    area_o_precio,
+                    str(agencia).split(" - ")[-1].strip(),       # Extrae solo la agencia final
+                    str(area_o_precio).split(" - ")[-1].strip(), # Extrae solo el área final
                     st.session_state["usuario_actual"],
                     int(contador_anterior),
                     int(contador_actual),
