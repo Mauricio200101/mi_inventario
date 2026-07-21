@@ -72,6 +72,7 @@ hoja_usuarios = pestanas_activas["Usuarios"]
 hoja_parametros = pestanas_activas["Parametros"]
 hoja_ventas = pestanas_activas["Ventas"]
 hoja_alquileres = pestanas_activas["Alquileres"]
+hoja_respaldo = pestanas_activas["Backup"]
 
 # --- FUNCIONES DE GESTIÓN DE USUARIOS ---
 @st.cache_data(ttl=60)
@@ -400,10 +401,11 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
 # Asegúrate de que esto esté totalmente a la izquierda (sin sangría/indentación)
 df_insumos = obtener_insumos()
 empresas_disponibles, areas_disponibles, agencias_disponibles = obtener_parametros()
-tab_operaciones, tab_valorizacion, tab_rendimiento, tab_reportes, tab_usuarios = st.tabs([
+tab_operaciones, tab_valorizacion, tab_rendimiento, tab_respaldo, tab_reportes, tab_usuarios = st.tabs([
     "Operaciones de Stock",
     "Valorización del Inventario",
     "Rendimiento de Insumos",
+    "Insumos de Respaldo",
     "Reportes por Fecha / Edición",
     "Configuración y Usuarios"
 ])
@@ -1329,3 +1331,86 @@ with tab_usuarios:
                         
     else:
         st.warning("🔒 Esta sección es exclusiva para el Administrador de la plataforma.")
+# ==========================================
+# 6.PESTAÑA DE INSUMOS DE RESPALDO (BACKUP)
+# ==========================================
+with tab_respaldo:
+    st.subheader("🛡️ Gestión de Insumos de Respaldo (Backup por Empresa)")
+    st.write("Consulta los insumos en stock de respaldo y asígnales Agencia, Área y Contadores al momento de utilizarlos.")
+
+    try:
+        datos_resp = hoja_respaldo.get_all_values()
+        
+        if datos_resp and len(datos_resp) > 1:
+            df_resp = pd.DataFrame(datos_resp[1:], columns=datos_resp[0])
+            
+            if "Estado" in df_resp.columns:
+                df_disponibles = df_resp[df_resp["Estado"].str.strip().str.lower() == "disponible"]
+            else:
+                df_disponibles = df_resp
+
+            if not df_disponibles.empty:
+                empresas_backup = sorted(df_disponibles["Empresa Destino"].dropna().unique().tolist())
+                empresa_elegida = st.selectbox("Selecciona la Empresa para ver su Respaldo:", empresas_backup, key="busq_empresa_backup")
+
+                df_filtrado_empresa = df_disponibles[df_disponibles["Empresa Destino"] == empresa_elegida]
+
+                st.markdown(f"### Insumos de Respaldo disponibles en: {empresa_elegida}")
+                st.dataframe(df_filtrado_empresa, use_container_width=True, hide_index=True)
+
+                st.markdown("---")
+                st.subheader("🔄 Activar y Asignar Destino (Enviar a Alquileres)")
+
+                with st.form("form_activar_backup_flexible"):
+                    opciones_items = [
+                        f"Fila {idx+2} - Insumo: {row['Insumo']} (Cantidad: {row['Cantidad']})"
+                        for idx, row in df_filtrado_empresa.iterrows()
+                    ]
+                    
+                    item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        agencia_destino_uso = st.text_input("Agencia Destino donde se instalará:")
+                    with col2:
+                        area_destino_uso = st.text_input("Área Destino donde se instalará:")
+
+                    st.markdown("#### Control de Contadores:")
+                    c_ant = st.number_input("Contador Anterior:", min_value=0, step=1, value=0)
+                    c_act = st.number_input("Contador Actual (Lectura de hoy):", min_value=0, step=1, value=0)
+                    
+                    btn_activar = st.form_submit_button("🚀 Dar de Baja en Backup y Registrar en Alquileres")
+
+                    if btn_activar:
+                        if not agencia_destino_uso or not area_destino_uso:
+                            st.warning("Por favor, ingresa la agencia y el área de destino.")
+                        else:
+                            fila_idx = int(item_a_usar.split(" - ")[0].replace("Fila ", ""))
+                            fila_datos = hoja_respaldo.row_values(fila_idx)
+                            
+                            insumo_bk = fila_datos[1]
+                            cantidad_bk = fila_datos[2]
+                            empresa_bk = fila_datos[3]
+                            
+                            paginas_impresas = max(0, c_act - c_ant)
+                            fecha_actual = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                            usuario_actual = st.session_state.get("usuario_actual", "admin")
+
+                            nueva_fila_alquiler = [
+                                fecha_actual, insumo_bk, cantidad_bk, empresa_bk, 
+                                agencia_destino_uso, area_destino_uso, usuario_actual, 
+                                c_ant, c_act, paginas_impresas, 0
+                            ]
+                            hoja_alquileres.append_row(nueva_fila_alquiler)
+                            hoja_respaldo.update_cell(fila_idx, 6, "Utilizado")
+
+                            st.success(f"¡El respaldo de {insumo_bk} se asignó a {agencia_destino_uso} / {area_destino_uso} y pasó a Alquileres con éxito!")
+                            st.rerun()
+
+            else:
+                st.info("No hay insumos de respaldo disponibles para esta empresa.")
+        else:
+            st.info("Aún no hay registros en la sección de respaldo.")
+            
+    except Exception as e:
+        st.error(f"Error al cargar la gestión de respaldos: {e}")
