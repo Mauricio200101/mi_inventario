@@ -1336,6 +1336,22 @@ with tab_usuarios:
 # 6.PESTAÑA DE INSUMOS DE RESPALDO (BACKUP)
 # ==========================================
 with tab_respaldo:
+    with st.expander("➕ Registrar Nuevo Insumo de Respaldo"):
+        with st.form("form_nuevo_backup"):
+            insumo_nuevo_bk = st.selectbox("Seleccionar Insumo:", df_insumos["Nombre"].tolist() if not df_insumos.empty else [])
+            cantidad_bk = st.number_input("Cantidad:", min_value=1, step=1, value=1)
+            empresa_bk = st.selectbox("Empresa Destino:", empresas_disponibles if 'empresas_disponibles' in locals() else [])
+            
+            btn_guardar_bk = st.form_submit_button("💾 Guardar Respaldo")
+            
+            if btn_guardar_bk:
+                fecha_bk = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                usuario_bk = st.session_state.get("usuario_actual", "admin")
+                estado_bk = "Disponible"
+                
+                hoja_respaldo.append_row([fecha_bk, insumo_nuevo_bk, cantidad_bk, empresa_bk, usuario_bk, estado_bk])
+                st.success(f"¡Respaldo de {insumo_nuevo_bk} registrado para {empresa_bk} con éxito!")
+                st.rerun()
     st.subheader("🛡️ Gestión de Insumos de Respaldo (Backup por Empresa)")
     st.write("Consulta los insumos en stock de respaldo y asígnales Agencia, Área y Contadores al momento de utilizarlos.")
 
