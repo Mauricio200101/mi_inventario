@@ -1399,16 +1399,17 @@ with tab_respaldo:
                             
                             if not df_filtrada_param.empty:
                                 # Extraemos los valores únicos
+                                # Extraemos los valores únicos y limpiamos cortando a partir del guión si lo tienen
                                 raw_agencias = df_filtrada_param["Agencia"].dropna().unique().tolist()
                                 raw_areas = df_filtrada_param["Area"].dropna().unique().tolist()
                                 
-                                # Limpiamos para que no se repita el nombre de la empresa si lo incluye
-                                prefijo_empresa = empresa_elegida.strip()
                                 agencias_empresa = sorted([
-                                    str(ag).replace(prefijo_empresa, "").strip(" -") for ag in raw_agencias
+                                    str(ag).split("-", 1)[-1].strip() if "-" in str(ag) else str(ag).strip() 
+                                    for ag in raw_agencias
                                 ])
                                 areas_empresa = sorted([
-                                    str(ar).replace(prefijo_empresa, "").strip(" -") for ar in raw_areas
+                                    str(ar).split("-", 1)[-1].strip() if "-" in str(ar) else str(ar).strip() 
+                                    for ar in raw_areas
                                 ])
                     except Exception:
                         pass
