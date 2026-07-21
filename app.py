@@ -298,8 +298,8 @@ def eliminar_insumo(id_insumo):
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
     """
-    Busca en la pestaña de Alquileres el último registro que coincida 
-    con el Insumo, la Empresa, el Área y la Agencia especificados para extraer su contador y su fecha.
+    Busca en la pestaña de Alquileres el último registro que coincida
+    con el Insumo, la Empresa, el Área y la Agencia especificados.
     """
     try:
         datos = hoja_alquileres.get_all_values()
@@ -308,25 +308,39 @@ def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
         
         df_alq = pd.DataFrame(datos[1:], columns=datos[0])
         
-        # Filtramos asegurándonos de contemplar la columna de Agencia Destino (si existe)
+        # Limpiamos los textos de entrada por si vienen con cadenas largas
+        busq_agencia = str(agencia).split(" - ")[-1].strip() if agencia else ""
+        busq_area = str(area).split(" - ")[-1].strip() if area else ""
+        busq_empresa = str(empresa).strip()
+        busq_insumo = str(insumo).strip()
+
+        # Creamos columnas limpias temporales en el DataFrame para comparar con seguridad
         if "Agencia Destino" in df_alq.columns:
-            df_filtrado = df_alq[
-                (df_alq["Insumo"].str.strip() == str(insumo).strip()) & 
-                (df_alq["Empresa Destino"].str.strip() == str(empresa).strip()) & 
-                (df_alq["Agencia Destino"].str.strip() == str(agencia).strip()) &
-                (df_alq["Area Destino"].str.strip() == str(area).strip())
-            ]
+            df_alq["_agencia_limpia"] = df_alq["Agencia Destino"].astype(str).apply(lambda x: x.split(" - ")[-1].strip())
         else:
-            # Fallback en caso de que la hoja de alquileres aún no tenga la columna Agencia Destino
-            df_filtrado = df_alq[
-                (df_alq["Insumo"].str.strip() == str(insumo).strip()) & 
-                (df_alq["Empresa Destino"].str.strip() == str(empresa).strip()) & 
-                (df_alq["Area Destino"].str.strip() == str(area).strip())
-            ]
+            df_alq["_agencia_limpia"] = ""
+
+        if "Área Destino" in df_alq.columns:
+            df_alq["_area_limpia"] = df_alq["Área Destino"].astype(str).apply(lambda x: x.split(" - ")[-1].strip())
+        else:
+            df_alq["_area_limpia"] = ""
+
+        df_alq["_empresa_limpia"] = df_alq["Empresa Destino"].astype(str).str.strip()
+        df_alq["_insumo_limpio"] = df_alq["Insumo"].astype(str).str.strip()
+
+        # Filtramos las coincidencias
+        df_filtrado = df_alq[
+            (df_alq["_insumo_limpio"] == busq_insumo) &
+            (df_alq["_empresa_limpia"] == busq_empresa) &
+            (df_alq["_agencia_limpia"] == busq_agencia) &
+            (df_alq["_area_limpia"] == busq_area)
+        ]
         
         if not df_filtrado.empty:
             ultimo_registro = df_filtrado.iloc[-1]
             return ultimo_registro
+            
+        return None
     except Exception as e:
         st.error(f"Error al buscar historial de contadores: {e}")
     return None
