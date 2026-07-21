@@ -296,54 +296,48 @@ def eliminar_insumo(id_insumo):
     return False
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
+Tienes toda la razón, en tus capturas se ve que la función abarca desde la línea 299 hasta la 347 (justo antes de donde empieza def actualizar_stock_sheet).
+
+Selecciona exactamente desde la línea 299 hasta la línea 347 y reemplázalo por este código limpio y directo basado en las posiciones de las columnas de tu hoja de Alquileres:
+
+Python
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
     """
     Busca en la pestaña de Alquileres el último registro que coincida
-    con el Insumo, la Empresa, el Área y la Agencia especificados.
+    con el Insumo, la Empresa, el Área y la Agencia especificados usando índices directos.
     """
     try:
         datos = hoja_alquileres.get_all_values()
         if not datos or len(datos) <= 1:
             return None
         
-        df_alq = pd.DataFrame(datos[1:], columns=datos[0])
-        
-        # Limpiamos los textos de entrada por si vienen con cadenas largas
-        busq_agencia = str(agencia).split(" - ")[-1].strip() if agencia else ""
-        busq_area = str(area).split(" - ")[-1].strip() if area else ""
-        busq_empresa = str(empresa).strip()
-        busq_insumo = str(insumo).strip()
+        busq_insumo = str(insumo).strip().lower()
+        busq_empresa = str(empresa).strip().lower()
+        busq_agencia = str(agencia).split(" - ")[-1].strip().lower() if agencia else ""
+        busq_area = str(area).split(" - ")[-1].strip().lower() if area else ""
 
-        # Creamos columnas limpias temporales en el DataFrame para comparar con seguridad
-        if "Agencia Destino" in df_alq.columns:
-            df_alq["_agencia_limpia"] = df_alq["Agencia Destino"].astype(str).apply(lambda x: x.split(" - ")[-1].strip())
-        else:
-            df_alq["_agencia_limpia"] = ""
-
-        if "Área Destino" in df_alq.columns:
-            df_alq["_area_limpia"] = df_alq["Área Destino"].astype(str).apply(lambda x: x.split(" - ")[-1].strip())
-        else:
-            df_alq["_area_limpia"] = ""
-
-        df_alq["_empresa_limpia"] = df_alq["Empresa Destino"].astype(str).str.strip()
-        df_alq["_insumo_limpio"] = df_alq["Insumo"].astype(str).str.strip()
-
-        # Filtramos las coincidencias
-        df_filtrado = df_alq[
-            (df_alq["_insumo_limpio"] == busq_insumo) &
-            (df_alq["_empresa_limpia"] == busq_empresa) &
-            (df_alq["_agencia_limpia"] == busq_agencia) &
-            (df_alq["_area_limpia"] == busq_area)
-        ]
-        
-        if not df_filtrado.empty:
-            ultimo_registro = df_filtrado.iloc[-1]
-            return ultimo_registro
+        # Recorremos las filas de abajo hacia arriba (saltando la cabecera)
+        for fila in reversed(datos[1:]):
+            if len(fila) < 6:
+                continue
             
+            r_insumo = str(fila[1]).strip().lower()   # Columna B: Insumo
+            r_empresa = str(fila[3]).strip().lower()  # Columna D: Empresa Destino
+            r_agencia = str(fila[4]).split(" - ")[-1].strip().lower() # Columna E: Agencia Destino
+            r_area = str(fila[5]).split(" - ")[-1].strip().lower()    # Columna F: Area Destino
+
+            if (r_insumo == busq_insumo and 
+                r_empresa == busq_empresa and 
+                r_agencia == busq_agencia and 
+                r_area == busq_area):
+                
+                columnas = datos[0]
+                return pd.Series(fila, index=columnas)
+                
         return None
     except Exception as e:
         st.error(f"Error al buscar historial de contadores: {e}")
-    return None
+        return None
 
 def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0, contador_anterior=0, contador_actual=0, paginas=0, dias=0, agencia=""):
     try:
