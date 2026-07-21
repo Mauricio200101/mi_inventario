@@ -1386,43 +1386,94 @@ with tab_respaldo:
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
                     
+                    # 1. Filtramos las agencias y áreas asociadas a esta empresa
+                    agencias_empresa = []
+                    areas_empresa = []
+                    
+                    try:
+                        datos_alq_hist = hoja_alquileres.get_all_values()
+                        if len(datos_alq_hist) > 1:
+                            df_alq_hist = pd.DataFrame(datos_alq_hist[1:], columns=datos_alq_hist[0])
+                            df_alq_empresa = df_alq_hist[df_alq_hist["Empresa"].str.strip() == empresa_elegida.strip()]
+                            
+                            if not df_alq_empresa.empty:
+                                agencias_empresa = sorted(df_alq_empresa["Agencia"].dropna().unique().tolist())
+                                areas_empresa = sorted(df_alq_empresa["Area"].dropna().unique().tolist())
+                    except Exception:
+                        pass
+                    
+                    if not agencias_empresa:
+                        agencias_empresa = ["Principal"]
+                    if not areas_empresa:
+                        areas_empresa = ["General"]
+
                     col1, col2 = st.columns(2)
                     with col1:
-                        agencia_destino_uso = st.text_input("Agencia Destino donde se instalará:")
+                        agencia_destino_uso = st.selectbox("Agencia Destino:", agencias_empresa)
                     with col2:
-                        area_destino_uso = st.text_input("Área Destino donde se instalará:")
+                        area_destino_uso = st.selectbox("Área Destino:", areas_empresa)
 
-                    st.markdown("#### Control de Contadores:")
-                    c_ant = st.number_input("Contador Anterior:", min_value=0, step=1, value=0)
-                    c_act = st.number_input("Contador Actual (Lectura de hoy):", min_value=0, step=1, value=0)
+                    st.markdown("#### Control por Fechas y Duración:")
                     
+                    # 2. Buscamos automáticamente la última fecha del cambio anterior para este insumo/agencia
+                    fecha_anterior_sugerida = pd.Timestamp.now().strftime("%Y-%m-%d")
+                    dias_duracion_calculados = 0
+                    
+                    try:
+                        insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
+                        
+                        if 'df_alq_hist' in locals() and not df_alq_hist.empty:
+                            df_match = df_alq_hist[
+                                (df_alq_hist["Empresa"].str.strip() == empresa_elegida.strip()) & 
+                                (df_alq_hist["Agencia"].str.strip() == agencia_destino_uso.strip()) & 
+                                (df_alq_hist["Insumo"].str.strip() == insumo_temp.strip())
+                            ]
+                            if not df_match.empty:
+                                ultimo_registro = df_match.iloc[-1]
+                                fecha_str = str(ultimo_registro["Fecha"])
+                                # Extraemos solo la fecha (YYYY-MM-DD) por si tiene hora
+                                fecha_anterior_sugerida = fecha_str.split(" ")[0]
+                    except Exception:
+                        pass
+
+                    # Mostramos la fecha del último cambio detectada
+                    st.info(última fecha de cambio registrada para este insumo: **{fecha_anterior_sugerida}**)
+                    
+                    # Permite confirmar o ajustar la fecha del cambio anterior y la fecha de hoy
+                    col_f1, col_f2 = st.columns(2)
+                    with col_f1:
+                        f_anterior = st.date_input("Fecha del Cambio Anterior:", value=pd.to_datetime(fecha_anterior_sugerida).date())
+                    with col_f2:
+                        f_actual = st.date_input("Fecha de Hoy (Instalación de Respaldo):", value=pd.Timestamp.now().date())
+                    
+                    # Calculamos automáticamente los días de duración
+                    dias_duracion_calculados = max(0, (pd.to_datetime(f_actual) - pd.to_datetime(f_anterior)).days)
+                    st.success(f"⏱️ Tiempo estimado que duró el insumo anterior: **{dias_duracion_calculados} días**")
+
                     btn_activar = st.form_submit_button("🚀 Dar de Baja en Backup y Registrar en Alquileres")
 
                     if btn_activar:
-                        if not agencia_destino_uso or not area_destino_uso:
-                            st.warning("Por favor, ingresa la agencia y el área de destino.")
-                        else:
-                            fila_idx = int(item_a_usar.split(" - ")[0].replace("Fila ", ""))
-                            fila_datos = hoja_respaldo.row_values(fila_idx)
-                            
-                            insumo_bk = fila_datos[1]
-                            cantidad_bk = fila_datos[2]
-                            empresa_bk = fila_datos[3]
-                            
-                            paginas_impresas = max(0, c_act - c_ant)
-                            fecha_actual = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-                            usuario_actual = st.session_state.get("usuario_actual", "admin")
+                        fila_idx = int(item_a_usar.split(" - ")[0].replace("Fila ", ""))
+                        fila_datos = hoja_respaldo.row_values(fila_idx)
+                        
+                        insumo_bk = fila_datos[1]
+                        cantidad_bk = fila_datos[2]
+                        empresa_bk = fila_datos[3]
+                        
+                        fecha_actual_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                        usuario_actual = st.session_state.get("usuario_actual", "admin")
 
-                            nueva_fila_alquiler = [
-                                fecha_actual, insumo_bk, cantidad_bk, empresa_bk, 
-                                agencia_destino_uso, area_destino_uso, usuario_actual, 
-                                c_ant, c_act, paginas_impresas, 0
-                            ]
-                            hoja_alquileres.append_row(nueva_fila_alquiler)
-                            hoja_respaldo.update_cell(fila_idx, 6, "Utilizado")
+                        # Guardamos en Alquileres (ponemos 0 en contadores si no se usan, y los días calculados al final)
+                        nueva_fila_alquiler = [
+                            fecha_actual_str, insumo_bk, cantidad_bk, empresa_bk, 
+                            agencia_destino_uso, area_destino_uso, usuario_actual, 
+                            0, 0, 0, dias_duracion_calculados
+                        ]
+                        hoja_alquileres.append_row(nueva_fila_alquiler)
+                        hoja_respaldo.update_cell(fila_idx, 6, "Utilizado")
 
-                            st.success(f"¡El respaldo de {insumo_bk} se asignó a {agencia_destino_uso} / {area_destino_uso} y pasó a Alquileres con éxito!")
-                            st.rerun()
+                        st.success(f"¡El respaldo de {insumo_bk} se asignó a {agencia_destino_uso} y pasó a Alquileres registrando una duración de {dias_duracion_calculados} días!")
+                        st.rerun()
 
             else:
                 st.info("No hay insumos de respaldo disponibles para esta empresa.")
