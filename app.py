@@ -136,7 +136,7 @@ def registrar_parametro(nuevo_valor, tipo):
     registros = hoja_parametros.get_all_values()
     if not registros:
         hoja_parametros.append_row(["Empresa", "Agencia", "Area"])
-        registros = [["Empresa", "Area", "Agencia"]]
+        registros = [["Empresa", "Agencia", "Area"]]
         
     df = pd.DataFrame(registros[1:], columns=registros[0])
     
