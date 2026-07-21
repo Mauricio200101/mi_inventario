@@ -1386,7 +1386,7 @@ with tab_respaldo:
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
                     
-                    # 1. Leemos las agencias y áreas desde Parámetros limpiando el nombre de la empresa
+                    # 1. Leemos las agencias y áreas desde Parámetros y limpiamos duplicados o textos largos
                     agencias_empresa = []
                     areas_empresa = []
                     
@@ -1398,19 +1398,46 @@ with tab_respaldo:
                             df_filtrada_param = df_param[df_param["Empresa"].str.strip() == empresa_elegida.strip()]
                             
                             if not df_filtrada_param.empty:
-                                # Extraemos los valores únicos
-                                # Extraemos los valores únicos y limpiamos cortando a partir del guión si lo tienen
                                 raw_agencias = df_filtrada_param["Agencia"].dropna().unique().tolist()
                                 raw_areas = df_filtrada_param["Area"].dropna().unique().tolist()
                                 
-                                agencias_empresa = sorted([
+                                # Limpiamos agencias (quitando la empresa si la trae)
+                                agencias_empresa = sorted(list(set([
                                     str(ag).split("-", 1)[-1].strip() if "-" in str(ag) else str(ag).strip() 
                                     for ag in raw_agencias
-                                ])
-                                areas_empresa = sorted([
-                                    str(ar).split("-", 1)[-1].strip() if "-" in str(ar) else str(ar).strip() 
-                                    for ar in raw_areas
-                                ])
+                                ])))
+                    except Exception:
+                        pass
+
+                    # Ahora cargamos las áreas dinámicamente según la agencia que el usuario elija en el primer selectbox
+                    try:
+                        if not df_filtrada_param.empty:
+                            # Filtramos las filas que correspondan a la empresa y a la agencia seleccionada actualmente
+                            # Buscamos de forma flexible donde aparezca la agencia elegida
+                            match_agencia = df_filtrada_param[
+                                df_filtrada_param["Agencia"].str.contains(agencia_destino_uso, na=False)
+                            ]
+                            if not match_agencia.empty:
+                                raw_areas_ag = match_agencia["Area"].dropna().unique().tolist()
+                            else:
+                                raw_areas_ag = raw_areas
+                                
+                            # Limpiamos el área para que solo quede el nombre final (ej. "Cajas" en vez de "Norte - Cajas")
+                            areas_limpias = []
+                            for ar in raw_areas_ag:
+                                texto_ar = str(ar).strip()
+                                # Quitamos el nombre de la empresa si lo tiene
+                                if empresa_elegida.strip() in texto_ar:
+                                    texto_ar = texto_ar.replace(empresa_elegida.strip(), "").strip(" -")
+                                # Quitamos también la agencia si se repite al inicio
+                                if agencia_destino_uso.strip() in texto_ar:
+                                    texto_ar = texto_ar.replace(agencia_destino_uso.strip(), "").strip(" -")
+                                if texto_ar:
+                                    areas_limpias.append(texto_ar)
+                                else:
+                                    areas_limpias.append(str(ar).strip())
+                                    
+                            areas_empresa = sorted(list(set(areas_limpias)))
                     except Exception:
                         pass
                     
