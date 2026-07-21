@@ -876,8 +876,23 @@ with tab_reportes:
                 st.warning("No se registraron movimientos en este rango.")
             else:
                 df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore').copy()
-                df_mostrar.insert(0, "N°", range(1, len(df_mostrar) + 1))
-                st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+                    
+                    # --- LIMPIEZA INTELIGENTE PARA AGENCIA Y ÁREA EN HISTORIAL ---
+                    # Verificamos si existe la columna de Agencia y Área para limpiarlas al vuelo
+                    for col_agencia in ["Agencia Destino", "Agencia"]:
+                        if col_agencia in df_mostrar.columns:
+                            df_mostrar[col_agencia] = df_mostrar[col_agencia].apply(
+                                lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
+                            )
+                            
+                    for col_area in ["Área Destino", "Area Destino", "Detalle"]:
+                        if col_area in df_mostrar.columns:
+                            df_mostrar[col_area] = df_mostrar[col_area].apply(
+                                lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
+                            )
+
+                    df_mostrar.insert(0, "N°", range(1, len(df_mostrar) + 1))
+                    st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
                 
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
