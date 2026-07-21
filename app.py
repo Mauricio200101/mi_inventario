@@ -983,25 +983,29 @@ with tab_reportes:
             df_filtrado_a["Fecha_dt"] = pd.to_datetime(df_filtrado_a["Fecha"], errors='coerce')
             df_filtrado_a = df_filtrado_a[(df_filtrado_a["Fecha_dt"].dt.date >= fecha_inicio_alq) & 
                                         (df_filtrado_a["Fecha_dt"].dt.date <= fecha_fin_alq)]
-            
             if df_filtrado_a.empty:
                 st.warning("No se encontraron registros con los filtros seleccionados.")
             else:
                 df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore').copy()
                 
-                # --- CORRECCIÓN DEFINITIVA DE COLUMNAS PARA LA VISTA ---
+                # --- LIMPIEZA LIMPIA PARA LA VISTA ---
                 if "Agencia Destino" in df_a_mostrar.columns:
-                    texto_completo = df_a_mostrar["Agencia Destino"].astype(str)
-                    
-                    # Agencia Destino se queda solo con el nombre de la agencia (penúltimo elemento)
-                    df_a_mostrar["Agencia Destino"] = texto_completo.apply(
-                        lambda x: x.split(" - ")[-2].strip() if " - " in x and len(x.split(" - ")) >= 2 else x
+                    df_a_mostrar["Agencia Destino"] = df_a_mostrar["Agencia Destino"].apply(
+                        lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
                     )
-                    
-                    # Área Destino toma el último elemento de la cadena (ej. "Cajas PB")
-                    df_a_mostrar["Area Destino"] = texto_completo.apply(
-                        lambda x: x.split(" - ")[-1].strip() if " - " in x else x
+                
+                if "Area Destino" in df_a_mostrar.columns:
+                    df_a_mostrar["Area Destino"] = df_a_mostrar["Area Destino"].apply(
+                        lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
                     )
+
+                df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
+                st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
+                
+                buffer_a = io.BytesIO()
+                with pd.ExcelWriter(buffer_a, engine='openpyxl') as writer:
+                    df_a_mostrar.to_excel(writer, index=False)
+                st.download_button("Descargar Reporte (Excel)", data=buffer_a.getvalue(), file_name="Reporte_Alquileres.xlsx")
 
                 df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
                 st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
