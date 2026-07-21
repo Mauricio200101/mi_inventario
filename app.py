@@ -1386,69 +1386,70 @@ with tab_respaldo:
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
                     
-                    # 1. Leemos las agencias y áreas desde Parámetros y limpiamos duplicados o textos largos
+                    # 1. Filtramos estrictamente las agencias y áreas de la hoja de Parámetros por empresa
                     agencias_empresa = []
                     areas_empresa = []
+                    df_filtrada_param = pd.DataFrame()
                     
                     try:
                         datos_param = hoja_parametros.get_all_values()
                         if len(datos_param) > 1:
                             df_param = pd.DataFrame(datos_param[1:], columns=datos_param[0])
                             
+                            # Filtro estricto por la empresa elegida
                             df_filtrada_param = df_param[df_param["Empresa"].str.strip() == empresa_elegida.strip()]
                             
                             if not df_filtrada_param.empty:
                                 raw_agencias = df_filtrada_param["Agencia"].dropna().unique().tolist()
-                                raw_areas = df_filtrada_param["Area"].dropna().unique().tolist()
-                                
-                                # Limpiamos agencias (quitando la empresa si la trae)
-                                agencias_empresa = sorted(list(set([
-                                    str(ag).split("-", 1)[-1].strip() if "-" in str(ag) else str(ag).strip() 
-                                    for ag in raw_agencias
-                                ])))
-                    except Exception:
-                        pass
-
-                    # Ahora cargamos las áreas dinámicamente según la agencia que el usuario elija en el primer selectbox
-                    try:
-                        if not df_filtrada_param.empty:
-                            # Filtramos las filas que correspondan a la empresa y a la agencia seleccionada actualmente
-                            # Buscamos de forma flexible donde aparezca la agencia elegida
-                            match_agencia = df_filtrada_param[
-                                df_filtrada_param["Agencia"].str.contains(agencia_destino_uso, na=False)
-                            ]
-                            if not match_agencia.empty:
-                                raw_areas_ag = match_agencia["Area"].dropna().unique().tolist()
-                            else:
-                                raw_areas_ag = raw_areas
-                                
-                            # Limpiamos el área para que solo quede el nombre final (ej. "Cajas" en vez de "Norte - Cajas")
-                            areas_limpias = []
-                            for ar in raw_areas_ag:
-                                texto_ar = str(ar).strip()
-                                # Quitamos el nombre de la empresa si lo tiene
-                                if empresa_elegida.strip() in texto_ar:
-                                    texto_ar = texto_ar.replace(empresa_elegida.strip(), "").strip(" -")
-                                # Quitamos también la agencia si se repite al inicio
-                                if agencia_destino_uso.strip() in texto_ar:
-                                    texto_ar = texto_ar.replace(agencia_destino_uso.strip(), "").strip(" -")
-                                if texto_ar:
-                                    areas_limpias.append(texto_ar)
-                                else:
-                                    areas_limpias.append(str(ar).strip())
-                                    
-                            areas_empresa = sorted(list(set(areas_limpias)))
+                                # Limpiamos el nombre de la agencia para que no muestre la empresa
+                                agencias_limpias = []
+                                for ag in raw_agencias:
+                                    t_ag = str(ag).strip()
+                                    if "-" in t_ag:
+                                        t_ag = t_ag.split("-", 1)[-1].strip()
+                                    if t_ag and t_ag not in agencias_limpias:
+                                        agencias_limpias.append(t_ag)
+                                agencias_empresa = sorted(agencias_limpias)
                     except Exception:
                         pass
                     
                     if not agencias_empresa:
                         agencias_empresa = ["Principal"]
-                    if not areas_empresa:
-                        areas_empresa = ["General"]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         agencia_destino_uso = st.selectbox("Agencia Destino:", agencias_empresa)
+                        
+                    # Ahora filtramos las áreas exclusivamente para la empresa y la agencia seleccionada
+                    try:
+                        if not df_filtrada_param.empty:
+                            # Buscamos filas que coincidan con la agencia seleccionada
+                            df_match_ag = df_filtrada_param[
+                                df_filtrada_param["Agencia"].str.contains(agencia_destino_uso, na=False)
+                            ]
+                            if not df_match_ag.empty:
+                                raw_areas = df_match_ag["Area"].dropna().unique().tolist()
+                            else:
+                                raw_areas = df_filtrada_param["Area"].dropna().unique().tolist()
+                                
+                            areas_limpias = []
+                            for ar in raw_areas:
+                                t_ar = str(ar).strip()
+                                # Quitamos el nombre de la empresa y de la agencia para dejar solo el área limpia
+                                if empresa_elegida.strip() in t_ar:
+                                    t_ar = t_ar.replace(empresa_elegida.strip(), "").strip(" -")
+                                if agencia_destino_uso.strip() in t_ar:
+                                    t_ar = t_ar.replace(agencia_destino_uso.strip(), "").strip(" -")
+                                if t_ar and t_ar not in areas_limpias:
+                                    areas_limpias.append(t_ar)
+                            
+                            areas_empresa = sorted(areas_limpias)
+                    except Exception:
+                        pass
+                        
+                    if not areas_empresa:
+                        areas_empresa = ["General"]
+
                     with col2:
                         area_destino_uso = st.selectbox("Área Destino:", areas_empresa)
 
