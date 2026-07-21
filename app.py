@@ -296,11 +296,6 @@ def eliminar_insumo(id_insumo):
     return False
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
-Tienes toda la razón, en tus capturas se ve que la función abarca desde la línea 299 hasta la 347 (justo antes de donde empieza def actualizar_stock_sheet).
-
-Selecciona exactamente desde la línea 299 hasta la línea 347 y reemplázalo por este código limpio y directo basado en las posiciones de las columnas de tu hoja de Alquileres:
-
-Python
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
     """
     Busca en la pestaña de Alquileres el último registro que coincida
