@@ -800,18 +800,26 @@ with tab_rendimiento:
             df_rend_filtrado = df_rend[(df_rend["Páginas Impresas"] > 0) | (df_rend["Días Transcurridos"] > 0)]
             
             if not df_rend_filtrado.empty:
+                # --- NUEVO: Selector / Buscador de Insumo ---
+                lista_insumos_disponibles = ["Todos"] + sorted(df_rend_filtrado["Insumo"].dropna().unique().tolist())
+                insumo_seleccionado = st.selectbox("Filtrar por Insumo:", lista_insumos_disponibles, key="filtro_rendimiento_insumo")
+                
+                if insumo_seleccionado != "Todos":
+                    df_rend_filtrado = df_rend_filtrado[df_rend_filtrado["Insumo"] == insumo_seleccionado]
+                # -------------------------------------------
+
                 df_promedios = df_rend_filtrado.groupby("Insumo").agg(
                     Promedio_Paginas=("Páginas Impresas", "mean"),
                     Promedio_Dias=("Días Transcurridos", "mean"),
                     Total_Registros=("Insumo", "count")
                 ).reset_index()
                 
-                df_promedios.columns = ["Insumo", "Páginas Promedio por Periodo", "Duración Promedio (Días)", "Nº Mediciones Realizadas"]
+                df_promedios.columns = ["Insumo", "Páginas Promedio por Periodo", "Duración Promedio (Días)", "№ Mediciones Realizadas"]
                 
                 st.write("📊 **Tabla de Rendimiento Promedio por Insumo**")
                 
                 df_promedios_con_num = df_promedios.copy()
-                df_promedios_con_num.insert(0, "N°", range(1, len(df_promedios_con_num) + 1))
+                df_promedios_con_num.insert(0, "№", range(1, len(df_promedios_con_num) + 1))
                 st.dataframe(df_promedios_con_num, use_container_width=True, hide_index=True)
                 
                 st.markdown("---")
