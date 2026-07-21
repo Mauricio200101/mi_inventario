@@ -298,7 +298,7 @@ def eliminar_insumo(id_insumo):
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
     """
-    Busca en la pestaña de Alquileres el último registro y muestra depuración si no halla coincidencia.
+    Busca en la pestaña de Alquileres asignando correctamente Agencia y Área.
     """
     try:
         datos = hoja_alquileres.get_all_values()
@@ -307,26 +307,29 @@ def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
         
         busq_insumo = str(insumo).strip().lower()
         busq_empresa = str(empresa).strip().lower()
+        
+        # Leemos los selectores tal cual entran (sin intercambiarlos)
         busq_agencia = str(agencia).split(" - ")[-1].strip().lower() if agencia else ""
         busq_area = str(area).split(" - ")[-1].strip().lower() if area else ""
-
-        # Depuración en pantalla para ver qué busca exactamente
-        st.write(f"Buscando -> Insumo: '{busq_insumo}' | Empresa: '{busq_empresa}' | Agencia: '{busq_agencia}' | Área: '{busq_area}'")
 
         for fila in reversed(datos[1:]):
             if len(fila) < 6:
                 continue
             
-            r_insumo = str(fila[1]).strip().lower()
-            r_empresa = str(fila[3]).strip().lower()
-            r_agencia = str(fila[4]).split(" - ")[-1].strip().lower()
-            r_area = str(fila[5]).split(" - ")[-1].strip().lower()
+            r_insumo = str(fila[1]).strip().lower()   # Columna B: Insumo
+            r_empresa = str(fila[3]).strip().lower()  # Columna D: Empresa Destino
+            
+            # Columna E es Agencia, Columna F es Área en tu Google Sheets
+            r_agencia = str(fila[4]).split(" - ")[-1].strip().lower() 
+            r_area = str(fila[5]).split(" - ")[-1].strip().lower()    
 
-            if (r_insumo == busq_insumo and 
-                r_empresa == busq_empresa and 
-                r_agencia == busq_agencia and 
-                r_area == busq_area):
-                
+            # Si al buscar se invierten, probamos ambas combinaciones para ser 100% robustos
+            coincide_sitio = (
+                (r_agencia == busq_agencia and r_area == busq_area) or 
+                (r_agencia == busq_area and r_area == busq_agencia)
+            )
+
+            if r_insumo == busq_insumo and r_empresa == busq_empresa and coincide_sitio:
                 columnas = datos[0]
                 return pd.Series(fila, index=columnas)
                 
