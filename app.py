@@ -1386,7 +1386,7 @@ with tab_respaldo:
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
                     
-                    # 1. Leemos las agencias y áreas directamente desde la hoja de Parámetros según la empresa elegida
+                    # 1. Leemos las agencias y áreas desde Parámetros limpiando el nombre de la empresa
                     agencias_empresa = []
                     areas_empresa = []
                     
@@ -1395,16 +1395,24 @@ with tab_respaldo:
                         if len(datos_param) > 1:
                             df_param = pd.DataFrame(datos_param[1:], columns=datos_param[0])
                             
-                            # Filtramos las filas que coincidan con la empresa seleccionada arriba
                             df_filtrada_param = df_param[df_param["Empresa"].str.strip() == empresa_elegida.strip()]
                             
                             if not df_filtrada_param.empty:
-                                agencias_empresa = sorted(df_filtrada_param["Agencia"].dropna().unique().tolist())
-                                areas_empresa = sorted(df_filtrada_param["Area"].dropna().unique().tolist())
+                                # Extraemos los valores únicos
+                                raw_agencias = df_filtrada_param["Agencia"].dropna().unique().tolist()
+                                raw_areas = df_filtrada_param["Area"].dropna().unique().tolist()
+                                
+                                # Limpiamos para que no se repita el nombre de la empresa si lo incluye
+                                prefijo_empresa = empresa_elegida.strip()
+                                agencias_empresa = sorted([
+                                    str(ag).replace(prefijo_empresa, "").strip(" -") for ag in raw_agencias
+                                ])
+                                areas_empresa = sorted([
+                                    str(ar).replace(prefijo_empresa, "").strip(" -") for ar in raw_areas
+                                ])
                     except Exception:
                         pass
                     
-                    # Respaldo por si acaso
                     if not agencias_empresa:
                         agencias_empresa = ["Principal"]
                     if not areas_empresa:
