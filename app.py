@@ -1386,34 +1386,65 @@ with tab_respaldo:
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
                     
-                    # 1. Filtramos estrictamente las agencias de la empresa elegida
-                    agencias_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_elegida.strip())] if 'agencias_disponibles' in locals() else [empresa_elegida + " - Principal"]
-                    if not agencias_filtradas:
-                        agencias_filtradas = [empresa_elegida + " - Principal"]
+                   # 1. Leemos directamente de la hoja de Parámetros de forma dinámica
+                    agencias_empresa = []
+                    areas_empresa = []
+                    df_param_local = pd.DataFrame()
+                    
+                    try:
+                        datos_param = hoja_parametros.get_all_values()
+                        if len(datos_param) > 1:
+                            df_param_local = pd.DataFrame(datos_param[1:], columns=datos_param[0])
+                            # Filtramos por la empresa elegida arriba
+                            df_emp = df_param_local[df_param_local["Empresa"].str.strip() == empresa_elegida.strip()]
+                            
+                            if not df_emp.empty:
+                                # Extraemos agencias limpias sin el nombre de la empresa
+                                raw_ags = df_emp["Agencia"].dropna().unique().tolist()
+                                agencias_limpias = []
+                                for ag in raw_ags:
+                                    t_ag = str(ag).strip()
+                                    if empresa_elegida.strip() in t_ag:
+                                        t_ag = t_ag.replace(empresa_elegida.strip(), "").strip(" -")
+                                    if t_ag and t_ag not in agencias_limpias:
+                                        agencias_limpias.append(t_ag)
+                                agencias_empresa = sorted(agencias_limpias)
+                    except Exception:
+                        pass
+                        
+                    if not agencias_empresa:
+                        agencias_empresa = ["Principal"]
 
                     col1, col2 = st.columns(2)
                     with col1:
-                        agencia_destino = st.selectbox(
-                            "Agencia:",
-                            agencias_filtradas,
-                            format_func=lambda x: x.replace(empresa_elegida + " - ", ""),
-                            key="backup_agencia_destino"
-                        )
+                        agencia_destino = st.selectbox("Agencia:", agencias_empresa, key="backup_agencia_destino")
                         
-                    # Filtramos las áreas buscando que pertenezcan a la agencia seleccionada
-                    agencia_full_match = empresa_elegida.strip() + " - " + agencia_destino
-                    areas_filtradas = [ar for ar in areas_disponibles if agencia_full_match in ar or agencia_destino in ar] if 'areas_disponibles' in locals() else [agencia_full_match + " - General"]
-                    if not areas_filtradas:
-                        areas_filtradas = [agencia_full_match + " - General"]
+                    # 2. Filtramos las áreas estrictamente según la empresa y la agencia elegida
+                    try:
+                        if not df_param_local.empty:
+                            # Buscamos filas que correspondan a esta empresa y cuya agencia contenga la agencia seleccionada
+                            df_filtered = df_emp[df_emp["Agencia"].str.contains(agencia_destino, na=False)]
+                            if not df_filtered.empty:
+                                raw_areas = df_filtered["Area"].dropna().unique().tolist()
+                                areas_limpias = []
+                                for ar in raw_areas:
+                                    t_ar = str(ar).strip()
+                                    # Limpiamos el texto para mostrar solo el área final (ej. "Negocios 1")
+                                    if empresa_elegida.strip() in t_ar:
+                                        t_ar = t_ar.replace(empresa_elegida.strip(), "").strip(" -")
+                                    if agencia_destino in t_ar:
+                                        t_ar = t_ar.replace(agencia_destino, "").strip(" -")
+                                    if t_ar and t_ar not in areas_limpias:
+                                        areas_limpias.append(t_ar)
+                                areas_empresa = sorted(areas_limpias)
+                    except Exception:
+                        pass
+                        
+                    if not areas_empresa:
+                        areas_empresa = ["General"]
 
                     with col2:
-                        area_destino_uso = st.selectbox(
-                            "Área:",
-                            areas_filtradas,
-                            format_func=lambda x: x.replace(agencia_destino + " - ", ""),
-                            key="backup_area_destino"
-                        )
-                        areas_empresa = area_destino_uso
+                        area_destino_uso = st.selectbox("Área:", areas_empresa, key="backup_area_destino")
                         
                     st.markdown("#### Control por Fechas y Duración:")
                     
