@@ -999,14 +999,9 @@ with tab_reportes:
                         lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
                     )
 
-                df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
-                st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
-                
-                buffer_a = io.BytesIO()
-                with pd.ExcelWriter(buffer_a, engine='openpyxl') as writer:
-                    df_a_mostrar.to_excel(writer, index=False)
-                st.download_button("Descargar Reporte (Excel)", data=buffer_a.getvalue(), file_name="Reporte_Alquileres.xlsx")
-
+                if "N°" in df_a_mostrar.columns:
+                    df_a_mostrar = df_a_mostrar.drop(columns=["N°"])
+                    
                 df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
                 st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
                 
