@@ -961,21 +961,12 @@ with tab_reportes:
             # Filtrado intermedio por Empresa
             df_temp = df_a if empresa_sel == "Todas" else df_a[df_a["Empresa Destino"] == empresa_sel]
             
-            # 2. Selector de Agencia (Limpiado para mostrar solo el último segmento)
-            # Obtenemos las agencias únicas disponibles para la empresa seleccionada
+            # 2. Selector de Agencia Limpio
             agencias_raw = sorted(df_temp["Area Destino"].unique().tolist())
-           # Limpiamos: tomamos solo lo que está después del ÚLTIMO guion encontrado
-            # Usamos set() para eliminar duplicados y volvemos a ordenar
             agencias_limpias = sorted(list(set([a.split(" - ")[-1].strip() for a in agencias_raw])))
-            
-            # Diccionario para mantener el mapeo original
-            # Esto asegura que al seleccionar un nombre limpio, el filtro sepa el original
             mapeo_agencias = {a.split(" - ")[-1].strip(): a for a in agencias_raw}
             
-            # Selector usando los nombres limpios
             agencia_display = st.selectbox("Seleccione Agencia:", ["Todas"] + agencias_limpias)
-            
-            # Filtramos internamente usando el valor original (no el limpio)
             agencia_sel = "Todas" if agencia_display == "Todas" else mapeo_agencias[agencia_display]
             
             # Filtrado final por Empresa y Agencia
@@ -988,14 +979,29 @@ with tab_reportes:
             with col_fa2:
                 fecha_fin_alq = st.date_input("Hasta:", value=obtener_hora_local_bo().date(), key="f_alq_fin_new")
                     
-                # Filtro de fecha
-                df_filtrado_a["Fecha_dt"] = pd.to_datetime(df_filtrado_a["Fecha"], errors='coerce')
-                df_filtrado_a = df_filtrado_a[(df_filtrado_a["Fecha_dt"].dt.date >= fecha_inicio_alq) & 
-                                            (df_filtrado_a["Fecha_dt"].dt.date <= fecha_fin_alq)]
+            # Filtro de fecha
+            df_filtrado_a["Fecha_dt"] = pd.to_datetime(df_filtrado_a["Fecha"], errors='coerce')
+            df_filtrado_a = df_filtrado_a[(df_filtrado_a["Fecha_dt"].dt.date >= fecha_inicio_alq) & 
+                                        (df_filtrado_a["Fecha_dt"].dt.date <= fecha_fin_alq)]
+            
             if df_filtrado_a.empty:
                 st.warning("No se encontraron registros con los filtros seleccionados.")
             else:
-                df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore')
+                # --- CORRECCIÓN PARA EVITAR TEXTOS REPETIDOS EN LAS COLUMNAS ---
+                df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore').copy()
+                
+                # Limpiar 'Agencia Destino' si trae incrustada la empresa
+                if "Agencia Destino" in df_a_mostrar.columns:
+                    df_a_mostrar["Agencia Destino"] = df_a_mostrar["Agencia Destino"].apply(
+                        lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
+                    )
+                
+                # Limpiar 'Area Destino' para que muestre únicamente el nombre del área final y no toda la ruta
+                if "Area Destino" in df_a_mostrar.columns:
+                    df_a_mostrar["Area Destino"] = df_a_mostrar["Area Destino"].apply(
+                        lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
+                    )
+
                 df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
                 st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
                 
