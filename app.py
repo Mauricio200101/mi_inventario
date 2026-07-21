@@ -961,7 +961,7 @@ with tab_reportes:
             # Filtrado intermedio por Empresa
             df_temp = df_a if empresa_sel == "Todas" else df_a[df_a["Empresa Destino"] == empresa_sel]
             
-            # 2. Selector de Agencia (Extraemos de la columna Agencia Destino de forma limpia)
+            # 2. Selector de Agencia (Extraemos la agencia real del penúltimo segmento)
             agencias_raw = sorted(df_temp["Agencia Destino"].unique().tolist())
             agencias_limpias = sorted(list(set([str(a).split(" - ")[-2].strip() if " - " in str(a) and len(str(a).split(" - ")) >= 2 else str(a) for a in agencias_raw])))
             mapeo_agencias = { (str(a).split(" - ")[-2].strip() if " - " in str(a) and len(str(a).split(" - ")) >= 2 else str(a)): a for a in agencias_raw }
@@ -989,17 +989,18 @@ with tab_reportes:
             else:
                 df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore').copy()
                 
-                # --- LIMPIEZA VISUAL DE LAS COLUMNAS ---
-                # Agencia Destino: Extrae únicamente el nombre de la agencia (ej. "Central")
+                # --- CORRECCIÓN DEFINITIVA DE COLUMNAS PARA LA VISTA ---
                 if "Agencia Destino" in df_a_mostrar.columns:
-                    df_a_mostrar["Agencia Destino"] = df_a_mostrar["Agencia Destino"].apply(
-                        lambda x: str(x).split(" - ")[-2].strip() if " - " in str(x) and len(str(x).split(" - ")) >= 2 else str(x)
+                    texto_completo = df_a_mostrar["Agencia Destino"].astype(str)
+                    
+                    # Agencia Destino se queda solo con el nombre de la agencia (penúltimo elemento)
+                    df_a_mostrar["Agencia Destino"] = texto_completo.apply(
+                        lambda x: x.split(" - ")[-2].strip() if " - " in x and len(x.split(" - ")) >= 2 else x
                     )
-                
-                # Área Destino: Extrae únicamente la última parte (ej. "Cajas PB")
-                if "Area Destino" in df_a_mostrar.columns:
-                    df_a_mostrar["Area Destino"] = df_a_mostrar["Area Destino"].apply(
-                        lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
+                    
+                    # Área Destino toma el último elemento de la cadena (ej. "Cajas PB")
+                    df_a_mostrar["Area Destino"] = texto_completo.apply(
+                        lambda x: x.split(" - ")[-1].strip() if " - " in x else x
                     )
 
                 df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
