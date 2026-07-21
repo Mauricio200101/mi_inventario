@@ -1386,7 +1386,7 @@ with tab_respaldo:
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
                     
-                    # 1. Filtramos estrictamente usando las listas globales de la app con la misma lógica que ya conoces
+                    # 1. Filtramos estrictamente usando las listas globales de la app
                     agencias_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_elegida.strip())] if 'agencias_disponibles' in locals() else [empresa_elegida + " - Principal"]
                     if not agencias_filtradas:
                         agencias_filtradas = [empresa_elegida + " - Principal"]
@@ -1406,12 +1406,14 @@ with tab_respaldo:
                         areas_filtradas = [agencia_destino + " - General"]
 
                     with col2:
+                        # Definimos ambas variables por compatibilidad para que ninguna se quede sin definir
                         area_destino_uso = st.selectbox(
                             "Área:",
                             areas_filtradas,
                             format_func=lambda x: x.replace(agencia_destino + " - ", ""),
                             key="backup_area_destino"
                         )
+                        areas_empresa = area_destino_uso  # Evita cualquier error si el resto del código la lee
                         
                     # Ahora filtramos las áreas exclusivamente para la empresa y la agencia seleccionada
                     try:
