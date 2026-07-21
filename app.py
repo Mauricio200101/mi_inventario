@@ -877,8 +877,9 @@ with tab_reportes:
             else:
                 df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore').copy()
                     
+                    df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore').copy()
+                    
                     # --- LIMPIEZA INTELIGENTE PARA AGENCIA Y ÁREA EN HISTORIAL ---
-                    # Verificamos si existe la columna de Agencia y Área para limpiarlas al vuelo
                     for col_agencia in ["Agencia Destino", "Agencia"]:
                         if col_agencia in df_mostrar.columns:
                             df_mostrar[col_agencia] = df_mostrar[col_agencia].apply(
