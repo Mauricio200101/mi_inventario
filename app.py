@@ -478,16 +478,21 @@ with tab_operaciones:
                             min_actual = int(datos_insumo_editar["Stock Mínimo"])
                             pt_act = float(datos_insumo_editar["Precio Técnico"])
                             pc_act = float(datos_insumo_editar["Precio Cliente"])
-                            pf_act = float(datos_insumo_editar["Precio Facturado"])
+                            pf_acl = float(datos_insumo_editar["Precio Facturado"])
+
+                            # Campo para editar el nombre del insumo
+                            nuevo_nombre = st.text_input("Nuevo Nombre del Insumo:", value=insumo_editar)
                             
                             nuevo_minimo = st.number_input("Nuevo Stock Mínimo:", min_value=1, step=1, value=min_actual)
                             nuevo_pt = st.number_input("Nuevo Precio Técnico:", min_value=0.0, step=0.1, value=pt_act)
                             nuevo_pc = st.number_input("Nuevo Precio Cliente:", min_value=0.0, step=0.1, value=pc_act)
-                            nuevo_pf = st.number_input("Nuevo Precio Facturado:", min_value=0.0, step=0.1, value=pf_act)
-                            
+                            nuevo_pf = st.number_input("Nuevo Precio Facturado:", min_value=0.0, step=0.1, value=pf_acl)
+
                             if st.button("Actualizar Parámetros"):
                                 celda_id = hoja_insumos.find(str(cel_id))
                                 if celda_id:
+                                    # Actualizamos el nombre en la columna 2 (Columna B: Insumo) y los demás parámetros
+                                    hoja_insumos.update_cell(celda_id.row, 2, nuevo_nombre)
                                     hoja_insumos.update_cell(celda_id.row, 5, nuevo_minimo)
                                     hoja_insumos.update_cell(celda_id.row, 6, nuevo_pt)
                                     hoja_insumos.update_cell(celda_id.row, 7, nuevo_pc)
