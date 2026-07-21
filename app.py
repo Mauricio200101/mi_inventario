@@ -1386,7 +1386,7 @@ with tab_respaldo:
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
                     
-                    # 1. Filtramos estrictamente usando las listas globales de la app
+                    # 1. Filtramos estrictamente las agencias de la empresa elegida
                     agencias_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_elegida.strip())] if 'agencias_disponibles' in locals() else [empresa_elegida + " - Principal"]
                     if not agencias_filtradas:
                         agencias_filtradas = [empresa_elegida + " - Principal"]
@@ -1400,47 +1400,19 @@ with tab_respaldo:
                             key="backup_agencia_destino"
                         )
                         
-                    # Filtramos las áreas basándonos en la agencia seleccionada
+                    # Filtramos las áreas basándonos estrictamente en la agencia seleccionada actual
                     areas_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_destino)] if 'areas_disponibles' in locals() else [agencia_destino + " - General"]
                     if not areas_filtradas:
                         areas_filtradas = [agencia_destino + " - General"]
 
                     with col2:
-                        # Definimos ambas variables por compatibilidad para que ninguna se quede sin definir
                         area_destino_uso = st.selectbox(
                             "Área:",
                             areas_filtradas,
                             format_func=lambda x: x.replace(agencia_destino + " - ", ""),
                             key="backup_area_destino"
                         )
-                        areas_empresa = area_destino_uso  # Evita cualquier error si el resto del código la lee
-                        
-                    # Ahora filtramos las áreas exclusivamente para la empresa y la agencia seleccionada
-                    try:
-                        if not df_filtrada_param.empty:
-                            # Buscamos filas que coincidan con la agencia seleccionada
-                            df_match_ag = df_filtrada_param[
-                                df_filtrada_param["Agencia"].str.contains(agencia_destino_uso, na=False)
-                            ]
-                            if not df_match_ag.empty:
-                                raw_areas = df_match_ag["Area"].dropna().unique().tolist()
-                            else:
-                                raw_areas = df_filtrada_param["Area"].dropna().unique().tolist()
-                                
-                            areas_limpias = []
-                            for ar in raw_areas:
-                                t_ar = str(ar).strip()
-                                # Quitamos el nombre de la empresa y de la agencia para dejar solo el área limpia
-                                if empresa_elegida.strip() in t_ar:
-                                    t_ar = t_ar.replace(empresa_elegida.strip(), "").strip(" -")
-                                if agencia_destino_uso.strip() in t_ar:
-                                    t_ar = t_ar.replace(agencia_destino_uso.strip(), "").strip(" -")
-                                if t_ar and t_ar not in areas_limpias:
-                                    areas_limpias.append(t_ar)
-                            
-                            areas_empresa = sorted(areas_limpias)
-                    except Exception:
-                        pass
+                        areas_empresa = area_destino_uso
                         
                     if not areas_empresa:
                         areas_empresa = ["General"]
