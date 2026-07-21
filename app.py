@@ -1400,10 +1400,11 @@ with tab_respaldo:
                             key="backup_agencia_destino"
                         )
                         
-                    # Filtramos las áreas basándonos estrictamente en la agencia seleccionada actual
-                    areas_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_destino)] if 'areas_disponibles' in locals() else [agencia_destino + " - General"]
+                    # Filtramos las áreas buscando que pertenezcan a la agencia seleccionada
+                    agencia_full_match = empresa_elegida.strip() + " - " + agencia_destino
+                    areas_filtradas = [ar for ar in areas_disponibles if agencia_full_match in ar or agencia_destino in ar] if 'areas_disponibles' in locals() else [agencia_full_match + " - General"]
                     if not areas_filtradas:
-                        areas_filtradas = [agencia_destino + " - General"]
+                        areas_filtradas = [agencia_full_match + " - General"]
 
                     with col2:
                         area_destino_uso = st.selectbox(
