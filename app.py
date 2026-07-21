@@ -298,8 +298,7 @@ def eliminar_insumo(id_insumo):
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
     """
-    Busca en la pestaña de Alquileres el último registro que coincida
-    de forma flexible con el Insumo, la Empresa, el Área y la Agencia.
+    Busca en la pestaña de Alquileres el último registro y muestra depuración si no halla coincidencia.
     """
     try:
         datos = hoja_alquileres.get_all_values()
@@ -308,28 +307,26 @@ def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
         
         busq_insumo = str(insumo).strip().lower()
         busq_empresa = str(empresa).strip().lower()
-        
-        # Extraemos la parte limpia de agencia y área sin importar cómo vengan formateadas
         busq_agencia = str(agencia).split(" - ")[-1].strip().lower() if agencia else ""
         busq_area = str(area).split(" - ")[-1].strip().lower() if area else ""
 
-        # Recorremos las filas de abajo hacia arriba (del más reciente al más antiguo)
+        # Depuración en pantalla para ver qué busca exactamente
+        st.write(f"Buscando -> Insumo: '{busq_insumo}' | Empresa: '{busq_empresa}' | Agencia: '{busq_agencia}' | Área: '{busq_area}'")
+
         for fila in reversed(datos[1:]):
             if len(fila) < 6:
                 continue
             
-            r_insumo = str(fila[1]).strip().lower()   # Columna B: Insumo
-            r_empresa = str(fila[3]).strip().lower()  # Columna D: Empresa Destino
-            r_agencia = str(fila[4]).split(" - ")[-1].strip().lower() # Columna E: Agencia Destino
-            r_area = str(fila[5]).split(" - ")[-1].strip().lower()    # Columna F: Area Destino
+            r_insumo = str(fila[1]).strip().lower()
+            r_empresa = str(fila[3]).strip().lower()
+            r_agencia = str(fila[4]).split(" - ")[-1].strip().lower()
+            r_area = str(fila[5]).split(" - ")[-1].strip().lower()
 
-            # Verificamos si coinciden (usando 'in' o igualdad directa para mayor tolerancia)
-            match_insumo = (busq_insumo in r_insumo or r_insumo in busq_insumo)
-            match_empresa = (busq_empresa in r_empresa or r_empresa in busq_empresa)
-            match_agencia = (busq_agencia in r_agencia or r_agencia in busq_agencia)
-            match_area = (busq_area in r_area or r_area in busq_area)
-
-            if match_insumo and match_empresa and match_agencia and match_area:
+            if (r_insumo == busq_insumo and 
+                r_empresa == busq_empresa and 
+                r_agencia == busq_agencia and 
+                r_area == busq_area):
+                
                 columnas = datos[0]
                 return pd.Series(fila, index=columnas)
                 
