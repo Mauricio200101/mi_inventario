@@ -8,6 +8,7 @@ import io
 import plotly.express as px
 import time
 import hashlib
+import requests
 
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
@@ -17,6 +18,37 @@ def obtener_hora_local_bo():
     """Retorna la fecha y hora actual con la zona horaria de Bolivia (UTC-4)."""
     tz_bo = timezone(timedelta(hours=-4))
     return datetime.now(tz_bo)
+
+# --- FUNCIÓN DE NOTIFICACIONES TELEGRAM ---
+def enviar_notificacion_telegram(empresa, agencia, area, problema, tecnico):
+    TOKEN_BOT = 8920856005:AAEgKI6dfghTS2sNLMrDeG8ENPoaO5oISWc
+    CHAT_ID = "-5394039789"
+    
+    mensaje = f"""
+🚨 *NUEVO SERVICIO TÉCNICO PENDIENTE* 🚨
+
+🏢 *Empresa:* {empresa}
+📍 *Agencia:* {agencia}
+🏢 *Área:* {area}
+👤 *Registrado por:* {tecnico}
+
+🛠️ *Problema o Falla:*
+{problema}
+
+📌 _Por favor ingresar al sistema para atender la solicitud._
+    """
+    
+    url = f"https://api.telegram.org/bot{TOKEN_BOT}/sendMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": mensaje,
+        "parse_mode": "Markdown"
+    }
+    
+    try:
+        requests.post(url, data=payload, timeout=5)
+    except Exception as e:
+        print(f"Error al enviar notificación a Telegram: {e}")
 
 # --- CONEXIÓN CON GOOGLE SHEETS (CON REINTENTOS AUTOMÁTICOS Y CACHÉ) ---
 @st.cache_resource
@@ -75,6 +107,7 @@ hoja_parametros = pestanas_activas["Parametros"]
 hoja_ventas = pestanas_activas["Ventas"]
 hoja_alquileres = pestanas_activas["Alquileres"]
 hoja_respaldo = pestanas_activas["Backup"]
+hoja_servicios = pestanas_activas["Servicios"]
 
 # --- FUNCIONES DE GESTIÓN DE USUARIOS ---
 def encriptar_password(password_plano):
@@ -409,11 +442,12 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
 # Asegúrate de que esto esté totalmente a la izquierda (sin sangría/indentación)
 df_insumos = obtener_insumos()
 empresas_disponibles, areas_disponibles, agencias_disponibles = obtener_parametros()
-tab_operaciones, tab_valorizacion, tab_rendimiento, tab_respaldo, tab_reportes, tab_usuarios = st.tabs([
+tab_operaciones, tab_valorizacion, tab_rendimiento, tab_respaldo, tab_servicios, tab_reportes, tab_usuarios = st.tabs([
     "Operaciones de Stock",
     "Valorización del Inventario",
     "Rendimiento de Insumos",
     "Insumos de Respaldo",
+    "🛠️ Servicios y Soporte",
     "Reportes por Fecha / Edición",
     "Configuración y Usuarios"
 ])
@@ -1496,3 +1530,124 @@ with tab_respaldo:
             
     except Exception as e:
         st.error(f"Error al cargar la gestión de respaldos: {e}")
+
+# =========================================================
+# PESTAÑA: SERVICIOS Y SOPORTE TÉCNICO
+# =========================================================
+with tab_servicios:
+    st.header("📋 Registro e Historial de Servicios Técnicos")
+    st.caption("Registra y consulta las atenciones, problemas e insumos utilizados en cada agencia y área.")
+
+    subtab_nuevo, subtab_historial = st.tabs(["➕ Registrar Nuevo Servicio", "📊 Historial de Servicios"])
+
+    # --- 1. REGISTRAR NUEVO SERVICIO ---
+    with subtab_nuevo:
+        st.subheader("Registrar Atención Técnica")
+
+        empresa_servicio = st.selectbox("Empresa Solicitante:", empresas_disponibles, key="serv_empresa")
+
+        agencias_serv_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_servicio.strip())]
+        if not agencias_serv_filtradas:
+            agencias_serv_filtradas = [f"{empresa_servicio} - Principal"]
+
+        col_s1, col_s2 = st.columns(2)
+
+        with col_s1:
+            agencia_servicio = st.selectbox(
+                "Agencia:", 
+                agencias_serv_filtradas, 
+                format_func=lambda x: x.replace(empresa_servicio.strip() + " - ", "").strip(),
+                key="serv_agencia"
+            )
+
+            areas_serv_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_servicio.strip())]
+            if not areas_serv_filtradas:
+                areas_serv_filtradas = [f"{agencia_servicio} - General"]
+
+            area_servicio = st.selectbox(
+                "Área:", 
+                areas_serv_filtradas, 
+                format_func=lambda x: x.replace(agencia_servicio.strip() + " - ", "").strip(),
+                key="serv_area"
+            )
+
+            fecha_solicitud = st.date_input("Fecha de Solicitud:", value=pd.Timestamp.now().date(), key="serv_fecha_sol")
+
+        with col_s2:
+            usuario_tecnico = st.session_state.get("usuario_actual", "admin")
+            tecnico_realizo = st.text_input("Técnico Responsable:", value=usuario_tecnico, key="serv_tecnico")
+            fecha_realizado = st.date_input("Fecha en que se realizó el trabajo:", value=pd.Timestamp.now().date(), key="serv_fecha_realizado")
+
+        problema_falla = st.text_area(
+            "Descripción del Problema, Falla o Trabajo Realizado:", 
+            placeholder="Ejemplo: Cambio de rodillo de presión por desgaste, mantenimiento preventivo...",
+            key="serv_problema"
+        )
+
+        lista_insumos_disponibles = df_insumos["Nombre"].tolist() if 'df_insumos' in locals() and not df_insumos.empty else []
+        
+        insumos_seleccionados = st.multiselect(
+            "Insumos o Repuestos Utilizados:",
+            options=lista_insumos_disponibles,
+            placeholder="Selecciona uno o varios insumos (deja vacío si no se usó ninguno)",
+            key="serv_insumos_multi"
+        )
+
+        insumos_usados_texto = ", ".join(insumos_seleccionados) if insumos_seleccionados else "Ninguno"
+
+        btn_guardar_servicio = st.button("💾 Registrar Servicio Técnico")
+
+        if btn_guardar_servicio:
+            if not problema_falla.strip():
+                st.warning("⚠️ Por favor ingresa el detalle del problema o trabajo realizado.")
+            else:
+                nueva_fila_servicio = [
+                    str(fecha_solicitud),
+                    empresa_servicio,
+                    agencia_servicio,
+                    area_servicio,
+                    problema_falla,
+                    insumos_usados_texto,
+                    str(fecha_realizado),
+                    tecnico_realizo,
+                    "Pendiente"
+                ]
+                
+                # 1. Guardar en Google Sheets
+                hoja_servicios.append_row(nueva_fila_servicio)
+                
+                # 2. ENVIAR NOTIFICACIÓN A TELEGRAM 🚀
+                enviar_notificacion_telegram(
+                    empresa_servicio,
+                    agencia_servicio,
+                    area_servicio,
+                    problema_falla,
+                    tecnico_realizo
+                )
+                
+                st.success(f"✅ Servicio registrado con éxito y alerta enviada al grupo de Telegram.")
+                st.rerun()
+
+    # --- 2. HISTORIAL DE SERVICIOS ---
+    with subtab_historial:
+        st.subheader("Consultar Historial de Servicios")
+
+        datos_servicios = hoja_servicios.get_all_records()
+        df_servicios = pd.DataFrame(datos_servicios)
+
+        if df_servicios.empty:
+            st.info("No hay servicios técnicos registrados todavía.")
+        else:
+            empresa_filtro_serv = st.selectbox(
+                "Filtrar por Empresa:", 
+                ["Todas"] + list(df_servicios["Empresa"].unique()),
+                key="filtro_empresa_serv"
+            )
+
+            if empresa_filtro_serv != "Todas":
+                df_servicios_mostrar = df_servicios[df_servicios["Empresa"] == empresa_filtro_serv]
+            else:
+                df_servicios_mostrar = df_servicios
+
+            st.dataframe(df_servicios_mostrar, use_container_width=True, hide_index=True)
+
