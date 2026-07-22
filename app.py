@@ -1750,12 +1750,42 @@ with tab_servicios:
                     # Concatenamos fecha y hora de realización
                     fecha_hora_realizado = f"{fecha_trabajo} {hora_trabajo.strftime('%H:%M')}"
                     
+                    # 1️⃣ Actualizar el registro del servicio
                     hoja_servicios.update_cell(fila_num_hoja, 6, tecnico_atendio)
                     hoja_servicios.update_cell(fila_num_hoja, 7, insumos_texto)
                     hoja_servicios.update_cell(fila_num_hoja, 8, fecha_hora_realizado)
                     hoja_servicios.update_cell(fila_num_hoja, 9, "Completado")
 
-                    st.success(f"🎉 Servicio completado con éxito.")
+                    # 2️⃣ Restar 1 unidad del stock de cada insumo utilizado
+                    if insumos_usados and 'hoja_insumos' in locals():
+                        try:
+                            datos_insumos = hoja_insumos.get_all_records()
+                            
+                            for insumo_nom in insumos_usados:
+                                for idx_ins, fila_ins in enumerate(datos_insumos):
+                                    nombre_item = str(fila_ins.get("Nombre", fila_ins.get("Insumo", ""))).strip()
+                                    
+                                    if nombre_item == insumo_nom.strip():
+                                        # Identificar cuál columna contiene el Stock / Cantidad
+                                        col_stock_key = [k for k in fila_ins.keys() if "stock" in str(k).lower() or "cantidad" in str(k).lower()]
+                                        
+                                        if col_stock_key:
+                                            campo_stock = col_stock_key[0]
+                                            stock_actual = int(fila_ins[campo_stock]) if str(fila_ins[campo_stock]).isdigit() else 0
+                                            
+                                            nuevo_stock = max(0, stock_actual - 1)
+                                            
+                                            # Obtener el número de columna y fila en Google Sheets
+                                            headers = list(fila_ins.keys())
+                                            num_columna = headers.index(campo_stock) + 1
+                                            num_fila = idx_ins + 2  # +2 por encabezado y base 1
+                                            
+                                            # Actualizar el valor en la hoja
+                                            hoja_insumos.update_cell(num_fila, num_columna, nuevo_stock)
+                        except Exception as e:
+                            st.error(f"⚠️ Ocurrió un detalle al actualizar el stock: {e}")
+
+                    st.success(f"🎉 Servicio completado con éxito y stock descontado.")
                     st.rerun()
 
     # ---------------------------------------------------------
