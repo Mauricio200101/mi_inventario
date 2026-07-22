@@ -21,7 +21,7 @@ def obtener_hora_local_bo():
 
 # --- FUNCIÓN DE NOTIFICACIONES TELEGRAM ---
 def enviar_notificacion_telegram(empresa, agencia, area, problema, tecnico):
-    TOKEN_BOT = 8920856005:AAEgKI6dfghTS2sNLMrDeG8ENPoaO5oISWc
+    TOKEN_BOT = "8920856005:AAEgKI6dfghTS2sNLMrDeG8ENPoaO5oISWc"
     CHAT_ID = "-5394039789"
     
     mensaje = f"""
