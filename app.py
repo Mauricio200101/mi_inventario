@@ -1385,7 +1385,8 @@ with tab_respaldo:
                 st.markdown("---")
                 st.subheader("🔄 Activar y Asignar Destino (Enviar a Alquileres)")
 
-                with st.form("form_activar_backup_flexible"):
+                # Usamos st.container para que Streamlit se recargue en tiempo real al cambiar de Agencia
+                with st.container():
                     opciones_items = [
                         f"Fila {idx+2} - Insumo: {row['Insumo']} (Cantidad: {row['Cantidad']})"
                         for idx, row in df_filtrado_empresa.iterrows()
@@ -1410,7 +1411,7 @@ with tab_respaldo:
                             key="backup_agencia_destino"
                         )
                         
-                    # 2. Filtrado de Áreas según la Agencia elegida
+                    # 2. Filtrado de Áreas según la Agencia seleccionada (se actualiza al instante)
                     areas_filtradas = [
                         ar for ar in areas_disponibles 
                         if ar.startswith(agencia_destino_uso.strip())
@@ -1463,7 +1464,7 @@ with tab_respaldo:
                     dias_duracion_calculados = max(0, (pd.to_datetime(f_actual) - pd.to_datetime(f_anterior)).days)
                     st.success(f"⏱️ Tiempo estimado que duró el insumo anterior: **{dias_duracion_calculados} días**")
 
-                    btn_activar = st.form_submit_button("🚀 Dar de Baja en Backup y Registrar en Alquileres")
+                    btn_activar = st.button("🚀 Dar de Baja en Backup y Registrar en Alquileres")
 
                     if btn_activar:
                         fila_idx = int(item_a_usar.split(" - ")[0].replace("Fila ", ""))
