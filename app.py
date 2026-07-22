@@ -1542,7 +1542,6 @@ with tab_respaldo:
 with tab_servicios:
     st.header("📋 Gestión de Servicios y Soporte Técnico")
     
-    # Tres sub-pestañas para el flujo de trabajo
     subtab_solicitar, subtab_atender, subtab_historial = st.tabs([
         "1️⃣ Registrar Solicitud (Pendiente)", 
         "2️⃣ Atender Servicio Pendiente", 
@@ -1550,7 +1549,7 @@ with tab_servicios:
     ])
 
     # ---------------------------------------------------------
-    # PARTE 1: REGISTRAR SOLICITUD DE SERVICIO (SECRETARIAS / USUARIOS)
+    # PARTE 1: REGISTRAR SOLICITUD DE SERVICIO
     # ---------------------------------------------------------
     with subtab_solicitar:
         st.subheader("➕ Registrar Nueva Solicitud de Atención")
@@ -1558,7 +1557,6 @@ with tab_servicios:
 
         empresa_servicio = st.selectbox("Empresa Solicitante:", empresas_disponibles, key="serv_empresa_sol")
 
-        # Filtrado dinámico de Agencias
         agencias_serv_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_servicio.strip())]
         if not agencias_serv_filtradas:
             agencias_serv_filtradas = [f"{empresa_servicio} - Principal"]
@@ -1569,11 +1567,10 @@ with tab_servicios:
             agencia_servicio = st.selectbox(
                 "Agencia:", 
                 agencias_serv_filtradas, 
-                format_func=lambda x: x.replace(empresa_servicio.strip() + " - ", "").strip(),
+                format_func=lambda x: x.split(" - ")[-1] if " - " in x else x,
                 key="serv_agencia_sol"
             )
 
-            # Filtrado dinámico de Áreas
             areas_serv_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_servicio.strip())]
             if not areas_serv_filtradas:
                 areas_serv_filtradas = [f"{agencia_servicio} - General"]
@@ -1581,17 +1578,23 @@ with tab_servicios:
             area_servicio = st.selectbox(
                 "Área:", 
                 areas_serv_filtradas, 
-                format_func=lambda x: x.replace(agencia_servicio.strip() + " - ", "").strip(),
+                format_func=lambda x: x.split(" - ")[-1] if " - " in x else x,
                 key="serv_area_sol"
             )
 
         with col_s2:
-            fecha_solicitud = st.date_input("Fecha de Solicitud:", value=pd.Timestamp.now().date(), key="serv_fecha_sol")
+            # Seleccionamos Fecha y Hora
+            col_fecha, col_hora = st.columns(2)
+            with col_fecha:
+                fecha_solicitud = st.date_input("Fecha de Solicitud:", value=pd.Timestamp.now().date(), key="serv_fecha_sol")
+            with col_hora:
+                hora_solicitud = st.time_input("Hora:", value=pd.Timestamp.now().time(), key="serv_hora_sol")
+                
             quien_registro = st.session_state.get("usuario_actual", "Secretaría")
 
         problema_falla = st.text_area(
             "Descripción del Problema o Falla Reportada:", 
-            placeholder="Ejemplo: Impresora no enciende, ruido extraño en rodillo de presión, falta mantenimiento...",
+            placeholder="Ejemplo: Impresora no enciende, ruido extraño, atasco de papel...",
             key="serv_problema_sol"
         )
 
@@ -1601,23 +1604,23 @@ with tab_servicios:
             if not problema_falla.strip():
                 st.warning("⚠️ Por favor ingresa el detalle del problema.")
             else:
-                # Estructura del registro inicial
+                # Concatenamos fecha y hora
+                fecha_hora_completa = f"{fecha_solicitud} {hora_solicitud.strftime('%H:%M')}"
+                
                 nueva_fila_servicio = [
-                    str(fecha_solicitud),   # Col 1: Fecha Solicitud
+                    fecha_hora_completa,    # Col 1: Fecha y Hora Solicitud
                     empresa_servicio,       # Col 2: Empresa
                     agencia_servicio,       # Col 3: Agencia
                     area_servicio,          # Col 4: Área
                     problema_falla,         # Col 5: Detalle Problema
-                    "Sin asignar",          # Col 6: Técnico (Aún no asignado)
-                    "Ninguno",              # Col 7: Insumos (Aún no usados)
+                    "Sin asignar",          # Col 6: Técnico
+                    "Ninguno",              # Col 7: Insumos
                     "Pendiente",            # Col 8: Fecha Realizado
                     "Pendiente"             # Col 9: Estado
                 ]
                 
-                # 1. Guardar en Google Sheets
                 hoja_servicios.append_row(nueva_fila_servicio)
                 
-                # 2. Notificar inmediatamente a Telegram
                 enviar_notificacion_telegram(
                     empresa_servicio,
                     agencia_servicio,
@@ -1626,24 +1629,22 @@ with tab_servicios:
                     quien_registro
                 )
                 
-                st.success(f"✅ Solicitud registrada como **PENDIENTE** y notificación enviada al grupo de Telegram.")
+                st.success(f"✅ Solicitud registrada con hora **{hora_solicitud.strftime('%H:%M')}** y notificada a Telegram.")
                 st.rerun()
 
     # ---------------------------------------------------------
-    # PARTE 2: ATENDER SERVICIO PENDIENTE (TÉCNICOS)
+    # PARTE 2: ATENDER SERVICIO PENDIENTE
     # ---------------------------------------------------------
     with subtab_atender:
         st.subheader("🛠️ Finalizar o Registrar Trabajo Realizado")
         st.caption("Selecciona un servicio pendiente para registrar el técnico responsable y los insumos utilizados.")
 
-        # Leemos todos los datos para encontrar los pendientes
         todos_datos = hoja_servicios.get_all_records()
         df_todos = pd.DataFrame(todos_datos)
 
         if df_todos.empty:
             st.info("No hay servicios registrados en la base de datos.")
         else:
-            # Buscamos la columna de Estado de forma flexible
             col_estado = [c for c in df_todos.columns if "estado" in str(c).lower()]
             col_estado_nombre = col_estado[0] if col_estado else "Estado"
 
@@ -1653,29 +1654,24 @@ with tab_servicios:
                 df_pendientes = pd.DataFrame()
 
             if df_pendientes.empty:
-                st.balloons()
-                st.success("🎉 ¡Excelente! No hay servicios técnicos pendientes en este momento.")
+                st.success("🎉 ¡Excelente! No hay servicios técnicos pendientes.")
             else:
                 opciones_pendientes = []
                 indices_hoja = []
                 
                 for idx, fila in df_pendientes.iterrows():
                     indices_hoja.append(idx + 2)
-                    
                     empresa_val = str(fila.get('Empresa', 'N/A'))
                     agencia_val = str(fila.get('Agencia', 'N/A'))
                     area_val = str(fila.get('Área', fila.get('Area', 'N/A')))
                     
-                    # Limpiamos nombres repetidos para el desplegable
                     ag_limpia = agencia_val.split(" - ")[-1] if " - " in agencia_val else agencia_val
                     ar_limpia = area_val.split(" - ")[-1] if " - " in area_val else area_val
-                    
                     problema_val = str(fila.get('Problema', fila.get('Problema o Falla', fila.iloc[4] if len(fila) > 4 else 'Sin detalle')))
                     
-                    etiqueta = f"Fila {idx+2} | {empresa_val} ➔ {ag_limpia} ({ar_limpia}) | Falla: {problema_val[:30]}..."
+                    etiqueta = f"Fila {idx+2} | {empresa_val} ➔ {ag_limpia} ({ar_limpia}) | {problema_val[:30]}..."
                     opciones_pendientes.append(etiqueta)
 
-                # Selección del servicio a completar
                 seleccion_idx = st.selectbox(
                     "Selecciona el Servicio Pendiente a Completar:",
                     options=range(len(opciones_pendientes)),
@@ -1686,7 +1682,6 @@ with tab_servicios:
                 fila_num_hoja = indices_hoja[seleccion_idx]
                 servicio_seleccionado = df_pendientes.iloc[seleccion_idx]
 
-                # Extracción y limpieza para la vista previa detallada
                 emp_sel = str(servicio_seleccionado.get('Empresa', 'N/A'))
                 ag_raw = str(servicio_seleccionado.get('Agencia', 'N/A'))
                 ar_raw = str(servicio_seleccionado.get('Área', servicio_seleccionado.get('Area', 'N/A')))
@@ -1694,13 +1689,13 @@ with tab_servicios:
                 ag_sel = ag_raw.split(" - ")[-1] if " - " in ag_raw else ag_raw
                 ar_sel = ar_raw.split(" - ")[-1] if " - " in ar_raw else ar_raw
 
-                fec_sel = servicio_seleccionado.get('Fecha Solicitud', servicio_seleccionado.iloc[0] if len(servicio_seleccionado) > 0 else 'N/A')
-                prob_sel = str(servicio_seleccionado.get('Problema', servicio_seleccionado.get('Problema o Falla', servicio_seleccionado.iloc[4] if len(servicio_seleccionado) > 4 else 'N/A')))
+                fec_sel = servicio_seleccionado.get('Fecha Solicitud', 'N/A')
+                prob_sel = str(servicio_seleccionado.get('Problema', 'N/A'))
 
                 st.markdown("---")
                 st.markdown(f"### 📌 Detalle de la Solicitud Seleccionada")
                 st.write(f"🏢 **Empresa:** {emp_sel} | 📍 **Agencia:** {ag_sel} | 🚪 **Área:** {ar_sel}")
-                st.write(f"📅 **Fecha Solicitud:** {fec_sel}")
+                st.write(f"📅 **Fecha y Hora de Solicitud:** {fec_sel}")
                 st.warning(f"🛠️ **Problema Reportado:** {prob_sel}")
 
                 st.markdown("### 📝 Datos de la Atención Técnica")
@@ -1708,17 +1703,15 @@ with tab_servicios:
                 col_t1, col_t2 = st.columns(2)
                 
                 with col_t1:
-                    # Cargar lista dinámica de usuarios del sistema
                     lista_usuarios_sistema = []
                     if 'hoja_usuarios' in locals():
                         try:
                             df_u = pd.DataFrame(hoja_usuarios.get_all_records())
                             if not df_u.empty and "Usuario" in df_u.columns:
                                 lista_usuarios_sistema = df_u["Usuario"].tolist()
-                        except Exception:
+                        except:
                             pass
                     
-                    # Si por alguna razón la lista está vacía, ponemos al usuario actual
                     usr_actual = st.session_state.get("usuario_actual", "admin")
                     if usr_actual not in lista_usuarios_sistema:
                         lista_usuarios_sistema.append(usr_actual)
@@ -1733,15 +1726,19 @@ with tab_servicios:
                     )
 
                 with col_t2:
-                    fecha_trabajo = st.date_input("Fecha de Trabajo Realizado:", value=pd.Timestamp.now().date(), key="tec_fecha")
+                    # Seleccionamos Fecha y Hora de finalización
+                    col_f_trab, col_h_trab = st.columns(2)
+                    with col_f_trab:
+                        fecha_trabajo = st.date_input("Fecha:", value=pd.Timestamp.now().date(), key="tec_fecha")
+                    with col_h_trab:
+                        hora_trabajo = st.time_input("Hora:", value=pd.Timestamp.now().time(), key="tec_hora")
 
-                # Lista de insumos registrados en el sistema
                 lista_insumos_disponibles = df_insumos["Nombre"].tolist() if 'df_insumos' in locals() and not df_insumos.empty else []
                 
                 insumos_usados = st.multiselect(
-                    "Insumos / Repuestos Utilizados en este servicio:",
+                    "Insumos / Repuestos Utilizados:",
                     options=lista_insumos_disponibles,
-                    placeholder="Selecciona los repuestos usados (deja vacío si solo fue revisión/mantenimiento)",
+                    placeholder="Selecciona los repuestos (deja vacío si solo fue revisión)",
                     key="tec_insumos_multi"
                 )
 
@@ -1750,17 +1747,19 @@ with tab_servicios:
                 btn_completar_servicio = st.button("✅ Marcar Servicio como COMPLETADO")
 
                 if btn_completar_servicio:
-                    # Col 6: Técnico, Col 7: Insumos, Col 8: Fecha Realizado, Col 9: Estado
+                    # Concatenamos fecha y hora de realización
+                    fecha_hora_realizado = f"{fecha_trabajo} {hora_trabajo.strftime('%H:%M')}"
+                    
                     hoja_servicios.update_cell(fila_num_hoja, 6, tecnico_atendio)
                     hoja_servicios.update_cell(fila_num_hoja, 7, insumos_texto)
-                    hoja_servicios.update_cell(fila_num_hoja, 8, str(fecha_trabajo))
+                    hoja_servicios.update_cell(fila_num_hoja, 8, fecha_hora_realizado)
                     hoja_servicios.update_cell(fila_num_hoja, 9, "Completado")
 
-                    st.success(f"🎉 Servicio completado con éxito por el técnico **{tecnico_atendio}**.")
+                    st.success(f"🎉 Servicio completado con éxito.")
                     st.rerun()
 
     # ---------------------------------------------------------
-    # PARTE 3: HISTORIAL GENERAL DE SERVICIOS
+    # PARTE 3: HISTORIAL GENERAL DE SERVICIOS (LIMPIO Y VISUAL)
     # ---------------------------------------------------------
     with subtab_historial:
         st.subheader("📊 Historial Completo de Servicios")
@@ -1786,5 +1785,20 @@ with tab_servicios:
             if filtro_empresa != "Todas":
                 df_filtrado = df_filtrado[df_filtrado["Empresa"] == filtro_empresa]
 
+            # --- LIMPIEZA VISUAL DE DATOS PARA LA TABLA ---
+            if "Agencia" in df_filtrado.columns:
+                df_filtrado["Agencia"] = df_filtrado["Agencia"].astype(str).apply(lambda x: x.split(" - ")[-1] if " - " in x else x)
+            
+            col_area_name = "Área" if "Área" in df_filtrado.columns else "Area" if "Area" in df_filtrado.columns else None
+            if col_area_name:
+                df_filtrado[col_area_name] = df_filtrado[col_area_name].astype(str).apply(lambda x: x.split(" - ")[-1] if " - " in x else x)
+
+            # --- APLICAR EMOJIS AL ESTADO ---
+            if "Estado" in df_filtrado.columns:
+                df_filtrado["Estado"] = df_filtrado["Estado"].apply(
+                    lambda x: "🔴 Pendiente" if x == "Pendiente" else ("✅ Completado" if x == "Completado" else x)
+                )
+
+            # Mostrar la tabla final limpia y visual
             st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
 
