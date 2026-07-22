@@ -1751,16 +1751,57 @@ with tab_servicios:
 
                 # 📊 CAMPOS DINÁMICOS QUE SE ACTIVAN SI ELIGE ALQUILER
                 cnt_ant, cnt_act, paginas_impresas, precio_facturado = 0, 0, 0, 0.0
+
                 if "Alquiler" in tipo_operacion:
                     st.markdown("---")
                     st.markdown("### 📊 Control de Contadores (Alquiler)")
+
+                    # 1. Tomamos el primer insumo seleccionado (si seleccionó alguno) para buscar su historial
+                    insumo_ref = insumos_usados[0] if insumos_usados else ""
+                    
+                    sugerencia_ant = 0
+                    if insumo_ref:
+                        # Usamos la función existente pasando los datos de la solicitud atendida
+                        ultimo_reg = obtener_ultimo_alquiler(insumo_ref, emp_sel, ag_sel, ar_sel)
+                        
+                        if ultimo_reg is not None:
+                            try:
+                                sugerencia_ant = int(ultimo_reg["Contador Actual"])
+                                st.success(f"🔍 ¡Historial Encontrado! Último contador para **{insumo_ref}**: **{sugerencia_ant}**")
+                            except Exception:
+                                sugerencia_ant = 0
+                        else:
+                            st.warning(f"⚠️ No se encontró historial previo de **{insumo_ref}** en {emp_sel} - {ag_sel} ({ar_sel}). Se iniciará en 0.")
+                    else:
+                        st.info("💡 Selecciona un insumo arriba para buscar su contador anterior automáticamente.")
+
+                    # 2. Renderizamos los inputs con la sugerencia automática
                     col_alq1, col_alq2, col_alq3 = st.columns(3)
+                    
                     with col_alq1:
-                        cnt_ant = st.number_input("Contador Anterior:", min_value=0, value=0, key="tec_cnt_ant")
+                        cnt_ant = st.number_input(
+                            "Contador Anterior:", 
+                            min_value=0, 
+                            value=int(sugerencia_ant), 
+                            key="tec_cnt_ant"
+                        )
+                        
                     with col_alq2:
-                        cnt_act = st.number_input("Contador Actual (Lectura de hoy):", min_value=0, value=0, key="tec_cnt_act")
+                        cnt_act = st.number_input(
+                            "Contador Actual (Lectura de hoy):", 
+                            min_value=int(cnt_ant), 
+                            value=int(cnt_ant), 
+                            key="tec_cnt_act"
+                        )
+                        
                     with col_alq3:
-                        precio_facturado = st.number_input("Precio Facturado (Bs.):", min_value=0.0, value=0.0, step=10.0, key="tec_precio_alq")
+                        precio_facturado = st.number_input(
+                            "Precio Facturado (Bs.):", 
+                            min_value=0.0, 
+                            value=0.0, 
+                            step=10.0, 
+                            key="tec_precio_alq"
+                        )
                     
                     paginas_impresas = max(0, cnt_act - cnt_ant)
                     st.info(f"📄 **Páginas Impresas Calculadas:** {paginas_impresas} págs.")
