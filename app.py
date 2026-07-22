@@ -19,17 +19,21 @@ def obtener_hora_local_bo():
     tz_bo = timezone(timedelta(hours=-4))
     return datetime.now(tz_bo)
 
-# --- FUNCIÓN DE NOTIFICACIONES TELEGRAM ---
+# --- FUNCIÓN DE NOTIFICACIONES TELEGRAM (TEXTOS LIMPIOS) ---
 def enviar_notificacion_telegram(empresa, agencia, area, problema, tecnico):
     TOKEN_BOT = "8920856005:AAEgKI6dfghTS2sNLMrDeG8ENPoaO5oISWc"
     CHAT_ID = "-5394039789"
+    
+    # Limpiamos los textos para que no repitan la Empresa ni la Agencia
+    agencia_limpia = agencia.split(" - ")[-1] if " - " in agencia else agencia
+    area_limpia = area.split(" - ")[-1] if " - " in area else area
     
     mensaje = f"""
 🚨 *NUEVO SERVICIO TÉCNICO PENDIENTE* 🚨
 
 🏢 *Empresa:* {empresa}
-📍 *Agencia:* {agencia}
-🏢 *Área:* {area}
+📍 *Agencia:* {agencia_limpia}
+🏢 *Área:* {area_limpia}
 👤 *Registrado por:* {tecnico}
 
 🛠️ *Problema o Falla:*
@@ -1639,22 +1643,36 @@ with tab_servicios:
         if df_todos.empty:
             st.info("No hay servicios registrados en la base de datos.")
         else:
-            # Filtramos solo los pendientes
-            df_pendientes = df_todos[df_todos["Estado"] == "Pendiente"]
+            # Buscamos la columna de Estado de forma flexible
+            col_estado = [c for c in df_todos.columns if "estado" in str(c).lower()]
+            col_estado_nombre = col_estado[0] if col_estado else "Estado"
+
+            if col_estado_nombre in df_todos.columns:
+                df_pendientes = df_todos[df_todos[col_estado_nombre] == "Pendiente"]
+            else:
+                df_pendientes = pd.DataFrame()
 
             if df_pendientes.empty:
                 st.balloons()
                 st.success("🎉 ¡Excelente! No hay servicios técnicos pendientes en este momento.")
             else:
-                # Crear lista para desplegable de pendientes
                 opciones_pendientes = []
-                # Guardamos los índices reales de la hoja de cálculo
                 indices_hoja = []
                 
                 for idx, fila in df_pendientes.iterrows():
-                    # idx en pandas es base 0, la fila real en Google Sheets es idx + 2 (por la cabecera)
                     indices_hoja.append(idx + 2)
-                    etiqueta = f"Fila {idx+2} | {fila['Empresa']} - {fila['Agencia']} ({fila['Área']}) | Falla: {fila['Problema'][:30]}..."
+                    
+                    empresa_val = str(fila.get('Empresa', 'N/A'))
+                    agencia_val = str(fila.get('Agencia', 'N/A'))
+                    area_val = str(fila.get('Área', fila.get('Area', 'N/A')))
+                    
+                    # Limpiamos nombres repetidos para el desplegable
+                    ag_limpia = agencia_val.split(" - ")[-1] if " - " in agencia_val else agencia_val
+                    ar_limpia = area_val.split(" - ")[-1] if " - " in area_val else area_val
+                    
+                    problema_val = str(fila.get('Problema', fila.get('Problema o Falla', fila.iloc[4] if len(fila) > 4 else 'Sin detalle')))
+                    
+                    etiqueta = f"Fila {idx+2} | {empresa_val} ➔ {ag_limpia} ({ar_limpia}) | Falla: {problema_val[:30]}..."
                     opciones_pendientes.append(etiqueta)
 
                 # Selección del servicio a completar
@@ -1668,18 +1686,52 @@ with tab_servicios:
                 fila_num_hoja = indices_hoja[seleccion_idx]
                 servicio_seleccionado = df_pendientes.iloc[seleccion_idx]
 
+                # Extracción y limpieza para la vista previa detallada
+                emp_sel = str(servicio_seleccionado.get('Empresa', 'N/A'))
+                ag_raw = str(servicio_seleccionado.get('Agencia', 'N/A'))
+                ar_raw = str(servicio_seleccionado.get('Área', servicio_seleccionado.get('Area', 'N/A')))
+                
+                ag_sel = ag_raw.split(" - ")[-1] if " - " in ag_raw else ag_raw
+                ar_sel = ar_raw.split(" - ")[-1] if " - " in ar_raw else ar_raw
+
+                fec_sel = servicio_seleccionado.get('Fecha Solicitud', servicio_seleccionado.iloc[0] if len(servicio_seleccionado) > 0 else 'N/A')
+                prob_sel = str(servicio_seleccionado.get('Problema', servicio_seleccionado.get('Problema o Falla', servicio_seleccionado.iloc[4] if len(servicio_seleccionado) > 4 else 'N/A')))
+
                 st.markdown("---")
                 st.markdown(f"### 📌 Detalle de la Solicitud Seleccionada")
-                st.write(f"**Empresa / Agencia / Área:** {servicio_seleccionado['Empresa']} - {servicio_seleccionado['Agencia']} ({servicio_seleccionado['Área']})")
-                st.write(f"**Fecha Solicitud:** {servicio_seleccionado['Fecha Solicitud']}")
-                st.warning(f"**Problema Reportado:** {servicio_seleccionado['Problema']}")
+                st.write(f"🏢 **Empresa:** {emp_sel} | 📍 **Agencia:** {ag_sel} | 🚪 **Área:** {ar_sel}")
+                st.write(f"📅 **Fecha Solicitud:** {fec_sel}")
+                st.warning(f"🛠️ **Problema Reportado:** {prob_sel}")
 
                 st.markdown("### 📝 Datos de la Atención Técnica")
                 
                 col_t1, col_t2 = st.columns(2)
+                
                 with col_t1:
-                    usuario_tecnico = st.session_state.get("usuario_actual", "")
-                    tecnico_atendio = st.text_input("Técnico Responsable:", value=usuario_tecnico, placeholder="Escribe tu nombre", key="tec_nombre")
+                    # Cargar lista dinámica de usuarios del sistema
+                    lista_usuarios_sistema = []
+                    if 'hoja_usuarios' in locals():
+                        try:
+                            df_u = pd.DataFrame(hoja_usuarios.get_all_records())
+                            if not df_u.empty and "Usuario" in df_u.columns:
+                                lista_usuarios_sistema = df_u["Usuario"].tolist()
+                        except Exception:
+                            pass
+                    
+                    # Si por alguna razón la lista está vacía, ponemos al usuario actual
+                    usr_actual = st.session_state.get("usuario_actual", "admin")
+                    if usr_actual not in lista_usuarios_sistema:
+                        lista_usuarios_sistema.append(usr_actual)
+                    
+                    idx_def = lista_usuarios_sistema.index(usr_actual) if usr_actual in lista_usuarios_sistema else 0
+
+                    tecnico_atendio = st.selectbox(
+                        "Técnico Responsable:",
+                        options=lista_usuarios_sistema,
+                        index=idx_def,
+                        key="tec_nombre_select"
+                    )
+
                 with col_t2:
                     fecha_trabajo = st.date_input("Fecha de Trabajo Realizado:", value=pd.Timestamp.now().date(), key="tec_fecha")
 
@@ -1698,18 +1750,14 @@ with tab_servicios:
                 btn_completar_servicio = st.button("✅ Marcar Servicio como COMPLETADO")
 
                 if btn_completar_servicio:
-                    if not tecnico_atendio.strip():
-                        st.warning("⚠️ Por favor ingresa el nombre del técnico responsable.")
-                    else:
-                        # Actualizamos los campos correspondientes en la fila exacta de Google Sheets
-                        # Col 6: Técnico, Col 7: Insumos, Col 8: Fecha Realizado, Col 9: Estado
-                        hoja_servicios.update_cell(fila_num_hoja, 6, tecnico_atendio)
-                        hoja_servicios.update_cell(fila_num_hoja, 7, insumos_texto)
-                        hoja_servicios.update_cell(fila_num_hoja, 8, str(fecha_trabajo))
-                        hoja_servicios.update_cell(fila_num_hoja, 9, "Completado")
+                    # Col 6: Técnico, Col 7: Insumos, Col 8: Fecha Realizado, Col 9: Estado
+                    hoja_servicios.update_cell(fila_num_hoja, 6, tecnico_atendio)
+                    hoja_servicios.update_cell(fila_num_hoja, 7, insumos_texto)
+                    hoja_servicios.update_cell(fila_num_hoja, 8, str(fecha_trabajo))
+                    hoja_servicios.update_cell(fila_num_hoja, 9, "Completado")
 
-                        st.success(f"🎉 Servicio completado con éxito por el técnico **{tecnico_atendio}**.")
-                        st.rerun()
+                    st.success(f"🎉 Servicio completado con éxito por el técnico **{tecnico_atendio}**.")
+                    st.rerun()
 
     # ---------------------------------------------------------
     # PARTE 3: HISTORIAL GENERAL DE SERVICIOS
