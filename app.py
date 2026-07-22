@@ -1633,11 +1633,11 @@ with tab_servicios:
                 st.rerun()
 
     # ---------------------------------------------------------
-    # PARTE 2: ATENDER SERVICIO PENDIENTE (CON VENTA / ALQUILER / STOCK)
+    # PARTE 2: ATENDER SERVICIO PENDIENTE (CON CONTADORES Y REGISTRO EN ALQUILERES)
     # ---------------------------------------------------------
     with subtab_atender:
         st.subheader("🛠️ Finalizar o Registrar Trabajo Realizado")
-        st.caption("Selecciona un servicio pendiente, define si es Servicio, Venta o Alquiler y registra los insumos.")
+        st.caption("Selecciona un servicio pendiente, define el tipo de trabajo y completa la información requerida.")
 
         todos_datos = hoja_servicios.get_all_records()
         df_todos = pd.DataFrame(todos_datos)
@@ -1693,7 +1693,7 @@ with tab_servicios:
                 prob_sel = str(servicio_seleccionado.get('Problema', 'N/A'))
 
                 st.markdown("---")
-                st.markdown(f"### 📌 Detalle de la Solicitud Seleccionada")
+                st.markdown("### 📌 Detalle de la Solicitud Seleccionada")
                 st.write(f"🏢 **Empresa:** {emp_sel} | 📍 **Agencia:** {ag_sel} | 🚪 **Área:** {ar_sel}")
                 st.write(f"📅 **Fecha y Hora de Solicitud:** {fec_sel}")
                 st.warning(f"🛠️ **Problema Reportado:** {prob_sel}")
@@ -1749,6 +1749,23 @@ with tab_servicios:
 
                 insumos_texto = ", ".join(insumos_usados) if insumos_usados else "Ninguno"
 
+                # 📊 CAMPOS DINÁMICOS QUE SE ACTIVAN SI ELIGE ALQUILER
+                cnt_ant, cnt_act, paginas_impresas, precio_facturado = 0, 0, 0, 0.0
+                if "Alquiler" in tipo_operacion:
+                    st.markdown("---")
+                    st.markdown("### 📊 Control de Contadores (Alquiler)")
+                    col_alq1, col_alq2, col_alq3 = st.columns(3)
+                    with col_alq1:
+                        cnt_ant = st.number_input("Contador Anterior:", min_value=0, value=0, key="tec_cnt_ant")
+                    with col_alq2:
+                        cnt_act = st.number_input("Contador Actual (Lectura de hoy):", min_value=0, value=0, key="tec_cnt_act")
+                    with col_alq3:
+                        precio_facturado = st.number_input("Precio Facturado (Bs.):", min_value=0.0, value=0.0, step=10.0, key="tec_precio_alq")
+                    
+                    paginas_impresas = max(0, cnt_act - cnt_ant)
+                    st.info(f"📄 **Páginas Impresas Calculadas:** {paginas_impresas} págs.")
+
+                st.markdown("---")
                 btn_completar_servicio = st.button("✅ Marcar Servicio como COMPLETADO y Registrar Movimiento")
 
                 if btn_completar_servicio:
@@ -1756,7 +1773,7 @@ with tab_servicios:
                     fecha_hora_realizado = f"{fecha_str_limpia} {hora_trabajo.strftime('%H:%M')}"
                     
                     # 1️⃣ Actualizar Hoja de Servicios
-                    hoja_servicios.update_cell(fila_num_hoja, 6, técnico_atendio if 'técnico_atendio' in locals() else tecnico_atendio)
+                    hoja_servicios.update_cell(fila_num_hoja, 6, tecnico_atendio)
                     hoja_servicios.update_cell(fila_num_hoja, 7, f"[{tipo_operacion}] {insumos_texto}")
                     hoja_servicios.update_cell(fila_num_hoja, 8, fecha_hora_realizado)
                     hoja_servicios.update_cell(fila_num_hoja, 9, "Completado")
@@ -1778,9 +1795,7 @@ with tab_servicios:
                                             stock_actual = int(fila_ins[campo_stock]) if str(fila_ins[campo_stock]).isdigit() else 0
                                             nuevo_stock = max(0, stock_actual - 1)
                                             
-                                            # Actualizar en memoria para siguientes items iguales si los hubiera
                                             fila_ins[campo_stock] = nuevo_stock
-                                            
                                             headers = list(fila_ins.keys())
                                             num_columna = headers.index(campo_stock) + 1
                                             num_fila = idx_ins + 2
@@ -1790,29 +1805,56 @@ with tab_servicios:
                         except Exception as e:
                             st.error(f"⚠️ Error al actualizar stock de insumos: {e}")
 
-                    # 3️⃣ Registrar en Venta, Alquiler o Historial General
+                    # 3️⃣ Registrar en la Hoja de Alquileres, Ventas o Historial General
                     try:
-                        detalle_movimiento = f"Servicio a {emp_sel} ({ag_sel}) - {insumos_texto}"
-                        
-                        # Si eligió Alquiler
+                        # Si eligió Alquiler -> Guarda los contadores en la pestaña de Alquileres
                         if "Alquiler" in tipo_operacion and 'hoja_alquileres' in locals():
-                            nueva_fila_alq = [fecha_str_limpia, emp_sel, ag_sel, ar_sel, insumos_texto, 1, tecnico_atendio, "Activo"]
+                            nueva_fila_alq = [
+                                fecha_str_limpia,
+                                emp_sel,
+                                ag_sel,
+                                ar_sel,
+                                insumos_texto,
+                                1,
+                                cnt_ant,
+                                cnt_act,
+                                paginas_impresas,
+                                precio_facturado,
+                                tecnico_atendio,
+                                "Activo"
+                            ]
                             hoja_alquileres.append_row(nueva_fila_alq)
-                        
+
                         # Si eligió Venta
                         elif "Venta" in tipo_operacion and 'hoja_ventas' in locals():
-                            nueva_fila_vta = [fecha_str_limpia, emp_sel, ag_sel, insumos_texto, 1, tecnico_atendio]
+                            nueva_fila_vta = [
+                                fecha_str_limpia,
+                                emp_sel,
+                                ag_sel,
+                                ar_sel,
+                                insumos_texto,
+                                1,
+                                tecnico_atendio
+                            ]
                             hoja_ventas.append_row(nueva_fila_vta)
 
-                        # Registrar también en Historial General / Movimientos de Inventario si existe
+                        # También enviamos copia al Historial General / Movimientos si existe
                         if 'hoja_movimientos' in locals():
-                            nueva_fila_mov = [fecha_str_limpia, tipo_operacion, emp_sel, insumos_texto, 1, tecnico_atendio]
+                            nueva_fila_mov = [
+                                fecha_str_limpia,
+                                tipo_operacion,
+                                emp_sel,
+                                ag_sel,
+                                insumos_texto,
+                                1,
+                                tecnico_atendio
+                            ]
                             hoja_movimientos.append_row(nueva_fila_mov)
 
                     except Exception as e:
-                        st.warning(f"⚠️ El servicio se completó pero hubo un aviso en el registro general: {e}")
+                        st.warning(f"⚠️ Nota al guardar en reportes: {e}")
 
-                    st.success(f"🎉 Servicio completado, {len(insumos_usados)} insumos descontados del stock y registrado en el Historial General.")
+                    st.success("🎉 ¡Servicio completado! Se registraron los datos en Historial de Alquileres y se actualizó el stock.")
                     st.rerun()
 
     # ---------------------------------------------------------
