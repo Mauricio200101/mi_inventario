@@ -1586,9 +1586,9 @@ with tab_servicios:
             # Seleccionamos Fecha y Hora
             col_fecha, col_hora = st.columns(2)
             with col_fecha:
-                fecha_solicitud = st.date_input("Fecha de Solicitud:", value=pd.Timestamp.now().date(), key="serv_fecha_sol")
+                fecha_solicitud = st.date_input("Fecha de Solicitud:", value=obtener_hora_local_bo().date(), key="serv_fecha_sol")
             with col_hora:
-                hora_solicitud = st.time_input("Hora:", value=pd.Timestamp.now().time(), key="serv_hora_sol")
+                hora_solicitud = st.time_input("Hora:", value=obtener_hora_local_bo().time(), key="serv_hora_sol")
                 
             quien_registro = st.session_state.get("usuario_actual", "Secretaría")
 
@@ -1729,9 +1729,9 @@ with tab_servicios:
                     # Seleccionamos Fecha y Hora de finalización
                     col_f_trab, col_h_trab = st.columns(2)
                     with col_f_trab:
-                        fecha_trabajo = st.date_input("Fecha:", value=pd.Timestamp.now().date(), key="tec_fecha")
+                        fecha_trabajo = st.date_input("Fecha:", value=obtener_hora_local_bo().date(), key="tec_fecha")
                     with col_h_trab:
-                        hora_trabajo = st.time_input("Hora:", value=pd.Timestamp.now().time(), key="tec_hora")
+                        hora_trabajo = st.time_input("Hora:", value=obtener_hora_local_bo().time(), key="tec_hora")
 
                 lista_insumos_disponibles = df_insumos["Nombre"].tolist() if 'df_insumos' in locals() and not df_insumos.empty else []
                 
