@@ -79,7 +79,8 @@ def inicializar_pestanas_seguras():
                     "Parametros": sh.worksheet("Parametros"),
                     "Ventas": sh.worksheet("Ventas"),
                     "Alquileres": sh.worksheet("Alquileres"),
-                    "Backup": sh.worksheet("Backup")
+                    "Backup": sh.worksheet("Backup"),
+                    "Servicios": sh.worksheet("Servicios")
                 }
                 break # Éxito, salimos del bucle
             except gspread.exceptions.APIError as e:
