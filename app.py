@@ -1633,11 +1633,11 @@ with tab_servicios:
                 st.rerun()
 
     # ---------------------------------------------------------
-    # PARTE 2: ATENDER SERVICIO PENDIENTE
+    # PARTE 2: ATENDER SERVICIO PENDIENTE (CON VENTA / ALQUILER / STOCK)
     # ---------------------------------------------------------
     with subtab_atender:
         st.subheader("🛠️ Finalizar o Registrar Trabajo Realizado")
-        st.caption("Selecciona un servicio pendiente para registrar el técnico responsable y los insumos utilizados.")
+        st.caption("Selecciona un servicio pendiente, define si es Servicio, Venta o Alquiler y registra los insumos.")
 
         todos_datos = hoja_servicios.get_all_records()
         df_todos = pd.DataFrame(todos_datos)
@@ -1725,8 +1725,13 @@ with tab_servicios:
                         key="tec_nombre_select"
                     )
 
+                    tipo_operacion = st.selectbox(
+                        "Tipo de Operación / Destino:",
+                        options=["Servicio Técnico Regular", "Venta de Insumo/Repuesto", "Alquiler de Equipo/Insumo"],
+                        key="tec_tipo_operacion"
+                    )
+
                 with col_t2:
-                    # Seleccionamos Fecha y Hora de finalización
                     col_f_trab, col_h_trab = st.columns(2)
                     with col_f_trab:
                         fecha_trabajo = st.date_input("Fecha:", value=obtener_hora_local_bo().date(), key="tec_fecha")
@@ -1738,25 +1743,25 @@ with tab_servicios:
                 insumos_usados = st.multiselect(
                     "Insumos / Repuestos Utilizados:",
                     options=lista_insumos_disponibles,
-                    placeholder="Selecciona los repuestos (deja vacío si solo fue revisión)",
+                    placeholder="Selecciona uno o varios repuestos...",
                     key="tec_insumos_multi"
                 )
 
                 insumos_texto = ", ".join(insumos_usados) if insumos_usados else "Ninguno"
 
-                btn_completar_servicio = st.button("✅ Marcar Servicio como COMPLETADO")
+                btn_completar_servicio = st.button("✅ Marcar Servicio como COMPLETADO y Registrar Movimiento")
 
                 if btn_completar_servicio:
-                    # Concatenamos fecha y hora de realización
-                    fecha_hora_realizado = f"{fecha_trabajo} {hora_trabajo.strftime('%H:%M')}"
+                    fecha_str_limpia = fecha_trabajo.strftime('%Y-%m-%d')
+                    fecha_hora_realizado = f"{fecha_str_limpia} {hora_trabajo.strftime('%H:%M')}"
                     
-                    # 1️⃣ Actualizar el registro del servicio
-                    hoja_servicios.update_cell(fila_num_hoja, 6, tecnico_atendio)
-                    hoja_servicios.update_cell(fila_num_hoja, 7, insumos_texto)
+                    # 1️⃣ Actualizar Hoja de Servicios
+                    hoja_servicios.update_cell(fila_num_hoja, 6, técnico_atendio if 'técnico_atendio' in locals() else tecnico_atendio)
+                    hoja_servicios.update_cell(fila_num_hoja, 7, f"[{tipo_operacion}] {insumos_texto}")
                     hoja_servicios.update_cell(fila_num_hoja, 8, fecha_hora_realizado)
                     hoja_servicios.update_cell(fila_num_hoja, 9, "Completado")
 
-                    # 2️⃣ Restar 1 unidad del stock de cada insumo utilizado
+                    # 2️⃣ Descontar TODOS los insumos seleccionados en el stock
                     if insumos_usados and 'hoja_insumos' in locals():
                         try:
                             datos_insumos = hoja_insumos.get_all_records()
@@ -1765,27 +1770,49 @@ with tab_servicios:
                                 for idx_ins, fila_ins in enumerate(datos_insumos):
                                     nombre_item = str(fila_ins.get("Nombre", fila_ins.get("Insumo", ""))).strip()
                                     
-                                    if nombre_item == insumo_nom.strip():
-                                        # Identificar cuál columna contiene el Stock / Cantidad
+                                    if nombre_item.lower() == insumo_nom.strip().lower():
                                         col_stock_key = [k for k in fila_ins.keys() if "stock" in str(k).lower() or "cantidad" in str(k).lower()]
                                         
                                         if col_stock_key:
                                             campo_stock = col_stock_key[0]
                                             stock_actual = int(fila_ins[campo_stock]) if str(fila_ins[campo_stock]).isdigit() else 0
-                                            
                                             nuevo_stock = max(0, stock_actual - 1)
                                             
-                                            # Obtener el número de columna y fila en Google Sheets
+                                            # Actualizar en memoria para siguientes items iguales si los hubiera
+                                            fila_ins[campo_stock] = nuevo_stock
+                                            
                                             headers = list(fila_ins.keys())
                                             num_columna = headers.index(campo_stock) + 1
-                                            num_fila = idx_ins + 2  # +2 por encabezado y base 1
+                                            num_fila = idx_ins + 2
                                             
-                                            # Actualizar el valor en la hoja
                                             hoja_insumos.update_cell(num_fila, num_columna, nuevo_stock)
+                                            break
                         except Exception as e:
-                            st.error(f"⚠️ Ocurrió un detalle al actualizar el stock: {e}")
+                            st.error(f"⚠️ Error al actualizar stock de insumos: {e}")
 
-                    st.success(f"🎉 Servicio completado con éxito y stock descontado.")
+                    # 3️⃣ Registrar en Venta, Alquiler o Historial General
+                    try:
+                        detalle_movimiento = f"Servicio a {emp_sel} ({ag_sel}) - {insumos_texto}"
+                        
+                        # Si eligió Alquiler
+                        if "Alquiler" in tipo_operacion and 'hoja_alquileres' in locals():
+                            nueva_fila_alq = [fecha_str_limpia, emp_sel, ag_sel, ar_sel, insumos_texto, 1, tecnico_atendio, "Activo"]
+                            hoja_alquileres.append_row(nueva_fila_alq)
+                        
+                        # Si eligió Venta
+                        elif "Venta" in tipo_operacion and 'hoja_ventas' in locals():
+                            nueva_fila_vta = [fecha_str_limpia, emp_sel, ag_sel, insumos_texto, 1, tecnico_atendio]
+                            hoja_ventas.append_row(nueva_fila_vta)
+
+                        # Registrar también en Historial General / Movimientos de Inventario si existe
+                        if 'hoja_movimientos' in locals():
+                            nueva_fila_mov = [fecha_str_limpia, tipo_operacion, emp_sel, insumos_texto, 1, tecnico_atendio]
+                            hoja_movimientos.append_row(nueva_fila_mov)
+
+                    except Exception as e:
+                        st.warning(f"⚠️ El servicio se completó pero hubo un aviso en el registro general: {e}")
+
+                    st.success(f"🎉 Servicio completado, {len(insumos_usados)} insumos descontados del stock y registrado en el Historial General.")
                     st.rerun()
 
     # ---------------------------------------------------------
