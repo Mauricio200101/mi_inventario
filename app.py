@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 import io
 import plotly.express as px
 import time
+import hashlib
 
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
@@ -76,6 +77,9 @@ hoja_alquileres = pestanas_activas["Alquileres"]
 hoja_respaldo = pestanas_activas["Backup"]
 
 # --- FUNCIONES DE GESTIÓN DE USUARIOS ---
+def encriptar_password(password_plano):
+    """Convierte una contraseña en texto plano a un hash SHA-256 encriptado."""
+    return hashlib.sha256(str(password_plano).encode()).hexdigest()
 @st.cache_data(ttl=60)
 def obtener_usuarios():
     try:
@@ -89,16 +93,18 @@ def obtener_usuarios():
     return df
 
 def registrar_usuario(usuario, contrasenia, rol):
-    hoja_usuarios.append_row([usuario, contrasenia, rol])
+    pass_encriptado = encriptar_password(contrasenia)
+    hoja_usuarios.append_row([usuario, pass_encriptado, rol])
 
 def editar_usuario(usuario_viejo, nuevo_usuario, nueva_contrasenia, nuevo_rol):
-    """Edita un registro de usuario existente."""
+    """Edita un registro de usuario existente encriptando su contraseña."""
+    pass_encriptado = encriptar_password(nueva_contrasenia)
     datos = hoja_usuarios.get_all_values()
     for i, fila in enumerate(datos):
         if fila[0] == usuario_viejo:
             fila_idx = i + 1
             hoja_usuarios.update_cell(fila_idx, 1, nuevo_usuario)
-            hoja_usuarios.update_cell(fila_idx, 2, nueva_contrasenia)
+            hoja_usuarios.update_cell(fila_idx, 2, pass_encriptado)
             hoja_usuarios.update_cell(fila_idx, 3, nuevo_rol)
             break
 
@@ -228,6 +234,7 @@ def check_password():
     
     if st.button("Ingresar"):
         df_users = obtener_usuarios()
+        pass_input_hash = encriptar_password(password_input)
         usuario_valido = df_users[(df_users["Usuario"] == usuario_input) & (df_users["Contraseña"] == str(password_input))]
         
         if not usuario_valido.empty:
@@ -1419,7 +1426,7 @@ with tab_respaldo:
 
                     col1, col2 = st.columns(2)
                     with col1:
-                        agencia_destino = st.selectbox(
+                        agencia_destino_uso = st.selectbox(
                             "Agencia:", 
                             agencias_empresa, 
                             format_func=lambda x: x.replace(empresa_elegida.strip(), "").strip(" -"),
