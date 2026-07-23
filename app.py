@@ -1546,18 +1546,21 @@ with tab_respaldo:
     except Exception as e:
         st.error(f"Error al cargar la gestión de respaldos: {e}")
 
+# =========================================================
+# PESTAÑA: SERVICIOS Y SOPORTE TÉCNICO (3 ETAPAS)
+# =========================================================
 with tab_servicios:
-    st.header("🛠️ Gestión de Servicios y Soporte Técnico")
-
+    st.header("📋 Gestión de Servicios y Soporte Técnico")
+    
     subtab_solicitar, subtab_atender, subtab_historial = st.tabs([
-        "1️⃣ Registrar Solicitud (Pendiente)",
-        "2️⃣ Atender Servicio Pendiente",
+        "1️⃣ Registrar Solicitud (Pendiente)", 
+        "2️⃣ Atender Servicio Pendiente", 
         "3️⃣ Historial de Servicios"
     ])
 
-    # ==============================================================================
+    # ---------------------------------------------------------
     # PARTE 1: REGISTRAR SOLICITUD DE SERVICIO
-    # ==============================================================================
+    # ---------------------------------------------------------
     with subtab_solicitar:
         st.subheader("➕ Registrar Nueva Solicitud de Atención")
         st.caption("Llena este formulario cuando una agencia reporte un problema.")
@@ -1572,8 +1575,8 @@ with tab_servicios:
 
         with col_s1:
             agencia_servicio = st.selectbox(
-                "Agencia:",
-                agencias_serv_filtradas,
+                "Agencia:", 
+                agencias_serv_filtradas, 
                 format_func=lambda x: x.split(" - ")[-1] if " - " in x else x,
                 key="serv_agencia_sol"
             )
@@ -1583,23 +1586,24 @@ with tab_servicios:
                 areas_serv_filtradas = [f"{agencia_servicio} - General"]
 
             area_servicio = st.selectbox(
-                "Área:",
-                areas_serv_filtradas,
+                "Área:", 
+                areas_serv_filtradas, 
                 format_func=lambda x: x.split(" - ")[-1] if " - " in x else x,
                 key="serv_area_sol"
             )
 
         with col_s2:
+            # Seleccionamos Fecha y Hora
             col_fecha, col_hora = st.columns(2)
             with col_fecha:
                 fecha_solicitud = st.date_input("Fecha de Solicitud:", value=obtener_hora_local_bo().date(), key="serv_fecha_sol")
             with col_hora:
                 hora_solicitud = st.time_input("Hora:", value=obtener_hora_local_bo().time(), key="serv_hora_sol")
-
-            quien_registro = st.session_state.get("usuario_actual", "Secretaria")
+                
+            quien_registro = st.session_state.get("usuario_actual", "Secretaría")
 
         problema_falla = st.text_area(
-            "Descripción del Problema o Falla Reportada:",
+            "Descripción del Problema o Falla Reportada:", 
             placeholder="Ejemplo: Impresora no enciende, ruido extraño, atasco de papel...",
             key="serv_problema_sol"
         )
@@ -1610,245 +1614,341 @@ with tab_servicios:
             if not problema_falla.strip():
                 st.warning("⚠️ Por favor ingresa el detalle del problema.")
             else:
+                # Concatenamos fecha y hora
                 fecha_hora_completa = f"{fecha_solicitud} {hora_solicitud.strftime('%H:%M')}"
+                
                 nueva_fila_servicio = [
-                    fecha_hora_completa,
+                    fecha_hora_completa,    # Col 1: Fecha y Hora Solicitud
+                    empresa_servicio,       # Col 2: Empresa
+                    agencia_servicio,       # Col 3: Agencia
+                    area_servicio,          # Col 4: Área
+                    problema_falla,         # Col 5: Detalle Problema
+                    "Sin asignar",          # Col 6: Técnico
+                    "Ninguno",              # Col 7: Insumos
+                    "Pendiente",            # Col 8: Fecha Realizado
+                    "Pendiente"             # Col 9: Estado
+                ]
+                
+                hoja_servicios.append_row(nueva_fila_servicio)
+                
+                enviar_notificacion_telegram(
                     empresa_servicio,
                     agencia_servicio,
                     area_servicio,
                     problema_falla,
-                    "Sin asignar",
-                    "Ninguno",
-                    "Pendiente",
-                    "Pendiente"
-                ]
-                hoja_servicios.append_row(nueva_fila_servicio)
-
-                if "enviar_notificacion_telegram" in globals():
-                    try:
-                        enviar_notificacion_telegram(
-                            empresa_servicio, agencia_servicio, area_servicio, problema_falla, quien_registro
-                        )
-                    except Exception:
-                        pass
-
-                st.success(f"✅ Solicitud registrada con hora **{hora_solicitud.strftime('%H:%M')}**")
+                    quien_registro
+                )
+                
+                st.success(f"✅ Solicitud registrada con hora **{hora_solicitud.strftime('%H:%M')}** y notificada a Telegram.")
                 st.rerun()
 
-    # ==============================================================================
-    # PARTE 2: ATENDER SERVICIO PENDIENTE
-    # ==============================================================================
+    # ---------------------------------------------------------
+    # PARTE 2: ATENDER SERVICIO PENDIENTE (CON CONTADORES Y REGISTRO EN ALQUILERES)
+    # ---------------------------------------------------------
     with subtab_atender:
         st.subheader("🛠️ Finalizar o Registrar Trabajo Realizado")
-        st.caption("Selecciona un servicio pendiente, define el trabajo y descuenta el inventario.")
+        st.caption("Selecciona un servicio pendiente, define el tipo de trabajo y completa la información requerida.")
 
-        try:
-            todos_datos = hoja_servicios.get_all_records()
-            df_todos = pd.DataFrame(todos_datos)
+        todos_datos = hoja_servicios.get_all_records()
+        df_todos = pd.DataFrame(todos_datos)
 
-            if df_todos.empty:
-                st.info("ℹ️ No hay servicios registrados en la base de datos.")
+        if df_todos.empty:
+            st.info("No hay servicios registrados en la base de datos.")
+        else:
+            col_estado = [c for c in df_todos.columns if "estado" in str(c).lower()]
+            col_estado_nombre = col_estado[0] if col_estado else "Estado"
+
+            if col_estado_nombre in df_todos.columns:
+                df_pendientes = df_todos[df_todos[col_estado_nombre] == "Pendiente"]
             else:
-                col_estado = [c for c in df_todos.columns if "estado" in str(c).lower()]
-                col_estado_nombre = col_estado[0] if col_estado else "Estado"
+                df_pendientes = pd.DataFrame()
 
-                if col_estado_nombre in df_todos.columns:
-                    df_pendientes = df_todos[df_todos[col_estado_nombre] == "Pendiente"]
-                else:
-                    df_pendientes = pd.DataFrame()
+            if df_pendientes.empty:
+                st.success("🎉 ¡Excelente! No hay servicios técnicos pendientes.")
+            else:
+                opciones_pendientes = []
+                indices_hoja = []
+                
+                for idx, fila in df_pendientes.iterrows():
+                    indices_hoja.append(idx + 2)
+                    empresa_val = str(fila.get('Empresa', 'N/A'))
+                    agencia_val = str(fila.get('Agencia', 'N/A'))
+                    area_val = str(fila.get('Área', fila.get('Area', 'N/A')))
+                    
+                    ag_limpia = agencia_val.split(" - ")[-1] if " - " in agencia_val else agencia_val
+                    ar_limpia = area_val.split(" - ")[-1] if " - " in area_val else area_val
+                    problema_val = str(fila.get('Problema', fila.get('Problema o Falla', fila.iloc[4] if len(fila) > 4 else 'Sin detalle')))
+                    
+                    etiqueta = f"Fila {idx+2} | {empresa_val} ➔ {ag_limpia} ({ar_limpia}) | {problema_val[:30]}..."
+                    opciones_pendientes.append(etiqueta)
 
-                if df_pendientes.empty:
-                    st.success("🎉 ¡Excelente! No hay servicios técnicos pendientes.")
-                else:
-                    opciones_pendientes = []
-                    indices_hoja = []
+                seleccion_idx = st.selectbox(
+                    "Selecciona el Servicio Pendiente a Completar:",
+                    options=range(len(opciones_pendientes)),
+                    format_func=lambda i: opciones_pendientes[i],
+                    key="select_servicio_atender"
+                )
 
-                    for idx, fila in df_pendientes.iterrows():
-                        indices_hoja.append(idx + 2)
-                        empresa_val = str(fila.get('Empresa', 'N/A'))
-                        agencia_val = str(fila.get('Agencia', 'N/A'))
-                        area_val = str(fila.get('Área', fila.get('Area', 'N/A')))
+                fila_num_hoja = indices_hoja[seleccion_idx]
+                servicio_seleccionado = df_pendientes.iloc[seleccion_idx]
 
-                        ag_limpia = agencia_val.split(" - ")[-1] if " - " in agencia_val else agencia_val
-                        ar_limpia = area_val.split(" - ")[-1] if " - " in area_val else area_val
-                        prob_val = str(fila.get('Problema', fila.get('Problema o Falla', fila.iloc[4] if len(fila) > 4 else 'Sin detalle')))
+                emp_sel = str(servicio_seleccionado.get('Empresa', 'N/A'))
+                ag_raw = str(servicio_seleccionado.get('Agencia', 'N/A'))
+                ar_raw = str(servicio_seleccionado.get('Área', servicio_seleccionado.get('Area', 'N/A')))
+                
+                ag_sel = ag_raw.split(" - ")[-1] if " - " in ag_raw else ag_raw
+                ar_sel = ar_raw.split(" - ")[-1] if " - " in ar_raw else ar_raw
 
-                        etiqueta = f"[Fila {idx+2}] | {empresa_val} ➔ {ag_limpia} ({ar_limpia}) | {prob_val[:30]}..."
-                        opciones_pendientes.append(etiqueta)
+                fec_sel = servicio_seleccionado.get('Fecha Solicitud', 'N/A')
+                prob_sel = str(servicio_seleccionado.get('Problema', 'N/A'))
 
-                    seleccion_idx = st.selectbox(
-                        "Selecciona el Servicio Pendiente a Completar:",
-                        options=range(len(opciones_pendientes)),
-                        format_func=lambda i: opciones_pendientes[i],
-                        key="select_servicio_atender"
+                st.markdown("---")
+                st.markdown("### 📌 Detalle de la Solicitud Seleccionada")
+                st.write(f"🏢 **Empresa:** {emp_sel} | 📍 **Agencia:** {ag_sel} | 🚪 **Área:** {ar_sel}")
+                st.write(f"📅 **Fecha y Hora de Solicitud:** {fec_sel}")
+                st.warning(f"🛠️ **Problema Reportado:** {prob_sel}")
+
+                st.markdown("### 📝 Datos de la Atención Técnica")
+                
+                col_t1, col_t2 = st.columns(2)
+                
+                with col_t1:
+                    lista_usuarios_sistema = []
+                    if 'hoja_usuarios' in locals():
+                        try:
+                            df_u = pd.DataFrame(hoja_usuarios.get_all_records())
+                            if not df_u.empty and "Usuario" in df_u.columns:
+                                lista_usuarios_sistema = df_u["Usuario"].tolist()
+                        except:
+                            pass
+                    
+                    usr_actual = st.session_state.get("usuario_actual", "admin")
+                    if usr_actual not in lista_usuarios_sistema:
+                        lista_usuarios_sistema.append(usr_actual)
+                    
+                    idx_def = lista_usuarios_sistema.index(usr_actual) if usr_actual in lista_usuarios_sistema else 0
+
+                    tecnico_atendio = st.selectbox(
+                        "Técnico Responsable:",
+                        options=lista_usuarios_sistema,
+                        index=idx_def,
+                        key="tec_nombre_select"
                     )
 
-                    fila_num_hoja = indices_hoja[seleccion_idx]
-                    servicio_seleccionado = df_pendientes.iloc[seleccion_idx]
+                    tipo_operacion = st.selectbox(
+                        "Tipo de Operación / Destino:",
+                        options=["Servicio Técnico Regular", "Venta de Insumo/Repuesto", "Alquiler de Equipo/Insumo"],
+                        key="tec_tipo_operacion"
+                    )
 
-                    emp_sel = str(servicio_seleccionado.get('Empresa', 'N/A'))
-                    ag_raw = str(servicio_seleccionado.get('Agencia', 'N/A'))
-                    ar_raw = str(servicio_seleccionado.get('Área', servicio_seleccionado.get('Area', 'N/A')))
-                    fec_sel = servicio_seleccionado.get('Fecha Solicitud', 'N/A')
-                    prob_sel = str(servicio_seleccionado.get('Problema', 'N/A'))
+                with col_t2:
+                    col_f_trab, col_h_trab = st.columns(2)
+                    with col_f_trab:
+                        fecha_trabajo = st.date_input("Fecha:", value=obtener_hora_local_bo().date(), key="tec_fecha")
+                    with col_h_trab:
+                        hora_trabajo = st.time_input("Hora:", value=obtener_hora_local_bo().time(), key="tec_hora")
 
-                    ag_sel = ag_raw.split(" - ")[-1] if " - " in ag_raw else ag_raw
-                    ar_sel = ar_raw.split(" - ")[-1] if " - " in ar_raw else ar_raw
+                lista_insumos_disponibles = df_insumos["Nombre"].tolist() if 'df_insumos' in locals() and not df_insumos.empty else []
+                
+                insumos_usados = st.multiselect(
+                    "Insumos / Repuestos Utilizados:",
+                    options=lista_insumos_disponibles,
+                    placeholder="Selecciona uno o varios repuestos...",
+                    key="tec_insumos_multi"
+                )
 
+                insumos_texto = ", ".join(insumos_usados) if insumos_usados else "Ninguno"
+
+                # 📊 CAMPOS DINÁMICOS QUE SE ACTIVAN SI ELIGE ALQUILER
+                cnt_ant, cnt_act, paginas_impresas, precio_facturado = 0, 0, 0, 0.0
+
+                if "Alquiler" in tipo_operacion:
                     st.markdown("---")
-                    st.markdown("### 📌 Detalle de la Solicitud Seleccionada")
-                    st.write(f"🏢 **Empresa:** {emp_sel} | 📍 **Agencia:** {ag_sel} | 🚪 **Área:** {ar_sel}")
-                    st.write(f"📅 **Fecha Solicitud:** {fec_sel}")
-                    st.warning(f"⚠️ **Problema Reportado:** {prob_sel}")
+                    st.markdown("### 📊 Control de Contadores (Alquiler)")
 
-                    st.markdown("### 📝 Datos de la Atención Técnica")
-                    col_t1, col_t2 = st.columns(2)
-
-                    with col_t1:
-                        tecnico_atendio = st.text_input("Técnico Responsable:", value=st.session_state.get("usuario_actual", "Técnico"))
-                        tipo_operacion = st.selectbox(
-                            "Tipo de Operación / Destino:",
-                            ["Servicio Técnico Regular", "Alquiler de Equipo/Insumo", "Venta de Insumo/Repuesto"],
-                            key="tec_tipo_operacion"
-                        )
-
-                    with col_t2:
-                        col_f_trab, col_h_trab = st.columns(2)
-                        with col_f_trab:
-                            fecha_trabajo = st.date_input("Fecha:", value=obtener_hora_local_bo().date(), key="tec_fecha")
-                        with col_h_trab:
-                            hora_trabajo = st.time_input("Hora:", value=obtener_hora_local_bo().time(), key="tec_hora")
-
-                    df_insumos_local = obtener_insumos()
-                    lista_insumos_disponibles = df_insumos_local["Nombre"].unique().tolist() if not df_insumos_local.empty else []
-
-                    insumos_usados = st.multiselect(
-                        "Insumos / Repuestos Utilizados:",
-                        options=lista_insumos_disponibles,
-                        placeholder="Selecciona uno o varios repuestos...",
-                        key="tec_insumos_multi"
-                    )
-
-                    insumos_texto = ", ".join(insumos_usados) if insumos_usados else "Ninguno"
-
-                    cnt_ant = 0
-                    cnt_act = 0
-                    precio_fac = 0.0
-
-                    if "Alquiler" in tipo_operacion:
-                        st.markdown("---")
-                        st.markdown("### 📊 Control de Contadores (Alquiler)")
-
-                        insumo_ref = insumos_usados[0] if insumos_usados else ""
-                        sugerencia_ant = 0
-                        if insumo_ref:
-                            sugerencia_ant = obtener_ultimo_contador(emp_sel, ag_sel, insumo_ref)
-                            st.success(f"📈 **Historial Encontrado:** Último contador para **{insumo_ref}**: `{sugerencia_ant}`")
+                    # 1. Tomamos el primer insumo seleccionado (si seleccionó alguno) para buscar su historial
+                    insumo_ref = insumos_usados[0] if insumos_usados else ""
+                    
+                    sugerencia_ant = 0
+                    if insumo_ref:
+                        # Usamos la función existente pasando los datos de la solicitud atendida
+                        ultimo_reg = obtener_ultimo_alquiler(insumo_ref, emp_sel, ag_sel, ar_sel)
+                        
+                        if ultimo_reg is not None:
+                            try:
+                                sugerencia_ant = int(ultimo_reg["Contador Actual"])
+                                st.success(f"🔍 ¡Historial Encontrado! Último contador para **{insumo_ref}**: **{sugerencia_ant}**")
+                            except Exception:
+                                sugerencia_ant = 0
                         else:
-                            st.info("💡 Selecciona un insumo arriba para buscar su contador automáticamente.")
+                            st.warning(f"⚠️ No se encontró historial previo de **{insumo_ref}** en {emp_sel} - {ag_sel} ({ar_sel}). Se iniciará en 0.")
+                    else:
+                        st.info("💡 Selecciona un insumo arriba para buscar su contador anterior automáticamente.")
 
-                        col_alq1, col_alq2, col_alq3 = st.columns(3)
-                        with col_alq1:
-                            cnt_ant = st.number_input("Contador Anterior:", min_value=0, value=int(sugerencia_ant), key="tec_cnt_ant")
-                        with col_alq2:
-                            cnt_act = st.number_input("Contador Actual (Lectura de hoy):", min_value=int(cnt_ant), value=int(cnt_ant), key="tec_cnt_act")
-                        with col_alq3:
-                            precio_fac = st.number_input("Precio Facturado (Bs.):", min_value=0.0, step=10.0, value=0.0, key="tec_precio_alq")
+                    # 2. Renderizamos los inputs con la sugerencia automática
+                    col_alq1, col_alq2, col_alq3 = st.columns(3)
+                    
+                    with col_alq1:
+                        cnt_ant = st.number_input(
+                            "Contador Anterior:", 
+                            min_value=0, 
+                            value=int(sugerencia_ant), 
+                            key="tec_cnt_ant"
+                        )
+                        
+                    with col_alq2:
+                        cnt_act = st.number_input(
+                            "Contador Actual (Lectura de hoy):", 
+                            min_value=int(cnt_ant), 
+                            value=int(cnt_ant), 
+                            key="tec_cnt_act"
+                        )
+                        
+                    with col_alq3:
+                        precio_facturado = st.number_input(
+                            "Precio Facturado (Bs.):", 
+                            min_value=0.0, 
+                            value=0.0, 
+                            step=10.0, 
+                            key="tec_precio_alq"
+                        )
+                    
+                    paginas_impresas = max(0, cnt_act - cnt_ant)
+                    st.info(f"📄 **Páginas Impresas Calculadas:** {paginas_impresas} págs.")
 
-                        paginas_impresas = max(0, cnt_act - cnt_ant)
-                        st.info(f"📄 **Páginas Impresas Calculadas:** `{paginas_impresas}` págs.")
+                st.markdown("---")
+                btn_completar_servicio = st.button("✅ Marcar Servicio como COMPLETADO y Registrar Movimiento")
 
-                    elif "Venta" in tipo_operacion:
-                        st.markdown("---")
-                        st.markdown("### 💰 Detalles de Venta")
-                        precio_fac = st.number_input("Precio Total de Venta (Bs.):", min_value=0.0, step=5.0, value=0.0, key="tec_precio_vta")
+                if btn_completar_servicio:
+                    fecha_str_limpia = fecha_trabajo.strftime('%Y-%m-%d')
+                    fecha_hora_realizado = f"{fecha_str_limpia} {hora_trabajo.strftime('%H:%M')}"
+                    
+                    # 1️⃣ Actualizar Hoja de Servicios
+                    hoja_servicios.update_cell(fila_num_hoja, 6, tecnico_atendio)
+                    hoja_servicios.update_cell(fila_num_hoja, 7, f"[{tipo_operacion}] {insumos_texto}")
+                    hoja_servicios.update_cell(fila_num_hoja, 8, fecha_hora_realizado)
+                    hoja_servicios.update_cell(fila_num_hoja, 9, "Completado")
 
-                    st.markdown("---")
-                    btn_completar_servicio = st.button("✅ Marcar Servicio como COMPLETADO y Registrar Movimiento")
+                    # 2️⃣ Descontar TODOS los insumos seleccionados en el stock
+                    if insumos_usados and 'hoja_insumos' in locals():
+                        try:
+                            datos_insumos = hoja_insumos.get_all_records()
+                            
+                            for insumo_nom in insumos_usados:
+                                for idx_ins, fila_ins in enumerate(datos_insumos):
+                                    nombre_item = str(fila_ins.get("Nombre", fila_ins.get("Insumo", ""))).strip()
+                                    
+                                    if nombre_item.lower() == insumo_nom.strip().lower():
+                                        col_stock_key = [k for k in fila_ins.keys() if "stock" in str(k).lower() or "cantidad" in str(k).lower()]
+                                        
+                                        if col_stock_key:
+                                            campo_stock = col_stock_key[0]
+                                            stock_actual = int(fila_ins[campo_stock]) if str(fila_ins[campo_stock]).isdigit() else 0
+                                            nuevo_stock = max(0, stock_actual - 1)
+                                            
+                                            fila_ins[campo_stock] = nuevo_stock
+                                            headers = list(fila_ins.keys())
+                                            num_columna = headers.index(campo_stock) + 1
+                                            num_fila = idx_ins + 2
+                                            
+                                            hoja_insumos.update_cell(num_fila, num_columna, nuevo_stock)
+                                            break
+                        except Exception as e:
+                            st.error(f"⚠️ Error al actualizar stock de insumos: {e}")
 
-                    if btn_completar_servicio:
-                        fecha_str_limpia = fecha_trabajo.strftime('%Y-%m-%d')
-                        fecha_hora_realizado = f"{fecha_str_limpia} {hora_trabajo.strftime('%H:%M')}"
+                    # 3️⃣ Registrar en la Hoja de Alquileres, Ventas o Historial General
+                    try:
+                        # Si eligió Alquiler -> Guarda los contadores en la pestaña de Alquileres
+                        if "Alquiler" in tipo_operacion and 'hoja_alquileres' in locals():
+                            nueva_fila_alq = [
+                                fecha_str_limpia,
+                                emp_sel,
+                                ag_sel,
+                                ar_sel,
+                                insumos_texto,
+                                1,
+                                cnt_ant,
+                                cnt_act,
+                                paginas_impresas,
+                                precio_facturado,
+                                tecnico_atendio,
+                                "Activo"
+                            ]
+                            hoja_alquileres.append_row(nueva_fila_alq)
 
-                        # 1. Actualizar Hoja de Servicios
-                        hoja_servicios.update_cell(fila_num_hoja, 6, tecnico_atendio)
-                        hoja_servicios.update_cell(fila_num_hoja, 7, f"[{tipo_operacion}] {insumos_texto}")
-                        hoja_servicios.update_cell(fila_num_hoja, 8, fecha_hora_realizado)
-                        hoja_servicios.update_cell(fila_num_hoja, 9, "Completado")
+                        # Si eligió Venta
+                        elif "Venta" in tipo_operacion and 'hoja_ventas' in locals():
+                            nueva_fila_vta = [
+                                fecha_str_limpia,
+                                emp_sel,
+                                ag_sel,
+                                ar_sel,
+                                insumos_texto,
+                                1,
+                                tecnico_atendio
+                            ]
+                            hoja_ventas.append_row(nueva_fila_vta)
 
-                        # 2. Descontar Stock e Historiales
-                        motivo_proc = "Alquiler" if "Alquiler" in tipo_operacion else ("Venta" if "Venta" in tipo_operacion else "Mantenimiento / Soporte Técnico")
+                        # También enviamos copia al Historial General / Movimientos si existe
+                        if 'hoja_movimientos' in locals():
+                            nueva_fila_mov = [
+                                fecha_str_limpia,
+                                tipo_operacion,
+                                emp_sel,
+                                ag_sel,
+                                insumos_texto,
+                                1,
+                                tecnico_atendio
+                            ]
+                            hoja_movimientos.append_row(nueva_fila_mov)
 
-                        for insumo_nom in insumos_usados:
-                            datos_ins = df_insumos_local[df_insumos_local["Nombre"] == insumo_nom]
-                            if not datos_ins.empty:
-                                ins_id = datos_ins.iloc[0]["ID"]
-                                procesar_salida_insumo(
-                                    id_insumo=ins_id,
-                                    nombre_insumo=insumo_nom,
-                                    cant_movida=1,
-                                    motivo=motivo_proc,
-                                    empresa=emp_sel,
-                                    agencia=ag_sel,
-                                    area=ar_sel,
-                                    contador_anterior=cnt_ant,
-                                    contador_actual=cnt_act,
-                                    dias=30,
-                                    precio_unitario=precio_fac,
-                                    ticket_id=f"Fila-{fila_num_hoja}"
-                                )
+                    except Exception as e:
+                        st.warning(f"⚠️ Nota al guardar en reportes: {e}")
 
-                        st.success("🎉 ¡Servicio completado! Se actualizaron los contadores, ventas/alquileres e inventarios.")
-                        st.rerun()
+                    st.success("🎉 ¡Servicio completado! Se registraron los datos en Historial de Alquileres y se actualizó el stock.")
+                    st.rerun()
 
-        except Exception as e:
-            st.error(f"⚠️ Error al procesar atención de servicios: {e}")
-
-    # ==============================================================================
-    # PARTE 3: HISTORIAL GENERAL DE SERVICIOS (CON FILTROS Y EMOJIS)
-    # ==============================================================================
+    # ---------------------------------------------------------
+    # PARTE 3: HISTORIAL GENERAL DE SERVICIOS (LIMPIO Y VISUAL)
+    # ---------------------------------------------------------
     with subtab_historial:
-        st.subheader("📋 Historial Completo de Servicios")
+        st.subheader("📊 Historial Completo de Servicios")
         st.caption("Consulta el estado general de todas las atenciones registradas.")
 
-        try:
-            datos_historial = hoja_servicios.get_all_records()
-            df_historial = pd.DataFrame(datos_historial)
+        datos_historial = hoja_servicios.get_all_records()
+        df_historial = pd.DataFrame(datos_historial)
 
-            if df_historial.empty:
-                st.info("ℹ️ No hay atenciones técnicas registradas aún.")
-            else:
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    filtro_estado = st.selectbox("Filtrar por Estado:", ["Todos", "Pendiente", "Completado"], key="filtro_est_hist")
-                with col_f2:
-                    empresas_unicas = list(df_historial["Empresa"].unique()) if "Empresa" in df_historial.columns else []
-                    filtro_empresa = st.selectbox("Filtrar por Empresa:", ["Todas"] + empresas_unicas, key="filtro_emp_hist")
+        if df_historial.empty:
+            st.info("No hay atenciones técnicas registradas aún.")
+        else:
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                filtro_estado = st.selectbox("Filtrar por Estado:", ["Todos", "Pendiente", "Completado"], key="filtro_est_hist")
+            with col_f2:
+                filtro_empresa = st.selectbox("Filtrar por Empresa:", ["Todas"] + list(df_historial["Empresa"].unique()), key="filtro_emp_hist")
 
-                df_filtrado = df_historial.copy()
+            df_filtrado = df_historial.copy()
 
-                if filtro_estado != "Todos" and "Estado" in df_filtrado.columns:
-                    df_filtrado = df_filtrado[df_filtrado["Estado"] == filtro_estado]
+            if filtro_estado != "Todos":
+                df_filtrado = df_filtrado[df_filtrado["Estado"] == filtro_estado]
 
-                if filtro_empresa != "Todas" and "Empresa" in df_filtrado.columns:
-                    df_filtrado = df_filtrado[df_filtrado["Empresa"] == filtro_empresa]
+            if filtro_empresa != "Todas":
+                df_filtrado = df_filtrado[df_filtrado["Empresa"] == filtro_empresa]
 
-                # Limpieza visual para Agencia y Área
-                if "Agencia" in df_filtrado.columns:
-                    df_filtrado["Agencia"] = df_filtrado["Agencia"].astype(str).apply(lambda x: x.split(" - ")[-1] if " - " in x else x)
+            # --- LIMPIEZA VISUAL DE DATOS PARA LA TABLA ---
+            if "Agencia" in df_filtrado.columns:
+                df_filtrado["Agencia"] = df_filtrado["Agencia"].astype(str).apply(lambda x: x.split(" - ")[-1] if " - " in x else x)
+            
+            col_area_name = "Área" if "Área" in df_filtrado.columns else "Area" if "Area" in df_filtrado.columns else None
+            if col_area_name:
+                df_filtrado[col_area_name] = df_filtrado[col_area_name].astype(str).apply(lambda x: x.split(" - ")[-1] if " - " in x else x)
 
-                col_area_name = "Área" if "Área" in df_filtrado.columns else ("Area" if "Area" in df_filtrado.columns else None)
-                if col_area_name:
-                    df_filtrado[col_area_name] = df_filtrado[col_area_name].astype(str).apply(lambda x: x.split(" - ")[-1] if " - " in x else x)
+            # --- APLICAR EMOJIS AL ESTADO ---
+            if "Estado" in df_filtrado.columns:
+                df_filtrado["Estado"] = df_filtrado["Estado"].apply(
+                    lambda x: "🔴 Pendiente" if x == "Pendiente" else ("✅ Completado" if x == "Completado" else x)
+                )
 
-                # Aplicar emojis al estado
-                if "Estado" in df_filtrado.columns:
-                    df_filtrado["Estado"] = df_filtrado["Estado"].apply(
-                        lambda x: "🔴 Pendiente" if str(x).strip() == "Pendiente" else ("🟢 Completado" if str(x).strip() == "Completado" else x)
-                    )
-
-                st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
-
-        except Exception as e:
-            st.error(f"Error al cargar el historial de servicios: {e}")
+            # Mostrar la tabla final limpia y visual
+            st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
 
