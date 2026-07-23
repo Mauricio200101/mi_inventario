@@ -273,7 +273,7 @@ def check_password():
     if st.button("Ingresar"):
         df_users = obtener_usuarios()
         pass_input_hash = encriptar_password(password_input)
-        usuario_valido = df_users[(df_users["Usuario"] == usuario_input) & (df_users["Contraseña"] == pass_input_hash)]
+        usuario_valido = df_users[(df_users["Usuario"] == usuario_input) & (df_users["Contraseña"] == str(password_input))]
         
         if not usuario_valido.empty:
             st.session_state["logged_in"] = True
@@ -343,115 +343,105 @@ def eliminar_insumo(id_insumo):
     return False
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
-def obtener_ultimo_contador(empresa, agencia, insumo):
-    """Busca en la pestaña de Alquileres el último Contador Actual."""
+def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
+    """
+    Busca en la pestaña de Alquileres asignando correctamente Agencia y Área.
+    """
     try:
         datos = hoja_alquileres.get_all_values()
         if not datos or len(datos) <= 1:
-            return 0
-
+            return None
+        
         busq_insumo = str(insumo).strip().lower()
         busq_empresa = str(empresa).strip().lower()
+        
+        # Leemos los selectores tal cual entran (sin intercambiarlos)
         busq_agencia = str(agencia).split(" - ")[-1].strip().lower() if agencia else ""
+        busq_area = str(area).split(" - ")[-1].strip().lower() if area else ""
 
         for fila in reversed(datos[1:]):
-            if len(fila) < 9:
+            if len(fila) < 6:
                 continue
+            
+            r_insumo = str(fila[1]).strip().lower()   # Columna B: Insumo
+            r_empresa = str(fila[3]).strip().lower()  # Columna D: Empresa Destino
+            
+            # Columna E es Agencia, Columna F es Área en tu Google Sheets
+            r_agencia = str(fila[4]).split(" - ")[-1].strip().lower() 
+            r_area = str(fila[5]).split(" - ")[-1].strip().lower()    
 
-            r_insumo = str(fila[1]).strip().lower()
-            r_empresa = str(fila[3]).strip().lower()
-            r_agencia = str(fila[4]).split(" - ")[-1].strip().lower()
+            # Si al buscar se invierten, probamos ambas combinaciones para ser 100% robustos
+            coincide_sitio = (
+                (r_agencia == busq_agencia and r_area == busq_area) or 
+                (r_agencia == busq_area and r_area == busq_agencia)
+            )
 
-            if r_insumo == busq_insumo and r_empresa == busq_empresa and r_agencia == busq_agencia:
-                return int(fila[8]) if str(fila[8]).isdigit() else 0
-
-        return 0
+            if r_insumo == busq_insumo and r_empresa == busq_empresa and coincide_sitio:
+                columnas = datos[0]
+                return pd.Series(fila, index=columnas)
+                
+        return None
     except Exception as e:
-        print(f"Error al obtener contador: {e}")
-        return 0
-
-
-# --- FUNCIÓN UNIFICADA DE PROCESAMIENTO Y SALIDA DE INSUMOS ---
-def procesar_salida_insumo(id_insumo, nombre_insumo, cant_movida, motivo, empresa="", agencia="", area="", contador_anterior=0, contador_actual=0, dias=0, precio_unitario=0.0, ticket_id=""):
+        st.error(f"Error al buscar historial de contadores: {e}")
+        return None
+def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0, contador_anterior=0, contador_actual=0, paginas=0, dias=0, agencia=""):
     try:
         df_local = obtener_insumos()
         idx_lista = df_local[df_local["ID"].astype(str) == str(id_insumo)].index
-
-        if idx_lista.empty:
-            st.error("❌ No se encontró el ID del insumo en la hoja de cálculo.")
-            return False
-
-        stock_actual = int(df_local.loc[idx_lista[0], "Stock"])
-        cant_int = int(cant_movida)
-
-        if cant_int > stock_actual:
-            st.error(f"❌ Stock insuficiente. Disponible: {stock_actual}, Solicitado: {cant_int}")
-            return False
-
-        nuevo_stock = stock_actual - cant_int
-        fila_sheet = int(idx_lista[0]) + 2
-
-        # 1. Actualiza Stock
-        hoja_insumos.update_cell(fila_sheet, 4, nuevo_stock)
-        fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
-        usuario_actual = st.session_state.get("usuario_actual", "Sistema")
-
-        agencia_limpia = str(agencia).split(" - ")[-1].strip() if agencia else ""
-        area_limpia = str(area).split(" - ")[-1].strip() if area else ""
-        detalle_motivo = f"{motivo} (Ticket: #{ticket_id})" if ticket_id else motivo
-
-        # 2. Historial General
-        hoja_historial.append_row([
-            fecha_actual,
-            nombre_insumo,
-            "Salida",
-            cant_int,
-            nuevo_stock,
-            usuario_actual,
-            detalle_motivo,
-            empresa,
-            agencia_limpia,
-            area_limpia
-        ])
-
-        # 3. Registros específicos
-        if motivo == "Alquiler":
-            paginas_impresas = max(0, int(contador_actual) - int(contador_anterior))
-            hoja_alquileres.append_row([
+        
+        if not idx_lista.empty:
+            fila_sheet = int(idx_lista[0]) + 2
+            
+            hoja_insumos.update_cell(fila_sheet, 4, nuevo_stock)
+            fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Separamos la agencia y el área de forma limpia para el historial
+            agencia_para_historial = agencia if agencia else ""
+            area_para_historial = area_o_precio if area_o_precio else ""
+            
+            hoja_historial.append_row([
                 fecha_actual,
                 nombre_insumo,
-                cant_int,
+                tipo_mov,
+                cant_movida,
+                nuevo_stock,
+                st.session_state["usuario_actual"],
+                motivo,
                 empresa,
-                agencia_limpia,
-                area_limpia,
-                usuario_actual,
-                int(contador_anterior),
-                int(contador_actual),
-                int(paginas_impresas),
-                int(dias)
+                agencia_para_historial,
+                area_para_historial
             ])
-        elif motivo == "Venta":
-            total_venta = float(cant_int) * float(precio_unitario)
-            hoja_ventas.append_row([
-                fecha_actual,
-                nombre_insumo,
-                cant_int,
-                empresa,
-                precio_unitario,
-                total_venta,
-                usuario_actual
-            ])
-
-        st.cache_data.clear()
-        return True
+            
+            if tipo_mov == "Salida":
+                if motivo == "Venta":
+                    total_venta = float(cant_movida) * float(precio_unitario)
+                    hoja_ventas.append_row([
+                        fecha_actual,
+                        nombre_insumo,
+                        cant_movida,
+                        area_o_precio, 
+                        total_venta,
+                        st.session_state["usuario_actual"]
+                    ])
+                elif motivo == "Alquiler":
+                    fila_registro = [
+                    fecha_actual,
+                    nombre_insumo,
+                    cant_movida,
+                    empresa,
+                    str(agencia).split(" - ")[-1].strip(),       # Extrae solo la agencia final
+                    str(area_o_precio).split(" - ")[-1].strip(), # Extrae solo el área final
+                    st.session_state["usuario_actual"],
+                    int(contador_anterior),
+                    int(contador_actual),
+                    int(paginas),
+                    int(dias)
+                    ]
+                    hoja_alquileres.append_row(fila_registro)
+            else:
+                st.error("No se encontró el ID del insumo en la hoja de cálculo.")
     except Exception as e:
-        st.error(f"⚠️ Error al conectar con la base de datos: {e}")
-        return False
-
-
-# Compatibilidad con llamadas antiguas si aún existen en otras pestañas
-actualizar_stock_sheet = procesar_salida_insumo
-obtener_ultimo_alquiler = obtener_ultimo_contador
+        st.error(f"Error al conectar con la base de datos: {e}")
 
 # --- PESTAÑAS DEL SISTEMA ---
 # Asegúrate de que esto esté totalmente a la izquierda (sin sangría/indentación)
