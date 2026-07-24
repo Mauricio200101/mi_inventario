@@ -1639,7 +1639,11 @@ with tab_servicios:
         st.subheader("🛠️ Finalizar o Registrar Trabajo Realizado")
         st.caption("Selecciona un servicio pendiente, define el tipo de trabajo y completa la información requerida.")
 
-        todos_datos = hoja_servicios.get_all_records()
+        @st.cache_data(ttl=60)
+        def obtener_datos_servicios_cacheados():
+            return hoja_servicios.get_all_records()
+
+        todos_datos = obtener_datos_servicios_cacheados()
         df_todos = pd.DataFrame(todos_datos)
 
         if df_todos.empty:
@@ -1749,7 +1753,6 @@ with tab_servicios:
 
                 insumos_texto = ", ".join(insumos_usados) if insumos_usados else "Ninguno"
 
-                # 📊 CAMPOS DINÁMICOS QUE SE ACTIVAN SI ELIGE ALQUILER
                 # 📊 CAMPOS DINÁMICOS QUE SE ACTIVAN SI ELIGE ALQUILER
                 cnt_ant, cnt_act, paginas_impresas, precio_facturado, dias_calculados = 0, 0, 0, 0.0, 0
 
