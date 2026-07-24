@@ -1526,6 +1526,7 @@ with tab_respaldo:
                         hoja_respaldo.update_cell(fila_idx, 6, "Utilizado")
 
                         st.success(f"¡El respaldo de {insumo_bk} se asignó a {agencia_destino_uso} y pasó a Alquileres registrando una duración de {dias_duracion_calculados} días!")
+                        st.cache_data.clear()
                         st.rerun()
 
             else:
@@ -1892,6 +1893,7 @@ with tab_servicios:
 
                     st.success("🎉 ¡Servicio completado! Se registraron los datos correctamente en los Historiales correspondientes y se actualizó el stock.")
                     time.sleep(1.5)
+                    st.cache_data.clear()
                     st.rerun()
 
     # ---------------------------------------------------------
