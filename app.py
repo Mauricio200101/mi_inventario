@@ -17,7 +17,7 @@ st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", l
 def obtener_hora_local_bo():
     """Retorna la fecha y hora actual con la zona horaria de Bolivia (UTC-4)."""
     tz_bo = timezone(timedelta(hours=-4))
-    return datetime.now(tz_bo).strftime('%Y-%m-%d %H:%M:%S')
+    return datetime.now(tz_bo)
 
 # --- FUNCIÓN DE NOTIFICACIONES TELEGRAM (TEXTOS LIMPIOS) ---
 def enviar_notificacion_telegram(empresa, agencia, area, problema, tecnico):
