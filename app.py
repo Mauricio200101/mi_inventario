@@ -1032,6 +1032,7 @@ with tab_reportes:
         try:
             datos_a = hoja_alquileres.get_all_values()
             df_a = pd.DataFrame(datos_a[1:], columns=datos_a[0]) if len(datos_a) > 1 else pd.DataFrame()
+            st.write("📊 Total de filas leídas de Google Sheets:", len(df_a))
         except:
             df_a = pd.DataFrame()
 
