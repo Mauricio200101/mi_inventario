@@ -1846,6 +1846,7 @@ with tab_servicios:
 
                         # A) Si eligió Alquiler -> Guarda en la pestaña de Alquileres con el orden CORRECTO
                         if "Alquiler" in tipo_operacion and 'hoja_alquileres' in locals():
+                            fecha_hora_realizado = f"{fecha_trabajo} {hora_trabajo.strftime('%H:%M:%S')}"
                             nueva_fila_alq = [
                                 fecha_hora_realizado,      # 1. Fecha
                                 insumos_texto,             # 2. Insumo
