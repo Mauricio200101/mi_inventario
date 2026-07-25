@@ -1525,8 +1525,8 @@ with tab_respaldo:
                                     fecha_str = str(ultimo_registro["Fecha"]).strip()
                                     # Extraemos solo la fecha (YYYY-MM-DD)
                                     fecha_anterior_sugerida = fecha_str.split(" ")[0]
-                    except Exception as e:
-                        pass
+                        except Exception as e:
+                            pass
 
                     # Mostramos la fecha del último cambio detectada
                     st.info(f"última fecha de cambio registrada para este insumo: **{fecha_anterior_sugerida}**")
