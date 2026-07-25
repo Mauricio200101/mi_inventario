@@ -1442,18 +1442,19 @@ with tab_respaldo:
                     if not agencias_filtradas:
                         agencias_filtradas = [f"{empresa_elegida} - Principal"]
 
-                    col1, col2 = st.columns(2)
+                    col1, col2, col3 = st.columns(3)
+
                     with col1:
                         agencia_destino_uso = st.selectbox(
-                            "Agencia:", 
-                            agencias_filtradas, 
+                            "Agencia:",
+                            agencias_filtradas,
                             format_func=lambda x: x.replace(empresa_elegida.strip() + " - ", "").strip(),
                             key="backup_agencia_destino"
                         )
-                        
-                    # 2. Filtrado de Áreas según la Agencia seleccionada (se actualiza al instante)
+
+                    # Filtrado de Áreas según la Agencia seleccionada
                     areas_filtradas = [
-                        ar for ar in areas_disponibles 
+                        ar for ar in areas_disponibles
                         if ar.startswith(agencia_destino_uso.strip())
                     ]
                     if not areas_filtradas:
@@ -1461,10 +1462,23 @@ with tab_respaldo:
 
                     with col2:
                         area_destino_uso = st.selectbox(
-                            "Área:", 
-                            areas_filtradas, 
+                            "Área:",
+                            areas_filtradas,
                             format_func=lambda x: x.replace(agencia_destino_uso.strip() + " - ", "").strip(),
                             key="backup_area_destino"
+                        )
+
+                    with col3:
+                        # Obtiene la cantidad máxima disponible del respaldo seleccionado
+                        # (Si tu variable de la fila seleccionada se llama diferente a 'respaldo_sel', ajusta ese nombre)
+                        cant_max = int(respaldo_sel["Cantidad"]) if "Cantidad" in respaldo_sel else 1
+                        cant_a_usar = st.number_input(
+                            "Cantidad a Usar:",
+                            min_value=1,
+                            max_value=cant_max,
+                            value=1,
+                            step=1,
+                            key="backup_cant_usar"
                         )
 
                     st.markdown("#### Control por Fechas y Duración:")
