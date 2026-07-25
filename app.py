@@ -1490,31 +1490,43 @@ with tab_respaldo:
                     try:
                         insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
                         
-                        if 'df_alq_hist' in locals() and not df_alq_hist.empty:
-                            # 1. Extraemos tanto el nombre completo como el nombre corto (sin prefijos)
-                            agencia_corta = agencia_destino_uso.replace(empresa_elegida.strip() + " - ", "").strip()
-                            area_corta = area_destino_uso.replace(agencia_destino_uso.strip() + " - ", "").replace(agencia_corta + " - ", "").strip()
+                        try:
+                            # Extraemos el insumo limpio
+                            insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
 
-                            # 2. Limpiamos espacios en el DataFrame de historial
-                            df_temp = df_alq_hist.copy()
-                            for col in ["Insumo", "Empresa Destino", "Agencia Destino", "Area Destino"]:
-                                if col in df_temp.columns:
-                                    df_temp[col] = df_temp[col].astype(str).str.strip()
+                            if 'df_alq_hist' in locals() and not df_alq_hist.empty:
+                                df_temp = df_alq_hist.copy()
+                                # Limpiamos espacios en blanco de los nombres de columnas
+                                df_temp.columns = [str(col).strip() for col in df_temp.columns]
 
-                            # 3. Filtramos aceptando coincidencia tanto en formato largo como en corto
-                            cond_insumo = df_temp["Insumo"] == insumo_temp.strip()
-                            cond_agencia = df_temp["Agencia Destino"].isin([agencia_destino_uso.strip(), agencia_corta])
-                            cond_area = df_temp["Area Destino"].isin([area_destino_uso.strip(), area_corta])
+                                # Obtenemos las palabras clave finales (ej. "central" y "plataforma p1")
+                                ins_buscado = insumo_temp.strip().lower()
+                                ag_buscada = agencia_destino_uso.split("-")[-1].strip().lower()
+                                ar_buscada = area_destino_uso.split("-")[-1].strip().lower()
 
-                            df_match = df_temp[cond_insumo & cond_agencia & cond_area]
+                                # Función de coincidencia flexible por fila
+                                def coincide_registro(row):
+                                    val_ins = str(row.get("Insumo", "")).strip().lower()
+                                    val_ag  = str(row.get("Agencia Destino", "")).strip().lower()
+                                    val_ar  = str(row.get("Area Destino", "")).strip().lower()
 
-                            if not df_match.empty:
-                                ultimo_registro = df_match.iloc[-1]
-                                fecha_str = str(ultimo_registro["Fecha"])
-                                # Extraemos solo la fecha (YYYY-MM-DD)
-                                fecha_anterior_sugerida = fecha_str.split(" ")[0]
-                    except Exception:
-                        pass
+                                    # Comprueba si el insumo coincide y si las agencias/áreas coinciden parcial o totalmente
+                                    match_ins = (ins_buscado == val_ins)
+                                    match_ag  = (ag_buscada in val_ag) or (val_ag in agencia_destino_uso.lower())
+                                    match_ar  = (ar_buscada in val_ar) or (val_ar in area_destino_uso.lower())
+
+                                    return match_ins and match_ag and match_ar
+
+                                # Aplicamos el filtro flexible
+                                df_match = df_temp[df_temp.apply(coincide_registro, axis=1)]
+
+                                if not df_match.empty:
+                                    ultimo_registro = df_match.iloc[-1]
+                                    fecha_str = str(ultimo_registro["Fecha"]).strip()
+                                    # Extraemos solo la fecha (YYYY-MM-DD)
+                                    fecha_anterior_sugerida = fecha_str.split(" ")[0]
+                        except Exception as e:
+                            pass
 
                     # Mostramos la fecha del último cambio detectada
                     st.info(f"última fecha de cambio registrada para este insumo: **{fecha_anterior_sugerida}**")
