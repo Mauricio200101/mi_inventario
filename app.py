@@ -1788,17 +1788,22 @@ with tab_servicios:
                     else:
                         st.info("💡 Selecciona un insumo arriba para buscar su contador anterior automáticamente.")
 
-                    # 2. Renderizamos los inputs con la sugerencia
+                    # 2. Renderizamos los inputs con la sugerencia (claves dinámicas)
                     col_alq1, col_alq2, col_alq3 = st.columns(3)
                     
+                    # Claves dinámicas que cambian según el insumo y la solicitud
+                    clave_anterior = f"tec_cnt_ant_{insumo_ref}_{seleccion_idx}"
+                    clave_actual = f"tec_cnt_act_{insumo_ref}_{seleccion_idx}"
+                    clave_precio = f"tec_precio_alq_{insumo_ref}_{seleccion_idx}"
+
                     with col_alq1:
-                        cnt_ant = st.number_input("Contador Anterior:", min_value=0, value=int(sugerencia_ant), key="tec_cnt_ant")
+                        cnt_ant = st.number_input("Contador Anterior:", min_value=0, value=int(sugerencia_ant), key=clave_anterior)
                         
                     with col_alq2:
-                        cnt_act = st.number_input("Contador Actual (Lectura de hoy):", min_value=int(cnt_ant), value=int(cnt_ant), key="tec_cnt_act")
+                        cnt_act = st.number_input("Contador Actual (Lectura de hoy):", min_value=int(cnt_ant), value=int(cnt_ant), key=clave_actual)
                         
                     with col_alq3:
-                        precio_facturado = st.number_input("Precio Facturado (Bs.):", min_value=0.0, value=0.0, step=10.0, key="tec_precio_alq")
+                        precio_facturado = st.number_input("Precio Facturado (Bs.):", min_value=0.0, value=0.0, step=10.0, key=clave_precio)
                     
                     paginas_impresas = max(0, cnt_act - cnt_ant)
                     st.info(f"📄 **Páginas Impresas Calculadas:** {paginas_impresas} págs.")
