@@ -1492,8 +1492,9 @@ with tab_respaldo:
                         
                         if 'df_alq_hist' in locals() and not df_alq_hist.empty:
                             df_match = df_alq_hist[
-                                (df_alq_hist["Empresa"].str.strip() == empresa_elegida.strip()) & 
-                                (df_alq_hist["Agencia"].str.strip() == agencia_destino_uso.strip()) & 
+                                (df_alq_hist["Empresa"].str.strip() == empresa_elegida.strip()) &
+                                (df_alq_hist["Agencia"].str.strip() == agencia_destino_uso.strip()) &
+                                (df_alq_hist["Área"].str.strip() == area_destino_uso.strip()) &
                                 (df_alq_hist["Insumo"].str.strip() == insumo_temp.strip())
                             ]
                             if not df_match.empty:
