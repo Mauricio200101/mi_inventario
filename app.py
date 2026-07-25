@@ -1524,24 +1524,34 @@ with tab_respaldo:
                     if btn_activar:
                         fila_idx = int(item_a_usar.split(" - ")[0].replace("Fila ", ""))
                         fila_datos = hoja_respaldo.row_values(fila_idx)
-                        
+
                         insumo_bk = fila_datos[1]
-                        cantidad_bk = fila_datos[2]
+                        cant_disponible = int(fila_datos[2])  # Cantidad total en el backup (ej. 3)
                         empresa_bk = fila_datos[3]
-                        
+
+                        cant_usar = int(cant_a_usar)  # Cantidad que eligió el usuario (ej. 1)
+
                         fecha_actual_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
                         usuario_actual = st.session_state.get("usuario_actual", "admin")
 
-                        # Guardamos en Alquileres (ponemos 0 en contadores si no se usan, y los días calculados al final)
+                        # 1. Guardamos en Alquileres usando 'cant_usar' (la cantidad real utilizada)
                         nueva_fila_alquiler = [
-                            fecha_actual_str, insumo_bk, cantidad_bk, empresa_bk, 
-                            agencia_destino_uso, area_destino_uso, usuario_actual, 
+                            fecha_actual_str, insumo_bk, cant_usar, empresa_bk,
+                            agencia_destino_uso, area_destino_uso, usuario_actual,
                             0, 0, 0, dias_duracion_calculados
                         ]
                         hoja_alquileres.append_row(nueva_fila_alquiler)
-                        hoja_respaldo.update_cell(fila_idx, 6, "Utilizado")
 
-                        st.success(f"¡El respaldo de {insumo_bk} se asignó a {agencia_destino_uso} y pasó a Alquileres registrando una duración de {dias_duracion_calculados} días!")
+                        # 2. Actualizamos la hoja de Respaldo según el consumo
+                        if cant_usar >= cant_disponible:
+                            # Si se usó todo, cambiamos el estado a "Utilizado"
+                            hoja_respaldo.update_cell(fila_idx, 6, "Utilizado")
+                        else:
+                            # Si fue consumo parcial, restamos y actualizamos la columna Cantidad (Columna 3 / 'C')
+                            nueva_cant = cant_disponible - cant_usar
+                            hoja_respaldo.update_cell(fila_idx, 3, nueva_cant)
+
+                        st.success(f"¡Se asignaron {cant_usar} unidad(es) de {insumo_bk} a {agencia_destino_uso} ({area_destino_uso})!")
                         st.cache_data.clear()
                         st.rerun()
 
