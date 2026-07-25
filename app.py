@@ -1491,40 +1491,40 @@ with tab_respaldo:
                         insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
                         
                         try:
-                        # Extraemos el insumo limpio
-                        insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
+                            # Extraemos el insumo limpio
+                            insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
 
-                        if 'df_alq_hist' in locals() and not df_alq_hist.empty:
-                            df_temp = df_alq_hist.copy()
-                            # Limpiamos espacios en blanco de los nombres de columnas
-                            df_temp.columns = [str(col).strip() for col in df_temp.columns]
+                            if 'df_alq_hist' in locals() and not df_alq_hist.empty:
+                                df_temp = df_alq_hist.copy()
+                                # Limpiamos espacios en blanco de los nombres de columnas
+                                df_temp.columns = [str(col).strip() for col in df_temp.columns]
 
-                            # Obtenemos las palabras clave finales (ej. "central" y "plataforma p1")
-                            ins_buscado = insumo_temp.strip().lower()
-                            ag_buscada = agencia_destino_uso.split("-")[-1].strip().lower()
-                            ar_buscada = area_destino_uso.split("-")[-1].strip().lower()
+                                # Obtenemos las palabras clave finales (ej. "central" y "plataforma p1")
+                                ins_buscado = insumo_temp.strip().lower()
+                                ag_buscada = agencia_destino_uso.split("-")[-1].strip().lower()
+                                ar_buscada = area_destino_uso.split("-")[-1].strip().lower()
 
-                            # Función de coincidencia flexible por fila
-                            def coincide_registro(row):
-                                val_ins = str(row.get("Insumo", "")).strip().lower()
-                                val_ag  = str(row.get("Agencia Destino", "")).strip().lower()
-                                val_ar  = str(row.get("Area Destino", "")).strip().lower()
+                                # Función de coincidencia flexible por fila
+                                def coincide_registro(row):
+                                    val_ins = str(row.get("Insumo", "")).strip().lower()
+                                    val_ag  = str(row.get("Agencia Destino", "")).strip().lower()
+                                    val_ar  = str(row.get("Area Destino", "")).strip().lower()
 
-                                # Comprueba si el insumo coincide y si las agencias/áreas coinciden parcial o totalmente
-                                match_ins = (ins_buscado == val_ins)
-                                match_ag  = (ag_buscada in val_ag) or (val_ag in agencia_destino_uso.lower())
-                                match_ar  = (ar_buscada in val_ar) or (val_ar in area_destino_uso.lower())
+                                    # Comprueba si el insumo coincide y si las agencias/áreas coinciden parcial o totalmente
+                                    match_ins = (ins_buscado == val_ins)
+                                    match_ag  = (ag_buscada in val_ag) or (val_ag in agencia_destino_uso.lower())
+                                    match_ar  = (ar_buscada in val_ar) or (val_ar in area_destino_uso.lower())
 
-                                return match_ins and match_ag and match_ar
+                                    return match_ins and match_ag and match_ar
 
-                            # Aplicamos el filtro flexible
-                            df_match = df_temp[df_temp.apply(coincide_registro, axis=1)]
+                                # Aplicamos el filtro flexible
+                                df_match = df_temp[df_temp.apply(coincide_registro, axis=1)]
 
-                            if not df_match.empty:
-                                ultimo_registro = df_match.iloc[-1]
-                                fecha_str = str(ultimo_registro["Fecha"]).strip()
-                                # Extraemos solo la fecha (YYYY-MM-DD)
-                                fecha_anterior_sugerida = fecha_str.split(" ")[0]
+                                if not df_match.empty:
+                                    ultimo_registro = df_match.iloc[-1]
+                                    fecha_str = str(ultimo_registro["Fecha"]).strip()
+                                    # Extraemos solo la fecha (YYYY-MM-DD)
+                                    fecha_anterior_sugerida = fecha_str.split(" ")[0]
                     except Exception as e:
                         pass
 
