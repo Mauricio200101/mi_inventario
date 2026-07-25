@@ -1433,6 +1433,9 @@ with tab_respaldo:
                     ]
                     
                     item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
+                    idx_sel = opciones_items.index(item_a_usar) if item_a_usar in opciones_items else 0
+                    respaldo_sel = df_filtrado_empresa.iloc[idx_sel]
+                    cant_max = int(respaldo_sel["Cantidad"])
                     
                     # 1. Filtrado de Agencias según la Empresa elegida
                     agencias_filtradas = [
@@ -1469,9 +1472,6 @@ with tab_respaldo:
                         )
 
                     with col3:
-                        # Obtiene la cantidad máxima disponible del respaldo seleccionado
-                        # (Si tu variable de la fila seleccionada se llama diferente a 'respaldo_sel', ajusta ese nombre)
-                        cant_max = int(respaldo_sel["Cantidad"]) if "Cantidad" in respaldo_sel else 1
                         cant_a_usar = st.number_input(
                             "Cantidad a Usar:",
                             min_value=1,
