@@ -1490,7 +1490,7 @@ with tab_respaldo:
                     try:
                         insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
                         
-                    try:
+                        try:
                         # Extraemos el insumo limpio
                         insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
 
