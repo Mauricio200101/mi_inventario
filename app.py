@@ -1491,16 +1491,27 @@ with tab_respaldo:
                         insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
                         
                         if 'df_alq_hist' in locals() and not df_alq_hist.empty:
-                            df_match = df_alq_hist[
-                                (df_alq_hist["Empresa Destino"].str.strip() == empresa_elegida.strip()) &
-                                (df_alq_hist["Agencia Destino"].str.strip() == agencia_destino_uso.strip()) &
-                                (df_alq_hist["Área Destino"].str.strip() == area_destino_uso.strip()) &
-                                (df_alq_hist["Insumo"].str.strip() == insumo_temp.strip())
-                            ]
+                            # 1. Extraemos tanto el nombre completo como el nombre corto (sin prefijos)
+                            agencia_corta = agencia_destino_uso.replace(empresa_elegida.strip() + " - ", "").strip()
+                            area_corta = area_destino_uso.replace(agencia_destino_uso.strip() + " - ", "").replace(agencia_corta + " - ", "").strip()
+
+                            # 2. Limpiamos espacios en el DataFrame de historial
+                            df_temp = df_alq_hist.copy()
+                            for col in ["Insumo", "Empresa Destino", "Agencia Destino", "Area Destino"]:
+                                if col in df_temp.columns:
+                                    df_temp[col] = df_temp[col].astype(str).str.strip()
+
+                            # 3. Filtramos aceptando coincidencia tanto en formato largo como en corto
+                            cond_insumo = df_temp["Insumo"] == insumo_temp.strip()
+                            cond_agencia = df_temp["Agencia Destino"].isin([agencia_destino_uso.strip(), agencia_corta])
+                            cond_area = df_temp["Area Destino"].isin([area_destino_uso.strip(), area_corta])
+
+                            df_match = df_temp[cond_insumo & cond_agencia & cond_area]
+
                             if not df_match.empty:
                                 ultimo_registro = df_match.iloc[-1]
                                 fecha_str = str(ultimo_registro["Fecha"])
-                                # Extraemos solo la fecha (YYYY-MM-DD) por si tiene hora
+                                # Extraemos solo la fecha (YYYY-MM-DD)
                                 fecha_anterior_sugerida = fecha_str.split(" ")[0]
                     except Exception:
                         pass
