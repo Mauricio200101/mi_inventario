@@ -11,6 +11,7 @@ import hashlib
 import requests
 import base64
 import streamlit as st
+import os
 
 # 1. Configuración de página
 st.set_page_config(
