@@ -113,18 +113,90 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 # ---------------------------------------------------------
-# VISTA 1: PANTALLA DE LOGIN
+# VISTA 1: PANTALLA DE LOGIN (DISEÑO TARJETA CENTRADA)
 # ---------------------------------------------------------
 if not st.session_state.logged_in:
-    
-    # Formulario de inicio de sesión
-    with st.form("form_login"):
-        col_izq, col_centro, col_der = st.columns([1, 2, 1])
-        with col_centro:
-            try:
-                st.image("logo.jpg", width=180)
-            except Exception:
-                pass
+
+    # Estilos CSS para centrar y estilizar la tarjeta de login
+    st.markdown("""
+    <style>
+        /* Ocultar encabezados de Streamlit */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+
+        /* Contenedor principal del formulario (Tarjeta central) */
+        div[data-testid="stForm"] {
+            max-width: 420px !important;
+            margin: 30px auto !important;
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            border-radius: 18px !important;
+            padding: 25px 30px 30px 30px !important;
+            border: 2px solid #e60000 !important;
+            box-shadow: 0px 0px 25px rgba(230, 0, 0, 0.4) !important;
+        }
+
+        /* Estilo del título dentro de la tarjeta */
+        .login-title {
+            text-align: center;
+            color: #1f2937;
+            font-size: 18px;
+            font-weight: 700;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* Etiquetas de los campos (Usuario / Contraseña) */
+        div[data-testid="stForm"] label p {
+            color: #374151 !important;
+            font-weight: 600 !important;
+            font-size: 14px !important;
+        }
+
+        /* Botón INGRESAR */
+        div[data-testid="stForm"] button {
+            background-color: #d90429 !important;
+            color: white !important;
+            font-weight: bold !important;
+            border-radius: 8px !important;
+            border: none !important;
+            height: 42px !important;
+            margin-top: 10px !important;
+            transition: all 0.3s ease !important;
+        }
+        div[data-testid="stForm"] button:hover {
+            background-color: #ef233c !important;
+            box-shadow: 0px 4px 12px rgba(217, 4, 41, 0.4) !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Columnas para asegurar centrado horizontal perfecto en pantallas anchas
+    col_izq, col_central, col_der = st.columns([1, 2, 1])
+
+    with col_central:
+        with st.form("form_login"):
+            # Logo centrado dentro de la tarjeta
+            logo_col1, logo_col2, logo_col3 = st.columns([1, 2, 1])
+            with logo_col2:
+                try:
+                    st.image("logo.jpg", width=140)
+                except Exception:
+                    pass
+
+            st.markdown("<div class='login-title'>🔑 Acceso al Sistema de Inventario</div>", unsafe_allow_html=True)
+
+            usuario = st.text_input("Usuario:", placeholder="Ej: admin")
+            password = st.text_input("Contraseña:", type="password", placeholder="••••••••")
+
+            btn_ingresar = st.form_submit_button("INGRESAR", use_container_width=True)
+
+            if btn_ingresar:
+                if usuario == "admin" and password == "1234":
+                    st.session_state.logged_in = True
+                    st.rerun()
+                else:
+                    st.error("Usuario o contraseña incorrectos")
 
 # ---------------------------------------------------------
 # VISTA 2: SISTEMA PRINCIPAL (Solo se ve al iniciar sesión)
