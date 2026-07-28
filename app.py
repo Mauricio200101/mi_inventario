@@ -140,12 +140,12 @@ if not st.session_state.logged_in:
                 st.rerun() # Recarga la app para entrar al panel
             else:
                 st.error("Usuario o contraseña incorrectos")
-col_izq, col_centro, col_der = st.columns([1, 2, 1])
-with col_centro:
-    try:
-        st.image("logo.jpg", width=180)
-    except Exception:
-        pass
+        col_izq, col_centro, col_der = st.columns([1, 2, 1])
+        with col_centro:
+            try:
+                st.image("logo.jpg", width=180)
+            except Exception:
+                pass
 
 # ---------------------------------------------------------
 # VISTA 2: SISTEMA PRINCIPAL (Solo se ve al iniciar sesión)
