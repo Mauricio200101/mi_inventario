@@ -331,7 +331,11 @@ def check_password():
     </style>
     """, unsafe_allow_html=True)
 
-    # Logo de alta nitidez
+    col_izq, col_central, col_der = st.columns([1, 2, 1])
+
+    with col_central:
+        with st.form("form_login"):
+            # Logo de alta nitidez
         l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
         with l_col2:
             try:
