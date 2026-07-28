@@ -337,17 +337,17 @@ def check_password():
             if st.form_submit_button("INGRESAR", use_container_width=True):
                 df_users = obtener_usuarios()
                 if df_users is not None and not df_users.empty:
-                    df_users["usuario"] = df_users["usuario"].astype(str).str.strip().str.lower()
+                    df_users["Usuario"] = df_users["Usuario"].astype(str).str.strip().str.lower()
                     df_users["password"] = df_users["password"].astype(str).str.strip()
                     
                     u_ingresado = usuario_input.strip().lower()
                     p_ingresado = password_input.strip()
                     
-                    user_match = df_users[(df_users["usuario"] == u_ingresado) & (df_users["password"] == p_ingresado)]
+                    user_match = df_users[(df_users["Usuario"] == u_ingresado) & (df_users["password"] == p_ingresado)]
                     if not user_match.empty:
                         st.session_state["logged_in"] = True
-                        st.session_state["usuario_actual"] = user_match.iloc[0]["usuario"]
-                        st.session_state["rol_actual"] = user_match.iloc[0]["rol"]
+                        st.session_state["usuario_actual"] = user_match.iloc[0]["Usuario"]
+                        st.session_state["rol_actual"] = user_match.iloc[0]["Rol"]
                         st.rerun()
                     else:
                         st.error("❌ Usuario o contraseña incorrectos")
