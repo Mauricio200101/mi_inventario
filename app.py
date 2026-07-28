@@ -15,51 +15,71 @@ st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", l
 
 st.markdown("""
 <style>
-    /* 1. Fondo gris claro de toda la aplicación */
+    /* 1. Fondo de la aplicación - Plomo claro profesional */
     [data-testid="stAppViewContainer"] {
-        background-color: #f4f6f9 !important;
+        background-color: #e9ecef !important;
     }
-    
-    /* Hacer transparente la barra superior predeterminada */
+
+    /* Ocultar barra superior por defecto */
     header[data-testid="stHeader"] {
         background-color: rgba(0,0,0,0) !important;
     }
 
-    /* 2. Personalización del Sidebar (Menú Lateral) */
+    /* 2. Menú Lateral (Sidebar) - Negro con borde Rojo */
     [data-testid="stSidebar"] {
-        background-color: #1e1e2d !important;
+        background-color: #121212 !important;
+        border-right: 3px solid #dc2626 !important;
     }
     [data-testid="stSidebar"] * {
         color: #ffffff !important;
     }
 
-    /* 3. Convertir Formularios y Contenido de Pestañas en Tarjetas (Cards) */
+    /* 3. Tarjetas, Formularios y Pestañas - Fondo blanco con borde plomo */
     div[data-testid="stForm"],
     div.stTabs [data-baseweb="tab-panel"] {
         background-color: #ffffff !important;
-        border-radius: 14px !important;
+        border-radius: 12px !important;
         padding: 24px !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04) !important;
-        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06) !important;
+        border: 1px solid #cbd5e1 !important;
         margin-top: 10px;
     }
 
-    /* 4. Rediseño elegante para las Pestañas superiores (Tabs) */
+    /* 4. Estilo para Pestañas (Tabs) - Plomo y Rojo */
     button[data-baseweb="tab"] {
         background-color: transparent !important;
         border-radius: 8px !important;
-        padding: 8px 16px !important;
+        padding: 8px 18px !important;
         font-weight: 600 !important;
-        color: #64748b !important;
-    }
-    
-    button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: #ffffff !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
-        color: #2563eb !important;
+        color: #475569 !important; /* Plomo oscuro */
     }
 
-    /* 5. Estilo para alertas/mensajes */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        background-color: #dc2626 !important; /* Rojo principal */
+        color: #ffffff !important;
+        box-shadow: 0 3px 10px rgba(220, 38, 38, 0.3) !important;
+    }
+
+    /* 5. Botones generales en estilo Rojo */
+    .stButton > button {
+        background-color: #dc2626 !important;
+        color: #ffffff !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-weight: 600 !important;
+        transition: background-color 0.2s ease;
+    }
+    .stButton > button:hover {
+        background-color: #991b1b !important; /* Rojo más oscuro al pasar el cursor */
+        color: #ffffff !important;
+    }
+
+    /* Títulos principales en Plomo Oscuro / Negro */
+    h1, h2, h3 {
+        color: #0f172a !important;
+    }
+
+    /* Mensajes de alerta */
     .stAlert {
         border-radius: 10px !important;
     }
