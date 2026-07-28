@@ -284,7 +284,7 @@ def check_password():
     if st.session_state["logged_in"]:
         return True
 
-    # Estilos para la tarjeta centrada y elegante
+    # Estilos para la tarjeta centrada y elegante + nitidez del logo
     st.markdown("""
     <style>
         #MainMenu, footer, header {visibility: hidden;}
@@ -308,25 +308,11 @@ def check_password():
             margin-bottom: 20px;
         }
 
-        div[data-testid="stForm"] label p {
-            color: #374151 !important;
-            font-weight: 600 !important;
-            font-size: 14px !important;
-        }
-
-        div[data-testid="stForm"] button {
-            background-color: #d90429 !important;
-            color: white !important;
-            font-weight: bold !important;
-            border-radius: 8px !important;
-            border: none !important;
-            height: 42px !important;
-            margin-top: 10px !important;
-            transition: all 0.3s ease !important;
-        }
-        div[data-testid="stForm"] button:hover {
-            background-color: #ef233c !important;
-            box-shadow: 0px 4px 12px rgba(217, 4, 41, 0.4) !important;
+        /* Fuerza la nitidez del logo */
+        [data-testid="stImage"] > img {
+            width: 150px;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crispedges;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -335,32 +321,37 @@ def check_password():
 
     with col_central:
         with st.form("form_login"):
-            # Logo de alta nitidez
+            # Logo centrado en alta definición
             l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
             with l_col2:
-                try:
-                    # Usamos use_container_width=True pero limitamos el tamaño en CSS
-                    # para forzar al servidor a enviar la mejor imagen posible.
-                    st.markdown(
-                        """
-                        <style>
-                            [data-testid="stImage"] > img {
-                                width: 150px;
-                                image-rendering: -webkit-optimize-contrast; /* Para Safari/Chrome */
-                                image-rendering: crispedges;              /* Para Firefox */
-                            }
-                        </style>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                    
-                    # OJO: Cambiamos 'logo.png' por 'logo_highres.png' si tienes una versión grande.
-                    # Si solo tienes 'logo.png', úsalo, pero usa use_container_width=True.
+                if os.path.exists("logo.png"):
                     st.image("logo.png", use_container_width=True)
+
+            st.markdown("<div class='login-title'>🔑 Acceso al Sistema de Inventario</div>", unsafe_allow_html=True)
+
+            # Campos de texto y botón
+            usuario_input = st.text_input("Usuario:", placeholder="Ingresa tu usuario")
+            password_input = st.text_input("Contraseña:", type="password", placeholder="••••••••")
+
+            if st.form_submit_button("INGRESAR", use_container_width=True):
+                df_users = obtener_usuarios()
+                if df_users is not None and not df_users.empty:
+                    df_users["usuario"] = df_users["usuario"].astype(str).str.strip().str.lower()
+                    df_users["password"] = df_users["password"].astype(str).str.strip()
                     
-                except Exception as e:
-                    # Si no lo encuentra, mostramos un aviso sutil o nada
-                    pass
+                    u_ingresado = usuario_input.strip().lower()
+                    p_ingresado = password_input.strip()
+                    
+                    user_match = df_users[(df_users["usuario"] == u_ingresado) & (df_users["password"] == p_ingresado)]
+                    if not user_match.empty:
+                        st.session_state["logged_in"] = True
+                        st.session_state["usuario_actual"] = user_match.iloc[0]["usuario"]
+                        st.session_state["rol_actual"] = user_match.iloc[0]["rol"]
+                        st.rerun()
+                    else:
+                        st.error("❌ Usuario o contraseña incorrectos")
+                else:
+                    st.error("⚠️ No se pudo consultar la base de datos de usuarios")
 
     return False
 
