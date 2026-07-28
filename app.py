@@ -603,7 +603,6 @@ else:
 
     seccion = st.session_state["menu_activo"]
 
-  *Pestaña de Operaciones de Stock*:
     
     if seccion == "Operaciones de Stock":
         if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
