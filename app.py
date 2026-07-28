@@ -168,14 +168,6 @@ else:
     st.title("Bienvenido al Sistema de Inventario")
     # AQUÍ CONTINÚA TODO EL CÓDIGO DE TUS PESTAÑAS Y FUNCIONES ORIGINALES
 
-/* Controlar el tamaño y centrado del logo dentro del login */
-    div[data-testid="stForm"] img {
-        max-width: 180px !important;
-        height: auto !important;
-        display: block !important;
-        margin: 0 auto 15px auto !important;
-    }
-
 # --- AJUSTE DE ZONA HORARIA (BOLIVIA UTC-4) ---
 def obtener_hora_local_bo():
     """Retorna la fecha y hora actual con la zona horaria de Bolivia (UTC-4)."""
