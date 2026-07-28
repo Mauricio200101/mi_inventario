@@ -514,24 +514,91 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
 
-# --- PESTAÑAS DEL SISTEMA ---
-# Asegúrate de que esto esté totalmente a la izquierda (sin sangría/indentación)
+# --- MENÚ PRINCIPAL DE TARJETAS FLOTANTES ---
+if "menu_activo" not in st.session_state:
+    st.session_state["menu_activo"] = "Inicio"
+
+# Estilo CSS para las tarjetas flotantes
+st.markdown("""
+<style>
+    .menu-card {
+        background-color: white;
+        padding: 24px;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+        border: 1px solid #eaeaea;
+        text-align: center;
+        margin-bottom: 15px;
+        transition: all 0.3s ease;
+    }
+    .menu-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(230, 0, 0, 0.15);
+        border-color: #e60000;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 df_insumos = obtener_insumos()
 empresas_disponibles, areas_disponibles, agencias_disponibles = obtener_parametros()
-tab_operaciones, tab_valorizacion, tab_rendimiento, tab_respaldo, tab_servicios, tab_reportes, tab_usuarios = st.tabs([
-    "Operaciones de Stock",
-    "Valorización del Inventario",
-    "Rendimiento de Insumos",
-    "Insumos de Respaldo",
-    "🛠️ Servicios y Soporte",
-    "Reportes por Fecha / Edición",
-    "Configuración y Usuarios"
-])
 
-# ==========================================
-# 1. PESTAÑA DE OPERACIONES DE STOCK
-# ==========================================
-with tab_operaciones:
+if st.session_state["menu_activo"] == "Inicio":
+    st.markdown("<h2 style='text-align: center; color: #1f2937;'>📋 Menú Principal del Sistema</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #6b7280; margin-bottom: 30px;'>Selecciona un módulo para acceder a su configuración y operaciones</p>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown('<div class="menu-card"><h3>📦</h3><h4>Operaciones de Stock</h4><p style="font-size:13px; color:#666;">Entradas, salidas y alertas críticas.</p></div>', unsafe_allow_html=True)
+        if st.button("Ingresar", use_container_width=True, key="btn_stock"):
+            st.session_state["menu_activo"] = "Operaciones de Stock"
+            st.rerun()
+
+        st.markdown('<div class="menu-card" style="margin-top:20px;"><h3>🛠️</h3><h4>Insumos de Respaldo</h4><p style="font-size:13px; color:#666;">Gestión de respaldos y alternativas.</p></div>', unsafe_allow_html=True)
+        if st.button("Ingresar", use_container_width=True, key="btn_respaldo"):
+            st.session_state["menu_activo"] = "Insumos de Respaldo"
+            st.rerun()
+
+    with col2:
+        st.markdown('<div class="menu-card"><h3>📊</h3><h4>Valorización del Inventario</h4><p style="font-size:13px; color:#666;">Costos, valor total y activos.</p></div>', unsafe_allow_html=True)
+        if st.button("Ingresar", use_container_width=True, key="btn_val"):
+            st.session_state["menu_activo"] = "Valorización del Inventario"
+            st.rerun()
+
+        st.markdown('<div class="menu-card" style="margin-top:20px;"><h3>⚙️</h3><h4>Servicios y Soporte</h4><p style="font-size:13px; color:#666;">Mantenimiento y asistencia técnica.</p></div>', unsafe_allow_html=True)
+        if st.button("Ingresar", use_container_width=True, key="btn_soporte"):
+            st.session_state["menu_activo"] = "Servicios y Soporte"
+            st.rerun()
+
+    with col3:
+        st.markdown('<div class="menu-card"><h3>📈</h3><h4>Rendimiento de Insumos</h4><p style="font-size:13px; color:#666;">Métricas de rotación y uso.</p></div>', unsafe_allow_html=True)
+        if st.button("Ingresar", use_container_width=True, key="btn_rend"):
+            st.session_state["menu_activo"] = "Rendimiento de Insumos"
+            st.rerun()
+
+        st.markdown('<div class="menu-card" style="margin-top:20px;"><h3>📑</h3><h4>Reportes por Fecha / Edición</h4><p style="font-size:13px; color:#666;">Filtros por fecha e historial.</p></div>', unsafe_allow_html=True)
+        if st.button("Ingresar", use_container_width=True, key="btn_rep"):
+            st.session_state["menu_activo"] = "Reportes por Fecha / Edición"
+            st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.markdown('<div class="menu-card"><h3>👥</h3><h4>Configuración y Usuarios</h4><p style="font-size:13px; color:#666;">Permisos, roles y ajustes del sistema.</p></div>', unsafe_allow_html=True)
+        if st.button("Ingresar", use_container_width=True, key="btn_config"):
+            st.session_state["menu_activo"] = "Configuración y Usuarios"
+            st.rerun()
+
+else:
+    if st.button("🏠 Volver al Menú Principal"):
+        st.session_state["menu_activo"] = "Inicio"
+        st.rerun()
+    
+    st.divider()
+
+    seccion = st.session_state["menu_activo"]
+
+    if seccion == "Operaciones de Stock":
     if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
         st.subheader("⚠️ Alertas de Stock Crítico")
         alertas_activas = False
