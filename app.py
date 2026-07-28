@@ -119,27 +119,6 @@ if not st.session_state.logged_in:
     
     # Formulario de inicio de sesión
     with st.form("form_login"):
-        
-        # Logo arriba centrado
-        try:
-            st.image("logo.jpg")
-        except Exception:
-            st.markdown("<h1 style='color:white; text-align:center;'>Copias y etc.</h1>", unsafe_allow_html=True)
-            
-        st.markdown("<h3 style='margin-top: -10px;'>Inicia sesión</h3>", unsafe_allow_html=True)
-        
-        usuario = st.text_input("USUARIO / CORREO", placeholder="Ej: admin")
-        password = st.text_input("CONTRASEÑA", type="password", placeholder="••••••••")
-        
-        btn_ingresar = st.form_submit_button("INGRESAR", use_container_width=True)
-        
-        if btn_ingresar:
-            # Aquí defines tu usuario y contraseña (o la consulta que ya tengas)
-            if usuario == "admin" and password == "1234":
-                st.session_state.logged_in = True
-                st.rerun() # Recarga la app para entrar al panel
-            else:
-                st.error("Usuario o contraseña incorrectos")
         col_izq, col_centro, col_der = st.columns([1, 2, 1])
         with col_centro:
             try:
