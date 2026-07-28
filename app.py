@@ -948,7 +948,7 @@ else:
 # ==========================================
 # 2. PESTAÑA DE VALORIZACIÓN DEL INVENTARIO
 # ==========================================
-if seccion == "Valorización del Inventario":
+if st.session_state["menu_activo"] == "Valorización del Inventario":
     if st.session_state["rol_actual"] == "Administrador":
         st.subheader("💰 Resumen Monetario del Inventario")
         if not df_insumos.empty:
