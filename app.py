@@ -13,6 +13,63 @@ import requests
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
 
+st.markdown("""
+<style>
+    /* Fondo general gris claro para resaltar tarjetas */
+    .stApp {
+        background-color: #f8f9fc;
+    }
+    
+    /* Ocultar menú y pie predeterminados */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Estilo para tarjetas personalizadas tipo 'SaaS' */
+    .kpi-card {
+        background-color: #ffffff;
+        border-radius: 14px;
+        padding: 20px;
+        border: 1px solid #eef2f6;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+        margin-bottom: 15px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .kpi-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+    }
+
+    /* Colores pastel para banners de métricas */
+    .bg-purple { background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); color: white; }
+    .bg-blue { background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%); color: #1e293b; }
+    .bg-orange { background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #1e293b; }
+    
+    .kpi-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        opacity: 0.9;
+        margin-bottom: 8px;
+    }
+    
+    .kpi-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+
+    /* Personalización del menú lateral */
+    [data-testid="stSidebar"] {
+        background-color: #1e1e2d;
+    }
+    [data-testid="stSidebar"] * {
+        color: #ffffff !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+# 📍 FIN DEL ESTILO VISUAL
+
 # --- AJUSTE DE ZONA HORARIA (BOLIVIA UTC-4) ---
 def obtener_hora_local_bo():
     """Retorna la fecha y hora actual con la zona horaria de Bolivia (UTC-4)."""
