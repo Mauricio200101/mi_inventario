@@ -998,7 +998,7 @@ if st.session_state["menu_activo"] == "Valorización del Inventario":
 # ==========================================
 # 3. PESTAÑA DE RENDIMIENTO DE INSUMOS
 # ==========================================
-elif seccion == "Rendimiento de Insumos":
+if st.session_state["menu_activo"] == "Rendimiento de Insumos":
     with tab_rendimiento:
         st.subheader("📈 Análisis de Rendimiento Promedio de Insumos")
         st.write("Esta sección calcula el rendimiento histórico del equipamiento/tóner en función de las copias realizadas y el tiempo útil de uso.")
@@ -1073,7 +1073,7 @@ elif seccion == "Rendimiento de Insumos":
 # ==========================================
 # 4. PESTAÑA DE REPORTES Y EDICIÓN/ELIMINACIÓN
 # ==========================================
-elif seccion == "Reportes por Fecha / Edición":
+if st.session_state["menu_activo"] == "Reportes por Fecha / Edición":
     st.subheader("📅 Reportes de Inventario y Herramientas de Edición")
     
     tab_rep_general, tab_rep_ventas, tab_rep_alquileres, tab_admin_borrado = st.tabs([
@@ -1322,7 +1322,7 @@ elif seccion == "Reportes por Fecha / Edición":
 # ==========================================
 # 5. PESTAÑA DE CONFIGURACIÓN Y USUARIOS
 # ==========================================
-elif seccion == "Configuración y Usuarios":
+if st.session_state["menu_activo"] == "Configuración y Gestión de Usuarios":
     if st.session_state["rol_actual"] == "Administrador":
         
         st.subheader("⚙️ Configuración y Gestión de Usuarios")
@@ -1547,7 +1547,7 @@ elif seccion == "Configuración y Usuarios":
 # ==========================================
 # 6.PESTAÑA DE INSUMOS DE RESPALDO (BACKUP)
 # ==========================================
-elif seccion == "Insumos de Respaldo (Backup)":
+if st.session_state["menu_activo"] == "Insumos de Respaldo (Backup)":
     with st.expander("➕ Registrar Nuevo Insumo de Respaldo"):
         with st.form("form_nuevo_backup"):
             insumo_nuevo_bk = st.selectbox("Seleccionar Insumo:", df_insumos["Nombre"].tolist() if not df_insumos.empty else [])
@@ -1751,7 +1751,7 @@ elif seccion == "Insumos de Respaldo (Backup)":
 # =========================================================
 # PESTAÑA: SERVICIOS Y SOPORTE TÉCNICO (3 ETAPAS)
 # =========================================================
-elif seccion == "servicios y soporte técnico":
+if st.session_state["menu_activo"] == "Servicios y Soporte Técnico":
     st.header("📋 Gestión de Servicios y Soporte Técnico")
     
     subtab_solicitar, subtab_atender, subtab_historial = st.tabs([
