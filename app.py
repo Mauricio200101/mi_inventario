@@ -514,27 +514,33 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
 
-# --- MENÚ PRINCIPAL DE TARJETAS FLOTANTES ---
+# --- MENÚ PRINCIPAL DE TARJETAS CLOTANTES INTERACTIVAS ---
 if "menu_activo" not in st.session_state:
     st.session_state["menu_activo"] = "Inicio"
 
-# Estilo CSS para las tarjetas flotantes
+# Estilo CSS para convertir los botones de Streamlit en tarjetas flotantes grandes y elegantes
 st.markdown("""
 <style>
-    .menu-card {
+    div.stButton > button {
         background-color: white;
-        padding: 24px;
+        color: #1f2937;
+        padding: 25px 20px;
         border-radius: 16px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
         border: 1px solid #eaeaea;
+        width: 100%;
+        height: 130px;
         text-align: center;
-        margin-bottom: 15px;
+        font-weight: 600;
         transition: all 0.3s ease;
+        white-space: pre-wrap; /* Permite saltos de línea en el texto del botón */
     }
-    .menu-card:hover {
+    div.stButton > button:hover {
         transform: translateY(-4px);
         box-shadow: 0 8px 25px rgba(230, 0, 0, 0.15);
         border-color: #e60000;
+        color: #e60000;
+        background-color: white;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -544,48 +550,47 @@ empresas_disponibles, areas_disponibles, agencias_disponibles = obtener_parametr
 
 if st.session_state["menu_activo"] == "Inicio":
     st.markdown("<h2 style='text-align: center; color: #1f2937;'>📋 Menú Principal del Sistema</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #6b7280; margin-bottom: 30px;'>Selecciona un módulo para acceder a su configuración y operaciones</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #6b7280; margin-bottom: 30px;'>Selecciona un módulo haciendo clic directamente sobre la tarjeta</p>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown('<div class="menu-card"><h3>📦</h3><h4>Operaciones de Stock</h4><p style="font-size:13px; color:#666;">Entradas, salidas y alertas críticas.</p></div>', unsafe_allow_html=True)
-        if st.button("Ingresar", use_container_width=True, key="btn_stock"):
+        if st.button("📦 Operaciones de Stock\n\nEntradas, salidas y alertas críticas", key="card_stock"):
             st.session_state["menu_activo"] = "Operaciones de Stock"
             st.rerun()
-
-        st.markdown('<div class="menu-card" style="margin-top:20px;"><h3>🛠️</h3><h4>Insumos de Respaldo</h4><p style="font-size:13px; color:#666;">Gestión de respaldos y alternativas.</p></div>', unsafe_allow_html=True)
-        if st.button("Ingresar", use_container_width=True, key="btn_respaldo"):
+        
+        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+        
+        if st.button("🛠️ Insumos de Respaldo\n\nGestión de respaldos y alternativas", key="card_respaldo"):
             st.session_state["menu_activo"] = "Insumos de Respaldo"
             st.rerun()
 
     with col2:
-        st.markdown('<div class="menu-card"><h3>📊</h3><h4>Valorización del Inventario</h4><p style="font-size:13px; color:#666;">Costos, valor total y activos.</p></div>', unsafe_allow_html=True)
-        if st.button("Ingresar", use_container_width=True, key="btn_val"):
+        if st.button("📊 Valorización del Inventario\n\nCostos, valor total y activos", key="card_val"):
             st.session_state["menu_activo"] = "Valorización del Inventario"
             st.rerun()
+            
+        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
 
-        st.markdown('<div class="menu-card" style="margin-top:20px;"><h3>⚙️</h3><h4>Servicios y Soporte</h4><p style="font-size:13px; color:#666;">Mantenimiento y asistencia técnica.</p></div>', unsafe_allow_html=True)
-        if st.button("Ingresar", use_container_width=True, key="btn_soporte"):
+        if st.button("⚙️ Servicios y Soporte\n\nMantenimiento y asistencia técnica", key="card_soporte"):
             st.session_state["menu_activo"] = "Servicios y Soporte"
             st.rerun()
 
     with col3:
-        st.markdown('<div class="menu-card"><h3>📈</h3><h4>Rendimiento de Insumos</h4><p style="font-size:13px; color:#666;">Métricas de rotación y uso.</p></div>', unsafe_allow_html=True)
-        if st.button("Ingresar", use_container_width=True, key="btn_rend"):
+        if st.button("📈 Rendimiento de Insumos\n\nMétricas de rotación y uso", key="card_rend"):
             st.session_state["menu_activo"] = "Rendimiento de Insumos"
             st.rerun()
+            
+        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
 
-        st.markdown('<div class="menu-card" style="margin-top:20px;"><h3>📑</h3><h4>Reportes por Fecha / Edición</h4><p style="font-size:13px; color:#666;">Filtros por fecha e historial.</p></div>', unsafe_allow_html=True)
-        if st.button("Ingresar", use_container_width=True, key="btn_rep"):
+        if st.button("📑 Reportes por Fecha / Edición\n\nFiltros por fecha e historial", key="card_rep"):
             st.session_state["menu_activo"] = "Reportes por Fecha / Edición"
             st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        st.markdown('<div class="menu-card"><h3>👥</h3><h4>Configuración y Usuarios</h4><p style="font-size:13px; color:#666;">Permisos, roles y ajustes del sistema.</p></div>', unsafe_allow_html=True)
-        if st.button("Ingresar", use_container_width=True, key="btn_config"):
+        if st.button("👥 Configuración y Usuarios\n\nPermisos, roles y ajustes del sistema", key="card_config"):
             st.session_state["menu_activo"] = "Configuración y Usuarios"
             st.rerun()
 
@@ -598,6 +603,8 @@ else:
 
     seccion = st.session_state["menu_activo"]
 
+  *Pestaña de Operaciones de Stock*:
+    
     if seccion == "Operaciones de Stock":
         if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
             st.subheader("⚠️ Alertas de Stock Crítico")
