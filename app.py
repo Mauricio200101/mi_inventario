@@ -514,30 +514,54 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
 
-# --- MENÚ PRINCIPAL DE TARJETAS CLOTANTES INTERACTIVAS ---
+# --- MENÚ PRINCIPAL: CARRUSEL HORIZONTAL DE TARJETAS GRANDES ---
 if "menu_activo" not in st.session_state:
     st.session_state["menu_activo"] = "Inicio"
 
-# Estilo CSS para convertir los botones de Streamlit en tarjetas flotantes grandes y elegantes
+# Estilo CSS para tarjetas grandes y contenedor deslizable horizontal (scroll)
 st.markdown("""
 <style>
+    /* Contenedor principal con desplazamiento horizontal */
+    .scroll-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 20px;
+        padding: 20px 10px;
+        scroll-behavior: smooth;
+        width: 100%;
+        margin-bottom: 20px;
+    }
+    .scroll-container::-webkit-scrollbar {
+        height: 8px;
+    }
+    .scroll-container::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+    .scroll-container::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 4px;
+    }
+
+    /* Tamaño grande y diseño de cada tarjeta convertida en botón */
     div.stButton > button {
         background-color: white;
         color: #1f2937;
-        padding: 25px 20px;
-        border-radius: 16px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+        padding: 30px 20px;
+        border-radius: 18px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
         border: 1px solid #eaeaea;
-        width: 100%;
-        height: 130px;
+        min-width: 260px;
+        height: 160px;
         text-align: center;
         font-weight: 600;
+        font-size: 16px;
         transition: all 0.3s ease;
-        white-space: pre-wrap; /* Permite saltos de línea en el texto del botón */
+        white-space: pre-wrap;
     }
     div.stButton > button:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 25px rgba(230, 0, 0, 0.15);
+        transform: translateY(-6px);
+        box-shadow: 0 12px 30px rgba(230, 0, 0, 0.18);
         border-color: #e60000;
         color: #e60000;
         background-color: white;
@@ -550,47 +574,43 @@ empresas_disponibles, areas_disponibles, agencias_disponibles = obtener_parametr
 
 if st.session_state["menu_activo"] == "Inicio":
     st.markdown("<h2 style='text-align: center; color: #1f2937;'>📋 Menú Principal del Sistema</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #6b7280; margin-bottom: 30px;'>Selecciona un módulo haciendo clic directamente sobre la tarjeta</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #6b7280; margin-bottom: 20px;'>Desliza hacia la derecha para ver todas las opciones y haz clic en una tarjeta</p>", unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns(3)
+    # Creamos las columnas en una sola fila larga para simular el carrusel
+    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
 
     with col1:
-        if st.button("📦 Operaciones de Stock\n\nEntradas, salidas y alertas críticas", key="card_stock"):
+        if st.button("📦 Operaciones\nde Stock\n\nEntradas y alertas", key="card_stock"):
             st.session_state["menu_activo"] = "Operaciones de Stock"
-            st.rerun()
-        
-        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
-        
-        if st.button("🛠️ Insumos de Respaldo\n\nGestión de respaldos y alternativas", key="card_respaldo"):
-            st.session_state["menu_activo"] = "Insumos de Respaldo"
             st.rerun()
 
     with col2:
-        if st.button("📊 Valorización del Inventario\n\nCostos, valor total y activos", key="card_val"):
+        if st.button("📊 Valorización\ndel Inventario\n\nCostos y activos", key="card_val"):
             st.session_state["menu_activo"] = "Valorización del Inventario"
-            st.rerun()
-            
-        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
-
-        if st.button("⚙️ Servicios y Soporte\n\nMantenimiento y asistencia técnica", key="card_soporte"):
-            st.session_state["menu_activo"] = "Servicios y Soporte"
             st.rerun()
 
     with col3:
-        if st.button("📈 Rendimiento de Insumos\n\nMétricas de rotación y uso", key="card_rend"):
+        if st.button("📈 Rendimiento\nde Insumos\n\nMétricas de uso", key="card_rend"):
             st.session_state["menu_activo"] = "Rendimiento de Insumos"
             st.rerun()
-            
-        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
 
-        if st.button("📑 Reportes por Fecha / Edición\n\nFiltros por fecha e historial", key="card_rep"):
+    with col4:
+        if st.button("🛠️ Insumos\nde Respaldo\n\nAlternativas", key="card_respaldo"):
+            st.session_state["menu_activo"] = "Insumos de Respaldo"
+            st.rerun()
+
+    with col5:
+        if st.button("⚙️ Servicios\ny Soporte\n\nMantenimiento", key="card_soporte"):
+            st.session_state["menu_activo"] = "Servicios y Soporte"
+            st.rerun()
+
+    with col6:
+        if st.button("📑 Reportes\ny Edición\n\nFiltros por fecha", key="card_rep"):
             st.session_state["menu_activo"] = "Reportes por Fecha / Edición"
             st.rerun()
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        if st.button("👥 Configuración y Usuarios\n\nPermisos, roles y ajustes del sistema", key="card_config"):
+    with col7:
+        if st.button("👥 Configuración\ny Usuarios\n\nRoles y ajustes", key="card_config"):
             st.session_state["menu_activo"] = "Configuración y Usuarios"
             st.rerun()
 
@@ -603,10 +623,10 @@ else:
 
     seccion = st.session_state["menu_activo"]
 
-    
     if seccion == "Operaciones de Stock":
         if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
             st.subheader("⚠️ Alertas de Stock Crítico")
+            # (Aquí sigue tu código original)
             alertas_activas = False
             if not df_insumos.empty:
                 for index, fila in df_insumos.iterrows():
