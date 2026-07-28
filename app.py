@@ -136,29 +136,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# CONTENIDO EN PESTAÑAS (Tarjetas abajo sobre fondo plomo)
-# ---------------------------------------------------------
-tab1, tab2, tab3 = st.tabs(["📦 Operaciones de Stock", "📊 Valorización", "🛠️ Servicios y Soporte"])
-
-with tab1:
-    col_a, col_b = st.columns([1, 1])
-    
-    with col_a:
-        with st.container(border=True):
-            st.subheader("➕ Registrar Nuevo Insumo")
-            st.text_input("Nombre del Insumo", placeholder="Ej: Toner HP 85A")
-            st.text_input("Categoría", placeholder="Ej: Consumibles")
-            st.number_input("Cantidad Inicial", min_value=1, value=10)
-            st.button("Guardar Insumo", use_container_width=True)
-            
-    with col_b:
-        with st.container(border=True):
-            st.subheader("🔄 Registrar Movimiento")
-            st.selectbox("Tipo de Movimiento", ["Entrada de Stock", "Salida a Servicio"])
-            st.number_input("Cantidad", min_value=1, value=1)
-            st.button("Confirmar Movimiento", use_container_width=True)
-
 # --- AJUSTE DE ZONA HORARIA (BOLIVIA UTC-4) ---
 def obtener_hora_local_bo():
     """Retorna la fecha y hora actual con la zona horaria de Bolivia (UTC-4)."""
