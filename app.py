@@ -599,296 +599,296 @@ else:
     seccion = st.session_state["menu_activo"]
 
     if seccion == "Operaciones de Stock":
-    if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
-        st.subheader("⚠️ Alertas de Stock Crítico")
-        alertas_activas = False
-        if not df_insumos.empty:
-            for index, fila in df_insumos.iterrows():
-                cant_actual = int(fila["Cantidad"])
-                cant_minima = int(fila["Stock Mínimo"])
-                if cant_actual <= cant_minima:
-                    st.error(f"🚨 **¡ALERTA DE STOCK BAJO!** El insumo **{fila['Nombre']}** tiene solo **{cant_actual}** unidades. (Mínimo: {cant_minima})")
-                    alertas_activas = True
-        if not alertas_activas:
-            st.success("✅ ¡Todos los insumos tienen niveles de stock saludables!")
-        st.markdown("---")
-
-    if st.session_state["rol_actual"] == "Técnico":
-        st.warning("ℹ️ Tu cuenta de **Técnico** tiene permisos de 'Solo Lectura'. Puedes revisar las existencias abajo.")
-    else:
-        col_izq, col_der = st.columns([1, 1])
-
-        with col_izq:
-            if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
-                if st.session_state["rol_actual"] == "Administrador":
-                    tab_reg, tab_edit = st.tabs(["➕ Registrar Insumo", "✏️ Editar Stock Mínimo/Precios"])
-                else:
-                    tab_reg = st.tabs(["➕ Registrar Insumo"])[0]
-                
-                with tab_reg:
-                    # Aquí mantienes tu código de registro actual (líneas 418 a 443)
-                    st.write("**Registrar Nuevo Insumo**")
-                    with st.form("nuevo_insumo_form", clear_on_submit=True):
-                        nombre = st.text_input("Nombre del Insumo", placeholder="Ej: GPR-57")
-                        categoria = st.text_input("Categoria", placeholder="Ej: Toner")
-                        amount_ini = st.number_input("Cantidad Inicial", min_value=0, step=1, value=0)
-                        stock_min = st.number_input("Stock Mínimo (Alerta)", min_value=1, step=1, value=5)
-                        
-                        st.markdown("**💰 Configuración de Precios (Bs.)**")
-                        p_tecnico = st.number_input("Precio Técnico", min_value=0.0, step=0.1, value=0.0)
-                        p_cliente = st.number_input("Precio Cliente", min_value=0.0, step=0.1, value=0.0)
-                        p_faclurado = st.number_input("Precio Facturado", min_value=0.0, step=0.1, value=0.0)
-                        
-                        guardado = st.form_submit_button("Guardar Insumo")
-                        
-                        if guardado:
-                            if nombre.strip() == "":
-                                st.error("Por favor, ingresa el nombre del insumo.")
-                            elif not df_insumos.empty and nombre.lower() in df_insumos["Nombre"].str.lower().values:
-                                st.warning("Ese insumo ya existe en la lista.")
-                            else:
-                                with st.spinner("Guardando en Google Sheets..."):
-                                    registrar_insumo(nombre, categoria, amount_ini, stock_min, p_tecnico, p_cliente, p_faclurado)
-                                    st.success(f"Insumo {nombre} registrado correctamente!")
-                                    st.rerun()
-
-                # Solo si es Administrador, mostramos el contenido de la pestaña de edición
-                if st.session_state["rol_actual"] == "Administrador":
-                    with tab_edit:
-                        st.write("**Modificar Alerta o Precios**")
-                        # Aquí va el código que tenías para editar (líneas 446 a 472 de tu archivo original)
-                        if not df_insumos.empty:
-                            insumo_editar = st.selectbox("Selecciona el insumo a editar:", df_insumos["Nombre"].tolist(), key="sel_edit")
-                            datos_insumo_editar = df_insumos[df_insumos["Nombre"] == insumo_editar].iloc[0]
-                            
-                            cel_id = datos_insumo_editar["ID"]
-                            min_actual = int(datos_insumo_editar["Stock Mínimo"])
-                            pt_act = float(datos_insumo_editar["Precio Técnico"])
-                            pc_act = float(datos_insumo_editar["Precio Cliente"])
-                            pf_acl = float(datos_insumo_editar["Precio Facturado"])
-
-                            # Campo para editar el nombre del insumo
-                            nuevo_nombre = st.text_input("Nuevo Nombre del Insumo:", value=insumo_editar)
-                            
-                            nuevo_minimo = st.number_input("Nuevo Stock Mínimo:", min_value=1, step=1, value=min_actual)
-                            nuevo_pt = st.number_input("Nuevo Precio Técnico:", min_value=0.0, step=0.1, value=pt_act)
-                            nuevo_pc = st.number_input("Nuevo Precio Cliente:", min_value=0.0, step=0.1, value=pc_act)
-                            nuevo_pf = st.number_input("Nuevo Precio Facturado:", min_value=0.0, step=0.1, value=pf_acl)
-
-                            if st.button("Actualizar Parámetros"):
-                                celda_id = hoja_insumos.find(str(cel_id))
-                                if celda_id:
-                                    # Actualizamos el nombre en la columna 2 (Columna B: Insumo) y los demás parámetros
-                                    hoja_insumos.update_cell(celda_id.row, 2, nuevo_nombre)
-                                    hoja_insumos.update_cell(celda_id.row, 5, nuevo_minimo)
-                                    hoja_insumos.update_cell(celda_id.row, 6, nuevo_pt)
-                                    hoja_insumos.update_cell(celda_id.row, 7, nuevo_pc)
-                                    hoja_insumos.update_cell(celda_id.row, 8, nuevo_pf)
-                                    st.success("¡Datos actualizados con éxito!")
-                                    st.rerun()
-
-        with col_der:
-            st.subheader("🔄 Registrar Movimiento (Entrada/Salida)")
-            
-            st.markdown("📷 **Lector de Códigos QR/Barra**")
-            
-            if "camara_activa" not in st.session_state:
-                st.session_state["camara_activa"] = False
-                
-            st.session_state["camara_activa"] = st.checkbox(
-                "🎥 Activar / Encender Cámara", 
-                value=st.session_state["camara_activa"]
-            )
-            
-            insumo_detectado = None
-            
-            if st.session_state["camara_activa"]:
-                foto_codigo = st.camera_input("Toma una foto al código de barra para escanearlo")
-                if foto_codigo is not None:
-                    st.success("¡Código capturado con éxito!")
-                    insumo_detectado = st.selectbox("🔍 Confirmar insumo detectado por la cámara:", df_insumos["Nombre"].tolist())
-            else:
-                st.info("📷 La cámara está actualmente apagada. Marca la casilla de arriba para encenderla.")
-
-            st.markdown("---")
+        if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
+            st.subheader("⚠️ Alertas de Stock Crítico")
+            alertas_activas = False
             if not df_insumos.empty:
-                opciones = df_insumos["Nombre"].tolist()
-                
-                indice_defecto = opciones.index(insumo_detectado) if insumo_detectado in opciones else 0
-                seleccionado = st.selectbox("Selecciona el insumo a modificar:", opciones, index=indice_defecto, key="sel_mov")
-                
-                if seleccionado:
-                    datos_insumo = df_insumos[df_insumos["Nombre"] == seleccionado].iloc[0]
-                    id_insumo = datos_insumo["ID"]
-                    cant_actual = int(datos_insumo["Cantidad"])
-                    
-                    st.info(f"Cantidad actual en bodega: **{cant_actual}** unidades.")
-                    st.markdown(f"💰 **Precios:** Técnico: *{datos_insumo['Precio Técnico']} Bs.* | Cliente: *{datos_insumo['Precio Cliente']} Bs.* | Facturado: *{datos_insumo['Precio Facturado']} Bs.*")
-                    
-                    tipo_movimiento = st.radio("Tipo de movimiento:", ["Agregar Stock (Entrada)", "Restar Stock (Salida)"], horizontal=True)
-                    
-                    motivo_salida = ""
-                    empresa_destino = ""
-                    area_o_precio_destino = ""
-                    agencia_destino = ""
-                    val_unit = 0.0
-                    
-                    cont_anterior = 0
-                    cont_actual = 0
-                    paginas_calculadas = 0
-                    dias_calculados = 0
-                    
-                    if tipo_movimiento == "Restar Stock (Salida)":
-                        col_mot1, col_mot2 = st.columns(2)
-                        with col_mot1:
-                            motivo_salida = st.selectbox("Motivo de la Salida:", ["Venta", "Alquiler"])
-                        
-                        if motivo_salida == "Venta":
-                            with col_mot2:
-                                tipo_precio_aplicado = st.selectbox(
-                                    "🏷️ Esquema de Precio Aplicado:",
-                                    ["Precio Técnico", "Precio Cliente", "Precio Facturado"]
-                                )
-                                area_o_precio_destino = tipo_precio_aplicado
-                                
-                                if tipo_precio_aplicado == "Precio Técnico":
-                                    val_unit = float(datos_insumo['Precio Técnico'])
-                                elif tipo_precio_aplicado == "Precio Cliente":
-                                    val_unit = float(datos_insumo['Precio Cliente'])
-                                else:
-                                    val_unit = float(datos_insumo['Precio Facturado'])
-                                st.caption(f"Valor Unitario: *{val_unit} Bs.*")
-                        
-                        elif motivo_salida == "Alquiler":
-                            # Estas columnas SOLO se crean si el motivo es Alquiler
-                            col_al_dest1, col_al_dest2 = st.columns(2)
-            
-                            with col_al_dest1:
-                                empresa_destino = st.selectbox("🏢 Empresa:", empresas_disponibles)
-                                agencias_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_destino.strip())]
-                                agencia_destino = st.selectbox(
-                                "🏢 Agencia:", 
-                                agencias_filtradas, 
-                                format_func=lambda x: x.replace(empresa_destino + " - ", "")
-                                )
+                for index, fila in df_insumos.iterrows():
+                    cant_actual = int(fila["Cantidad"])
+                    cant_minima = int(fila["Stock Mínimo"])
+                    if cant_actual <= cant_minima:
+                        st.error(f"🚨 **¡ALERTA DE STOCK BAJO!** El insumo **{fila['Nombre']}** tiene solo **{cant_actual}** unidades. (Mínimo: {cant_minima})")
+                        alertas_activas = True
+            if not alertas_activas:
+                st.success("✅ ¡Todos los insumos tienen niveles de stock saludables!")
+            st.markdown("---")
 
-                            with col_al_dest2:
-                                areas_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_destino)]
-                                area_o_precio_destino = st.selectbox(
-                                "📍 Área:", 
-                                areas_filtradas, 
-                                format_func=lambda x: x.replace(agencia_destino + " - ", "")
-                                )
+        if st.session_state["rol_actual"] == "Técnico":
+            st.warning("ℹ️ Tu cuenta de **Técnico** tiene permisos de 'Solo Lectura'. Puedes revisar las existencias abajo.")
+        else:
+            col_izq, col_der = st.columns([1, 1])
+
+            with col_izq:
+                if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
+                    if st.session_state["rol_actual"] == "Administrador":
+                        tab_reg, tab_edit = st.tabs(["➕ Registrar Insumo", "✏️ Editar Stock Mínimo/Precios"])
+                    else:
+                        tab_reg = st.tabs(["➕ Registrar Insumo"])[0]
+                    
+                    with tab_reg:
+                        # Aquí mantienes tu código de registro actual (líneas 418 a 443)
+                        st.write("**Registrar Nuevo Insumo**")
+                        with st.form("nuevo_insumo_form", clear_on_submit=True):
+                            nombre = st.text_input("Nombre del Insumo", placeholder="Ej: GPR-57")
+                            categoria = st.text_input("Categoria", placeholder="Ej: Toner")
+                            amount_ini = st.number_input("Cantidad Inicial", min_value=0, step=1, value=0)
+                            stock_min = st.number_input("Stock Mínimo (Alerta)", min_value=1, step=1, value=5)
+                            
+                            st.markdown("**💰 Configuración de Precios (Bs.)**")
+                            p_tecnico = st.number_input("Precio Técnico", min_value=0.0, step=0.1, value=0.0)
+                            p_cliente = st.number_input("Precio Cliente", min_value=0.0, step=0.1, value=0.0)
+                            p_faclurado = st.number_input("Precio Facturado", min_value=0.0, step=0.1, value=0.0)
+                            
+                            guardado = st.form_submit_button("Guardar Insumo")
+                            
+                            if guardado:
+                                if nombre.strip() == "":
+                                    st.error("Por favor, ingresa el nombre del insumo.")
+                                elif not df_insumos.empty and nombre.lower() in df_insumos["Nombre"].str.lower().values:
+                                    st.warning("Ese insumo ya existe en la lista.")
+                                else:
+                                    with st.spinner("Guardando en Google Sheets..."):
+                                        registrar_insumo(nombre, categoria, amount_ini, stock_min, p_tecnico, p_cliente, p_faclurado)
+                                        st.success(f"Insumo {nombre} registrado correctamente!")
+                                        st.rerun()
+
+                    # Solo si es Administrador, mostramos el contenido de la pestaña de edición
+                    if st.session_state["rol_actual"] == "Administrador":
+                        with tab_edit:
+                            st.write("**Modificar Alerta o Precios**")
+                            # Aquí va el código que tenías para editar (líneas 446 a 472 de tu archivo original)
+                            if not df_insumos.empty:
+                                insumo_editar = st.selectbox("Selecciona el insumo a editar:", df_insumos["Nombre"].tolist(), key="sel_edit")
+                                datos_insumo_editar = df_insumos[df_insumos["Nombre"] == insumo_editar].iloc[0]
+                                
+                                cel_id = datos_insumo_editar["ID"]
+                                min_actual = int(datos_insumo_editar["Stock Mínimo"])
+                                pt_act = float(datos_insumo_editar["Precio Técnico"])
+                                pc_act = float(datos_insumo_editar["Precio Cliente"])
+                                pf_acl = float(datos_insumo_editar["Precio Facturado"])
+
+                                # Campo para editar el nombre del insumo
+                                nuevo_nombre = st.text_input("Nuevo Nombre del Insumo:", value=insumo_editar)
+                                
+                                nuevo_minimo = st.number_input("Nuevo Stock Mínimo:", min_value=1, step=1, value=min_actual)
+                                nuevo_pt = st.number_input("Nuevo Precio Técnico:", min_value=0.0, step=0.1, value=pt_act)
+                                nuevo_pc = st.number_input("Nuevo Precio Cliente:", min_value=0.0, step=0.1, value=pc_act)
+                                nuevo_pf = st.number_input("Nuevo Precio Facturado:", min_value=0.0, step=0.1, value=pf_acl)
+
+                                if st.button("Actualizar Parámetros"):
+                                    celda_id = hoja_insumos.find(str(cel_id))
+                                    if celda_id:
+                                        # Actualizamos el nombre en la columna 2 (Columna B: Insumo) y los demás parámetros
+                                        hoja_insumos.update_cell(celda_id.row, 2, nuevo_nombre)
+                                        hoja_insumos.update_cell(celda_id.row, 5, nuevo_minimo)
+                                        hoja_insumos.update_cell(celda_id.row, 6, nuevo_pt)
+                                        hoja_insumos.update_cell(celda_id.row, 7, nuevo_pc)
+                                        hoja_insumos.update_cell(celda_id.row, 8, nuevo_pf)
+                                        st.success("¡Datos actualizados con éxito!")
+                                        st.rerun()
+
+            with col_der:
+                st.subheader("🔄 Registrar Movimiento (Entrada/Salida)")
                 
-                            st.markdown("---")
-                            st.markdown("📊 **Control de Contadores (Alquiler)**")
-            
-                            # Solo buscar el historial si el motivo es Alquiler
-                            ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
+                st.markdown("📷 **Lector de Códigos QR/Barra**")
+                
+                if "camara_activa" not in st.session_state:
+                    st.session_state["camara_activa"] = False
+                    
+                st.session_state["camara_activa"] = st.checkbox(
+                    "🎥 Activar / Encender Cámara", 
+                    value=st.session_state["camara_activa"]
+                )
+                
+                insumo_detectado = None
+                
+                if st.session_state["camara_activa"]:
+                    foto_codigo = st.camera_input("Toma una foto al código de barra para escanearlo")
+                    if foto_codigo is not None:
+                        st.success("¡Código capturado con éxito!")
+                        insumo_detectado = st.selectbox("🔍 Confirmar insumo detectado por la cámara:", df_insumos["Nombre"].tolist())
+                else:
+                    st.info("📷 La cámara está actualmente apagada. Marca la casilla de arriba para encenderla.")
+
+                st.markdown("---")
+                if not df_insumos.empty:
+                    opciones = df_insumos["Nombre"].tolist()
+                    
+                    indice_defecto = opciones.index(insumo_detectado) if insumo_detectado in opciones else 0
+                    seleccionado = st.selectbox("Selecciona el insumo a modificar:", opciones, index=indice_defecto, key="sel_mov")
+                    
+                    if seleccionado:
+                        datos_insumo = df_insumos[df_insumos["Nombre"] == seleccionado].iloc[0]
+                        id_insumo = datos_insumo["ID"]
+                        cant_actual = int(datos_insumo["Cantidad"])
+                        
+                        st.info(f"Cantidad actual en bodega: **{cant_actual}** unidades.")
+                        st.markdown(f"💰 **Precios:** Técnico: *{datos_insumo['Precio Técnico']} Bs.* | Cliente: *{datos_insumo['Precio Cliente']} Bs.* | Facturado: *{datos_insumo['Precio Facturado']} Bs.*")
+                        
+                        tipo_movimiento = st.radio("Tipo de movimiento:", ["Agregar Stock (Entrada)", "Restar Stock (Salida)"], horizontal=True)
+                        
+                        motivo_salida = ""
+                        empresa_destino = ""
+                        area_o_precio_destino = ""
+                        agencia_destino = ""
+                        val_unit = 0.0
+                        
+                        cont_anterior = 0
+                        cont_actual = 0
+                        paginas_calculadas = 0
+                        dias_calculados = 0
+                        
+                        if tipo_movimiento == "Restar Stock (Salida)":
+                            col_mot1, col_mot2 = st.columns(2)
+                            with col_mot1:
+                                motivo_salida = st.selectbox("Motivo de la Salida:", ["Venta", "Alquiler"])
                             
-                            # Buscar historial de contadores filtrando por Empresa, Área y Agencia de manera precisa
-                            ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
-                            
-                            sugerencia_anterior = 0
-                            fecha_ultimo_alquiler = None
-                            
-                            if ultimo_registro_alq is not None:
-                                try:
-                                    sugerencia_anterior = int(ultimo_registro_alq["Contador Actual"])
-                                    fecha_ultimo_alquiler = pd.to_datetime(ultimo_registro_alq["Fecha"], errors='coerce')
-                                    st.success(f"🔍 ¡Historial Encontrado! Último contador registrado: **{sugerencia_anterior}** el {ultimo_registro_alq['Fecha']}")
-                                except:
-                                    pass
-                            else:
-                                st.warning("⚠️ No se encontró un alquiler previo idéntico para este Insumo, Empresa, Área y Agencia. Se iniciará con contador base 0.")
-                            
-                            # --- CONTROL DE SEGURIDAD PARA CONTADOR ANTERIOR ---
-                            col_c1, col_c2 = st.columns(2)
-                            with col_c1:
-                                if st.session_state["rol_actual"] == "Administrador":
-                                    cont_anterior = st.number_input(
-                                        "Contador Anterior (Editable - Admin):", 
-                                        min_value=0, 
-                                        step=1, 
-                                        value=int(sugerencia_anterior)
+                            if motivo_salida == "Venta":
+                                with col_mot2:
+                                    tipo_precio_aplicado = st.selectbox(
+                                        "🏷️ Esquema de Precio Aplicado:",
+                                        ["Precio Técnico", "Precio Cliente", "Precio Facturado"]
                                     )
-                                else:
-                                    cont_anterior = sugerencia_anterior
-                                    st.metric(label="Contador Anterior (Bloqueado)", value=cont_anterior)
-                                    st.caption("🔒 El contador anterior es automático. Solo un Administrador puede cambiarlo.")
+                                    area_o_precio_destino = tipo_precio_aplicado
+                                    
+                                    if tipo_precio_aplicado == "Precio Técnico":
+                                        val_unit = float(datos_insumo['Precio Técnico'])
+                                    elif tipo_precio_aplicado == "Precio Cliente":
+                                        val_unit = float(datos_insumo['Precio Cliente'])
+                                    else:
+                                        val_unit = float(datos_insumo['Precio Facturado'])
+                                    st.caption(f"Valor Unitario: *{val_unit} Bs.*")
                             
-                            with col_c2:
-                                cont_actual = st.number_input(
-                                    "Contador Actual (Lectura de hoy):", 
-                                    min_value=int(cont_anterior), 
-                                    step=1, 
-                                    value=int(cont_anterior)
-                                )
-                            
-                            paginas_calculadas = cont_actual - cont_anterior
-                            
-                            hoy = obtener_hora_local_bo()
-                            if fecha_ultimo_alquiler is not None and not pd.isna(fecha_ultimo_alquiler):
-                                if fecha_ultimo_alquiler.tzinfo is None:
-                                    fecha_ultimo_alquiler = fecha_ultimo_alquiler.replace(tzinfo=timezone(timedelta(hours=-4)))
-                                dif_tiempo = hoy - fecha_ultimo_alquiler
-                                dias_calculados = max(0, dif_tiempo.days)
-                            else:
-                                dias_calculados = 0 
-                                
-                            st.info(f"📑 **Páginas Impresas:** {paginas_calculadas} págs. | 📅 **Duración del Periodo:** {dias_calculados} días.")
-                    
-                    cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1)
-                    
-                    if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Venta":
-                        st.write(f"💵 **Total de la Venta Estimado:** {val_unit * cantidad_mov:,.2f} Bs.")
-                    
-                    if st.button("Aplicar Movimiento"):
-                        es_valido = True
-                        if tipo_movimiento == "Restar Stock (Salida)" and cantidad_mov > cant_actual:
-                            st.error(f"❌ Error: No puedes retirar {cantidad_mov} unidades porque solo quedan {cant_actual} en stock.")
-                            es_valido = False
-                        
-                        if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Alquiler":
-                            if not str(empresa_destino).strip() or not str(area_o_precio_destino).strip():
-                                st.error("❌ Error: Para registrar un alquiler debes seleccionar la Empresa y el Área de destino.")
-                                es_valido = False
-                                
-                        if es_valido:
-                            if tipo_movimiento == "Agregar Stock (Entrada)":
-                                nueva_cantidad = cant_actual + cantidad_mov
-                                tipo_historial = "Entrada"
-                                motivo_final = "Abastecimiento"
-                            else:
-                                nueva_cantidad = cant_actual - cantidad_mov
-                                tipo_historial = "Salida"
-                                motivo_final = motivo_salida
-                            
-                            with st.spinner("Actualizando datos en la nube..."):
-                                actualizar_stock_sheet(
-                                    id_insumo, 
-                                    nueva_cantidad, 
-                                    seleccionado, 
-                                    tipo_historial, 
-                                    cantidad_mov,
-                                    motivo=motivo_final,
-                                    empresa=empresa_destino,
-                                    area_o_precio=area_o_precio_destino,
-                                    precio_unitario=val_unit,
-                                    contador_anterior=cont_anterior,
-                                    contador_actual=cont_actual,
-                                    paginas=paginas_calculadas,
-                                    dias=dias_calculados,
-                                    agencia=agencia_destino
-                                )
-                            st.success(f"¡Stock actualizado! Ahora tienes {nueva_cantidad} unidades de '{seleccionado}'.")
-                            st.cache_data.clear()
-                            st.cache_resource.clear()
-                            st.rerun()
-            else:
-                st.info("Registra un insumo para habilitar los movimientos.")
+                            elif motivo_salida == "Alquiler":
+                                # Estas columnas SOLO se crean si el motivo es Alquiler
+                                col_al_dest1, col_al_dest2 = st.columns(2)
+                
+                                with col_al_dest1:
+                                    empresa_destino = st.selectbox("🏢 Empresa:", empresas_disponibles)
+                                    agencias_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_destino.strip())]
+                                    agencia_destino = st.selectbox(
+                                    "🏢 Agencia:", 
+                                    agencias_filtradas, 
+                                    format_func=lambda x: x.replace(empresa_destino + " - ", "")
+                                    )
 
-    st.markdown("---")
+                                with col_al_dest2:
+                                    areas_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_destino)]
+                                    area_o_precio_destino = st.selectbox(
+                                    "📍 Área:", 
+                                    areas_filtradas, 
+                                    format_func=lambda x: x.replace(agencia_destino + " - ", "")
+                                    )
+                    
+                                st.markdown("---")
+                                st.markdown("📊 **Control de Contadores (Alquiler)**")
+                
+                                # Solo buscar el historial si el motivo es Alquiler
+                                ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
+                                
+                                # Buscar historial de contadores filtrando por Empresa, Área y Agencia de manera precisa
+                                ultimo_registro_alq = obtener_ultimo_alquiler(seleccionado, empresa_destino, area_o_precio_destino, agencia_destino)
+                                
+                                sugerencia_anterior = 0
+                                fecha_ultimo_alquiler = None
+                                
+                                if ultimo_registro_alq is not None:
+                                    try:
+                                        sugerencia_anterior = int(ultimo_registro_alq["Contador Actual"])
+                                        fecha_ultimo_alquiler = pd.to_datetime(ultimo_registro_alq["Fecha"], errors='coerce')
+                                        st.success(f"🔍 ¡Historial Encontrado! Último contador registrado: **{sugerencia_anterior}** el {ultimo_registro_alq['Fecha']}")
+                                    except:
+                                        pass
+                                else:
+                                    st.warning("⚠️ No se encontró un alquiler previo idéntico para este Insumo, Empresa, Área y Agencia. Se iniciará con contador base 0.")
+                                
+                                # --- CONTROL DE SEGURIDAD PARA CONTADOR ANTERIOR ---
+                                col_c1, col_c2 = st.columns(2)
+                                with col_c1:
+                                    if st.session_state["rol_actual"] == "Administrador":
+                                        cont_anterior = st.number_input(
+                                            "Contador Anterior (Editable - Admin):", 
+                                            min_value=0, 
+                                            step=1, 
+                                            value=int(sugerencia_anterior)
+                                        )
+                                    else:
+                                        cont_anterior = sugerencia_anterior
+                                        st.metric(label="Contador Anterior (Bloqueado)", value=cont_anterior)
+                                        st.caption("🔒 El contador anterior es automático. Solo un Administrador puede cambiarlo.")
+                                
+                                with col_c2:
+                                    cont_actual = st.number_input(
+                                        "Contador Actual (Lectura de hoy):", 
+                                        min_value=int(cont_anterior), 
+                                        step=1, 
+                                        value=int(cont_anterior)
+                                    )
+                                
+                                paginas_calculadas = cont_actual - cont_anterior
+                                
+                                hoy = obtener_hora_local_bo()
+                                if fecha_ultimo_alquiler is not None and not pd.isna(fecha_ultimo_alquiler):
+                                    if fecha_ultimo_alquiler.tzinfo is None:
+                                        fecha_ultimo_alquiler = fecha_ultimo_alquiler.replace(tzinfo=timezone(timedelta(hours=-4)))
+                                    dif_tiempo = hoy - fecha_ultimo_alquiler
+                                    dias_calculados = max(0, dif_tiempo.days)
+                                else:
+                                    dias_calculados = 0 
+                                    
+                                st.info(f"📑 **Páginas Impresas:** {paginas_calculadas} págs. | 📅 **Duración del Periodo:** {dias_calculados} días.")
+                        
+                        cantidad_mov = st.number_input("Cantidad a mover:", min_value=1, step=1, value=1)
+                        
+                        if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Venta":
+                            st.write(f"💵 **Total de la Venta Estimado:** {val_unit * cantidad_mov:,.2f} Bs.")
+                        
+                        if st.button("Aplicar Movimiento"):
+                            es_valido = True
+                            if tipo_movimiento == "Restar Stock (Salida)" and cantidad_mov > cant_actual:
+                                st.error(f"❌ Error: No puedes retirar {cantidad_mov} unidades porque solo quedan {cant_actual} en stock.")
+                                es_valido = False
+                            
+                            if tipo_movimiento == "Restar Stock (Salida)" and motivo_salida == "Alquiler":
+                                if not str(empresa_destino).strip() or not str(area_o_precio_destino).strip():
+                                    st.error("❌ Error: Para registrar un alquiler debes seleccionar la Empresa y el Área de destino.")
+                                    es_valido = False
+                                    
+                            if es_valido:
+                                if tipo_movimiento == "Agregar Stock (Entrada)":
+                                    nueva_cantidad = cant_actual + cantidad_mov
+                                    tipo_historial = "Entrada"
+                                    motivo_final = "Abastecimiento"
+                                else:
+                                    nueva_cantidad = cant_actual - cantidad_mov
+                                    tipo_historial = "Salida"
+                                    motivo_final = motivo_salida
+                                
+                                with st.spinner("Actualizando datos en la nube..."):
+                                    actualizar_stock_sheet(
+                                        id_insumo, 
+                                        nueva_cantidad, 
+                                        seleccionado, 
+                                        tipo_historial, 
+                                        cantidad_mov,
+                                        motivo=motivo_final,
+                                        empresa=empresa_destino,
+                                        area_o_precio=area_o_precio_destino,
+                                        precio_unitario=val_unit,
+                                        contador_anterior=cont_anterior,
+                                        contador_actual=cont_actual,
+                                        paginas=paginas_calculadas,
+                                        dias=dias_calculados,
+                                        agencia=agencia_destino
+                                    )
+                                st.success(f"¡Stock actualizado! Ahora tienes {nueva_cantidad} unidades de '{seleccionado}'.")
+                                st.cache_data.clear()
+                                st.cache_resource.clear()
+                                st.rerun()
+                else:
+                    st.info("Registra un insumo para habilitar los movimientos.")
+
+        st.markdown("---")
 
     # --- LISTA DE EXISTENCIAS ---
     st.subheader("🔍 Buscador y Lista de Existencias")
