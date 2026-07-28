@@ -9,82 +9,155 @@ import plotly.express as px
 import time
 import hashlib
 import requests
+import streamlit as st
 
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
 
 st.markdown("""
 <style>
-    /* 1. Fondo de la aplicación - Plomo claro profesional */
+    /* Fondo general de la aplicación (Plomo claro suave) */
     [data-testid="stAppViewContainer"] {
-        background-color: #e9ecef !important;
+        background-color: #f0f2f5 !important;
     }
-
-    /* Ocultar barra superior por defecto */
+    
     header[data-testid="stHeader"] {
         background-color: rgba(0,0,0,0) !important;
     }
 
-    /* 2. Menú Lateral (Sidebar) - Negro con borde Rojo */
+    /* Ocultar padding superior predeterminado de Streamlit */
+    .main .block-container {
+        padding-top: 1rem !important;
+        max-width: 95% !important;
+    }
+
+    /* Sidebar - Negro elegante con acento rojo */
     [data-testid="stSidebar"] {
-        background-color: #121212 !important;
-        border-right: 3px solid #dc2626 !important;
+        background-color: #16161a !important;
+        border-right: 3px solid #ff4b5c !important;
     }
     [data-testid="stSidebar"] * {
         color: #ffffff !important;
     }
 
-    /* 3. Tarjetas, Formularios y Pestañas - Fondo blanco con borde plomo */
-    div[data-testid="stForm"],
-    div.stTabs [data-baseweb="tab-panel"] {
-        background-color: #ffffff !important;
-        border-radius: 12px !important;
-        padding: 24px !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06) !important;
-        border: 1px solid #cbd5e1 !important;
-        margin-top: 10px;
+    /* ---------------------------------------------------------
+       ENCAREZADO "HERO" OSCURO (Como la imagen de referencia)
+       --------------------------------------------------------- */
+    .hero-container {
+        background-color: #1a181b;
+        border-radius: 16px;
+        padding: 40px 35px;
+        margin-bottom: 25px;
+        color: #ffffff;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    
+    .hero-title {
+        font-size: 2.3rem;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin-bottom: 10px;
+        color: #ffffff;
+    }
+    
+    .hero-subtitle {
+        font-size: 1rem;
+        color: #a1a1aa;
+        max-width: 700px;
+        line-height: 1.5;
     }
 
-    /* 4. Estilo para Pestañas (Tabs) - Plomo y Rojo */
+    .badge-red {
+        background-color: #ff4b5c;
+        color: white;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.8rem;
+        display: inline-block;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+    }
+
+    /* ---------------------------------------------------------
+       TARJETAS Y CONTENEDORES (Estilo 'Cards' flotantes)
+       --------------------------------------------------------- */
+    div[data-testid="stForm"],
+    div[data-testid="stVerticalBlock"] > div[style*="background-color"] {
+        background-color: #ffffff !important;
+        border-radius: 14px !important;
+        padding: 24px !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
+        border: 1px solid #e4e4e7 !important;
+    }
+
+    /* Pestañas modernas en rojo y negro */
     button[data-baseweb="tab"] {
         background-color: transparent !important;
         border-radius: 8px !important;
-        padding: 8px 18px !important;
+        padding: 10px 20px !important;
         font-weight: 600 !important;
-        color: #475569 !important; /* Plomo oscuro */
+        color: #52525b !important;
     }
 
     button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: #dc2626 !important; /* Rojo principal */
+        background-color: #ff4b5c !important;
         color: #ffffff !important;
-        box-shadow: 0 3px 10px rgba(220, 38, 38, 0.3) !important;
+        box-shadow: 0 4px 12px rgba(255, 75, 92, 0.3) !important;
     }
 
-    /* 5. Botones generales en estilo Rojo */
+    /* Botones primarios en Rojo */
     .stButton > button {
-        background-color: #dc2626 !important;
+        background-color: #ff4b5c !important;
         color: #ffffff !important;
         border-radius: 8px !important;
+        font-weight: 700 !important;
         border: none !important;
-        font-weight: 600 !important;
-        transition: background-color 0.2s ease;
+        padding: 10px 24px !important;
     }
+    
     .stButton > button:hover {
-        background-color: #991b1b !important; /* Rojo más oscuro al pasar el cursor */
-        color: #ffffff !important;
-    }
-
-    /* Títulos principales en Plomo Oscuro / Negro */
-    h1, h2, h3 {
-        color: #0f172a !important;
-    }
-
-    /* Mensajes de alerta */
-    .stAlert {
-        border-radius: 10px !important;
+        background-color: #e63946 !important;
+        box-shadow: 0 4px 12px rgba(230, 57, 70, 0.4) !important;
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# BANNER PRINCIPAL OSCURO (Inspirado en One Page Love)
+# ---------------------------------------------------------
+st.markdown("""
+<div class="hero-container">
+    <span class="badge-red">TechControl OS v2.0</span>
+    <div class="hero-title">Sistema de Gestión e Inventario Cloud</div>
+    <div class="hero-subtitle">
+        Control centralizado de insumos, servicios técnicos y monitoreo de stock en tiempo real.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# CONTENIDO EN PESTAÑAS (Tarjetas abajo sobre fondo plomo)
+# ---------------------------------------------------------
+tab1, tab2, tab3 = st.tabs(["📦 Operaciones de Stock", "📊 Valorización", "🛠️ Servicios y Soporte"])
+
+with tab1:
+    col_a, col_b = st.columns([1, 1])
+    
+    with col_a:
+        with st.container(border=True):
+            st.subheader("➕ Registrar Nuevo Insumo")
+            st.text_input("Nombre del Insumo", placeholder="Ej: Toner HP 85A")
+            st.text_input("Categoría", placeholder="Ej: Consumibles")
+            st.number_input("Cantidad Inicial", min_value=1, value=10)
+            st.button("Guardar Insumo", use_container_width=True)
+            
+    with col_b:
+        with st.container(border=True):
+            st.subheader("🔄 Registrar Movimiento")
+            st.selectbox("Tipo de Movimiento", ["Entrada de Stock", "Salida a Servicio"])
+            st.number_input("Cantidad", min_value=1, value=1)
+            st.button("Confirmar Movimiento", use_container_width=True)
 
 # --- AJUSTE DE ZONA HORARIA (BOLIVIA UTC-4) ---
 def obtener_hora_local_bo():
