@@ -122,7 +122,7 @@ if not st.session_state.logged_in:
         
         # Logo arriba centrado
         try:
-            st.image("logo.jpg", use_container_width=True)
+            st.image("logo.jpg")
         except Exception:
             st.markdown("<h1 style='color:white; text-align:center;'>Copias y etc.</h1>", unsafe_allow_html=True)
             
@@ -161,6 +161,14 @@ else:
 
     st.title("Bienvenido al Sistema de Inventario")
     # AQUÍ CONTINÚA TODO EL CÓDIGO DE TUS PESTAÑAS Y FUNCIONES ORIGINALES
+
+/* Controlar el tamaño y centrado del logo dentro del login */
+    div[data-testid="stForm"] img {
+        max-width: 180px !important;
+        height: auto !important;
+        display: block !important;
+        margin: 0 auto 15px auto !important;
+    }
 
 # --- AJUSTE DE ZONA HORARIA (BOLIVIA UTC-4) ---
 def obtener_hora_local_bo():
