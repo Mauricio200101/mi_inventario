@@ -335,27 +335,10 @@ def check_password():
 
     with col_central:
         with st.form("form_login"):
-            # Logo centrado arriba del título (con suavizado anti-pixelado)
+            # Logo vectorial/PNG nativo (máxima nitidez)
             l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
             with l_col2:
-                try:
-                    img = Image.open("logo.jpg").convert("RGBA")
-                    datas = img.getdata()
-                    new_data = []
-                    for item in datas:
-                        val = max(item[0], item[1], item[2])
-                        if val < 30:
-                            new_data.append((0, 0, 0, 0)) # Fondo transparente
-                        elif val < 120:
-                            # Transparencia gradual para suavizar bordes pixelados
-                            alpha = int((val - 30) / (120 - 30) * 255)
-                            new_data.append((item[0], item[1], item[2], alpha))
-                        else:
-                            new_data.append((item[0], item[1], item[2], 255))
-                    img.putdata(new_data)
-                    st.image(img, width=150)
-                except Exception:
-                    st.image("logo.jpg", width=140)
+                st.image("logo.png", width=150)
                     
             st.markdown("<div class='login-title'>🔑 Acceso al Sistema de Inventario</div>", unsafe_allow_html=True)
 
