@@ -331,11 +331,7 @@ def check_password():
     </style>
     """, unsafe_allow_html=True)
 
-    col_izq, col_central, col_der = st.columns([1, 2, 1])
-
-    with col_central:
-        with st.form("form_login"):
-            # Logo de alta nitidez
+    # Logo de alta nitidez
         l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
         with l_col2:
             try:
@@ -361,6 +357,7 @@ def check_password():
             except Exception as e:
                 # Si no lo encuentra, mostramos un aviso sutil o nada
                 pass
+
     return False
 
 if not check_password():
