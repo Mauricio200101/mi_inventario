@@ -335,30 +335,32 @@ def check_password():
 
     with col_central:
         with st.form("form_login"):
-            # Logo vectorial/PNG nativo (máxima nitidez)
-            l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
-            with l_col2:
-                st.image("logo.png", width=150)
-                    
-            st.markdown("<div class='login-title'>🔑 Acceso al Sistema de Inventario</div>", unsafe_allow_html=True)
-
-            usuario_input = st.text_input("Usuario:", placeholder="Ingresa tu usuario")
-            password_input = st.text_input("Contraseña:", type="password", placeholder="••••••••")
-
-            if st.form_submit_button("INGRESAR", use_container_width=True):
-                df_users = obtener_usuarios()
-                pass_input_hash = encriptar_password(password_input)
-                usuario_valido = df_users[(df_users["Usuario"] == usuario_input) & (df_users["Contraseña"] == str(password_input))]
-
-                if not usuario_valido.empty:
-                    st.session_state["logged_in"] = True
-                    st.session_state["usuario_actual"] = usuario_input
-                    st.session_state["rol_actual"] = usuario_valido.iloc[0]["Rol"]
-                    st.success(f"¡Bienvenido, {usuario_input}! Rol: {st.session_state['rol_actual']}")
-                    st.rerun()
-                else:
-                    st.error("❌ Usuario o contraseña incorrectos. Inténtalo de nuevo.")
-
+            # Logo de alta nitidez
+        l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
+        with l_col2:
+            try:
+                # Usamos use_container_width=True pero limitamos el tamaño en CSS
+                # para forzar al servidor a enviar la mejor imagen posible.
+                st.markdown(
+                    """
+                    <style>
+                        [data-testid="stImage"] > img {
+                            width: 150px;
+                            image-rendering: -webkit-optimize-contrast; /* Para Safari/Chrome */
+                            image-rendering: crispedges;              /* Para Firefox */
+                        }
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
+                
+                # OJO: Cambiamos 'logo.png' por 'logo_highres.png' si tienes una versión grande.
+                # Si solo tienes 'logo.png', úsalo, pero usa use_container_width=True.
+                st.image("logo.png", use_container_width=True)
+                
+            except Exception as e:
+                # Si no lo encuentra, mostramos un aviso sutil o nada
+                pass
     return False
 
 if not check_password():
