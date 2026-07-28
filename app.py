@@ -18,6 +18,7 @@ st.set_page_config(
     page_icon="🔐",
     layout="wide",
     initial_sidebar_state="collapsed" # Oculta el sidebar en la pantalla de login
+)
 
 # 2. Convertir imágenes a base64 para el CSS
 def get_base64(path):
@@ -28,9 +29,6 @@ def get_base64(path):
         return ""
 
 bg_base64 = get_base64("fondo.jpg")
-
-# Configuración de la página
-st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
 
 # 3. CSS de la pantalla de Login (Inspirado en la imagen de Impuestos)
 st.markdown(f"""
