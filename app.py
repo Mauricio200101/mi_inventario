@@ -9,132 +9,160 @@ import plotly.express as px
 import time
 import hashlib
 import requests
+import base64
 import streamlit as st
+
+# 1. Configuración de página
+st.set_page_config(
+    page_title="Copias y etc. - Iniciar Sesión",
+    page_icon="🔐",
+    layout="wide",
+    initial_sidebar_state="collapsed" # Oculta el sidebar en la pantalla de login
+
+# 2. Convertir imágenes a base64 para el CSS
+def get_base64(path):
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        return ""
+
+bg_base64 = get_base64("fondo.jpg")
 
 # Configuración de la página
 st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", layout="wide")
 
-st.markdown("""
+# 3. CSS de la pantalla de Login (Inspirado en la imagen de Impuestos)
+st.markdown(f"""
 <style>
-    /* Fondo general de la aplicación (Plomo claro suave) */
-    [data-testid="stAppViewContainer"] {
-        background-color: #f0f2f5 !important;
-    }
+    /* Fondo de pantalla completo con tu imagen */
+    [data-testid="stAppViewContainer"] {{
+        background-image: url("data:image/jpeg;base64,{bg_base64}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+    }}
     
-    header[data-testid="stHeader"] {
-        background-color: rgba(0,0,0,0) !important;
-    }
-
-    /* Ocultar padding superior predeterminado de Streamlit */
-    .main .block-container {
-        padding-top: 1rem !important;
-        max-width: 95% !important;
-    }
-
-    /* Sidebar - Negro elegante con acento rojo */
-    [data-testid="stSidebar"] {
-        background-color: #16161a !important;
-        border-right: 3px solid #ff4b5c !important;
-    }
-    [data-testid="stSidebar"] * {
-        color: #ffffff !important;
-    }
-
-    /* ---------------------------------------------------------
-       ENCAREZADO "HERO" OSCURO (Como la imagen de referencia)
-       --------------------------------------------------------- */
-    .hero-container {
-        background-color: #1a181b;
-        border-radius: 16px;
-        padding: 40px 35px;
-        margin-bottom: 25px;
-        color: #ffffff;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-    }
-    
-    .hero-title {
-        font-size: 2.3rem;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        margin-bottom: 10px;
-        color: #ffffff;
-    }
-    
-    .hero-subtitle {
-        font-size: 1rem;
-        color: #a1a1aa;
-        max-width: 700px;
-        line-height: 1.5;
-    }
-
-    .badge-red {
-        background-color: #ff4b5c;
-        color: white;
-        padding: 6px 14px;
-        border-radius: 20px;
-        font-weight: 700;
-        font-size: 0.8rem;
-        display: inline-block;
-        margin-bottom: 12px;
-        text-transform: uppercase;
-    }
-
-    /* ---------------------------------------------------------
-       TARJETAS Y CONTENEDORES (Estilo 'Cards' flotantes)
-       --------------------------------------------------------- */
-    div[data-testid="stForm"],
-    div[data-testid="stVerticalBlock"] > div[style*="background-color"] {
-        background-color: #ffffff !important;
-        border-radius: 14px !important;
-        padding: 24px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
-        border: 1px solid #e4e4e7 !important;
-    }
-
-    /* Pestañas modernas en rojo y negro */
-    button[data-baseweb="tab"] {
+    header[data-testid="stHeader"] {{
         background-color: transparent !important;
-        border-radius: 8px !important;
-        padding: 10px 20px !important;
-        font-weight: 600 !important;
-        color: #52525b !important;
-    }
+    }}
 
-    button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: #ff4b5c !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 12px rgba(255, 75, 92, 0.3) !important;
-    }
+    /* Si no ha iniciado sesión, ocultar el sidebar por completo */
+    [data-testid="stSidebar"] {{
+        display: none;
+    }}
 
-    /* Botones primarios en Rojo */
-    .stButton > button {
-        background-color: #ff4b5c !important;
+    /* Centrar la caja de Login en pantalla */
+    .main .block-container {{
+        max-width: 460px !important;
+        padding-top: 5rem !important;
+    }}
+
+    /* Tarjeta oscura flotante estilo SIAT */
+    div[data-testid="stForm"] {{
+        background-color: #121216 !important;
+        border-radius: 20px !important;
+        padding: 35px 30px !important;
+        border: 2px solid #dc2626 !important;
+        box-shadow: 0 0 25px rgba(220, 38, 38, 0.4) !important;
+    }}
+
+    /* Textos del formulario */
+    div[data-testid="stForm"] h2, 
+    div[data-testid="stForm"] label,
+    div[data-testid="stForm"] p {{
         color: #ffffff !important;
-        border-radius: 8px !important;
-        font-weight: 700 !important;
-        border: none !important;
-        padding: 10px 24px !important;
-    }
+        text-align: center;
+    }}
+
+    /* Campos de entrada (inputs) */
+    .stTextInput input {{
+        background-color: #1f1f2e !important;
+        color: #ffffff !important;
+        border-radius: 10px !important;
+        border: 1px solid #3f3f46 !important;
+        padding: 12px !important;
+    }}
     
-    .stButton > button:hover {
-        background-color: #e63946 !important;
-        box-shadow: 0 4px 12px rgba(230, 57, 70, 0.4) !important;
-    }
+    .stTextInput input:focus {{
+        border-color: #dc2626 !important;
+        box-shadow: 0 0 8px rgba(220, 38, 38, 0.6) !important;
+    }}
+
+    /* Botón INGRESAR en rojo */
+    .stButton > button {{
+        background-color: #dc2626 !important;
+        color: #ffffff !important;
+        border-radius: 10px !important;
+        border: none !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        padding: 12px !important;
+        margin-top: 15px !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }}
+    
+    .stButton > button:hover {{
+        background-color: #b91c1c !important;
+        box-shadow: 0 0 15px rgba(220, 38, 38, 0.8) !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
+# 4. Control de sesión del usuario
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
 # ---------------------------------------------------------
-# BANNER PRINCIPAL OSCURO (Inspirado en One Page Love)
+# VISTA 1: PANTALLA DE LOGIN
 # ---------------------------------------------------------
-st.markdown("""
-<div class="hero-container">
-    <span class="badge-red">TechControl OS v2.0</span>
-    <div class="hero-title">Sistema de Gestión e Inventario Cloud</div>
-    <div class="hero-subtitle">
-        Control centralizado de insumos, servicios técnicos y monitoreo de stock en tiempo real.
-    </div>
-</div>
-""", unsafe_allow_html=True)
+if not st.session_state.logged_in:
+    
+    # Formulario de inicio de sesión
+    with st.form("form_login"):
+        
+        # Logo arriba centrado
+        try:
+            st.image("logo.jpg", use_container_width=True)
+        except Exception:
+            st.markdown("<h1 style='color:white; text-align:center;'>Copias y etc.</h1>", unsafe_allow_html=True)
+            
+        st.markdown("<h3 style='margin-top: -10px;'>Inicia sesión</h3>", unsafe_allow_html=True)
+        
+        usuario = st.text_input("USUARIO / CORREO", placeholder="Ej: admin")
+        password = st.text_input("CONTRASEÑA", type="password", placeholder="••••••••")
+        
+        btn_ingresar = st.form_submit_button("INGRESAR", use_container_width=True)
+        
+        if btn_ingresar:
+            # Aquí defines tu usuario y contraseña (o la consulta que ya tengas)
+            if usuario == "admin" and password == "1234":
+                st.session_state.logged_in = True
+                st.rerun() # Recarga la app para entrar al panel
+            else:
+                st.error("Usuario o contraseña incorrectos")
+
+# ---------------------------------------------------------
+# VISTA 2: SISTEMA PRINCIPAL (Solo se ve al iniciar sesión)
+# ---------------------------------------------------------
+else:
+    # Mostramos de nuevo el sidebar cuando ya se inició sesión
+    st.markdown("""
+    <style>
+        [data-testid="stSidebar"] { display: block !important; }
+        .main .block-container { max-width: 95% !important; padding-top: 1rem !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    with st.sidebar:
+        st.caption("Sesión activa")
+        if st.button("Cerrar Sesión"):
+            st.session_state.logged_in = False
+            st.rerun()
+
+    st.title("Bienvenido al Sistema de Inventario")
+    # AQUÍ CONTINÚA TODO EL CÓDIGO DE TUS PESTAÑAS Y FUNCIONES ORIGINALES
 
 # --- AJUSTE DE ZONA HORARIA (BOLIVIA UTC-4) ---
 def obtener_hora_local_bo():
