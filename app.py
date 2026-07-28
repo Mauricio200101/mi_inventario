@@ -338,12 +338,12 @@ def check_password():
                 df_users = obtener_usuarios()
                 if df_users is not None and not df_users.empty:
                     df_users["Usuario"] = df_users["Usuario"].astype(str).str.strip().str.lower()
-                    df_users["password"] = df_users["password"].astype(str).str.strip()
+                    df_users["Contraseña"] = df_users["Contraseña"].astype(str).str.strip()
                     
                     u_ingresado = usuario_input.strip().lower()
                     p_ingresado = password_input.strip()
                     
-                    user_match = df_users[(df_users["Usuario"] == u_ingresado) & (df_users["password"] == p_ingresado)]
+                    user_match = df_users[(df_users["Usuario"] == u_ingresado) & (df_users["Contraseña"] == p_ingresado)]
                     if not user_match.empty:
                         st.session_state["logged_in"] = True
                         st.session_state["usuario_actual"] = user_match.iloc[0]["Usuario"]
