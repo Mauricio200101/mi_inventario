@@ -336,31 +336,31 @@ def check_password():
     with col_central:
         with st.form("form_login"):
             # Logo de alta nitidez
-        l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
-        with l_col2:
-            try:
-                # Usamos use_container_width=True pero limitamos el tamaño en CSS
-                # para forzar al servidor a enviar la mejor imagen posible.
-                st.markdown(
-                    """
-                    <style>
-                        [data-testid="stImage"] > img {
-                            width: 150px;
-                            image-rendering: -webkit-optimize-contrast; /* Para Safari/Chrome */
-                            image-rendering: crispedges;              /* Para Firefox */
-                        }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
-                # OJO: Cambiamos 'logo.png' por 'logo_highres.png' si tienes una versión grande.
-                # Si solo tienes 'logo.png', úsalo, pero usa use_container_width=True.
-                st.image("logo.png", use_container_width=True)
-                
-            except Exception as e:
-                # Si no lo encuentra, mostramos un aviso sutil o nada
-                pass
+            l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
+            with l_col2:
+                try:
+                    # Usamos use_container_width=True pero limitamos el tamaño en CSS
+                    # para forzar al servidor a enviar la mejor imagen posible.
+                    st.markdown(
+                        """
+                        <style>
+                            [data-testid="stImage"] > img {
+                                width: 150px;
+                                image-rendering: -webkit-optimize-contrast; /* Para Safari/Chrome */
+                                image-rendering: crispedges;              /* Para Firefox */
+                            }
+                        </style>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    
+                    # OJO: Cambiamos 'logo.png' por 'logo_highres.png' si tienes una versión grande.
+                    # Si solo tienes 'logo.png', úsalo, pero usa use_container_width=True.
+                    st.image("logo.png", use_container_width=True)
+                    
+                except Exception as e:
+                    # Si no lo encuentra, mostramos un aviso sutil o nada
+                    pass
 
     return False
 
