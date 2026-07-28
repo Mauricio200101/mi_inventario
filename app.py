@@ -15,60 +15,56 @@ st.set_page_config(page_title="Control de Inventario Cloud", page_icon="📦", l
 
 st.markdown("""
 <style>
-    /* Fondo general gris claro para resaltar tarjetas */
-    .stApp {
-        background-color: #f8f9fc;
+    /* 1. Fondo gris claro de toda la aplicación */
+    [data-testid="stAppViewContainer"] {
+        background-color: #f4f6f9 !important;
     }
     
-    /* Ocultar menú y pie predeterminados */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* Estilo para tarjetas personalizadas tipo 'SaaS' */
-    .kpi-card {
-        background-color: #ffffff;
-        border-radius: 14px;
-        padding: 20px;
-        border: 1px solid #eef2f6;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-        margin-bottom: 15px;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    
-    .kpi-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+    /* Hacer transparente la barra superior predeterminada */
+    header[data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0) !important;
     }
 
-    /* Colores pastel para banners de métricas */
-    .bg-purple { background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); color: white; }
-    .bg-blue { background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%); color: #1e293b; }
-    .bg-orange { background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #1e293b; }
-    
-    .kpi-title {
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        opacity: 0.9;
-        margin-bottom: 8px;
-    }
-    
-    .kpi-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-    }
-
-    /* Personalización del menú lateral */
+    /* 2. Personalización del Sidebar (Menú Lateral) */
     [data-testid="stSidebar"] {
-        background-color: #1e1e2d;
+        background-color: #1e1e2d !important;
     }
     [data-testid="stSidebar"] * {
         color: #ffffff !important;
     }
+
+    /* 3. Convertir Formularios y Contenido de Pestañas en Tarjetas (Cards) */
+    div[data-testid="stForm"],
+    div.stTabs [data-baseweb="tab-panel"] {
+        background-color: #ffffff !important;
+        border-radius: 14px !important;
+        padding: 24px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04) !important;
+        border: 1px solid #e2e8f0 !important;
+        margin-top: 10px;
+    }
+
+    /* 4. Rediseño elegante para las Pestañas superiores (Tabs) */
+    button[data-baseweb="tab"] {
+        background-color: transparent !important;
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        font-weight: 600 !important;
+        color: #64748b !important;
+    }
+    
+    button[data-baseweb="tab"][aria-selected="true"] {
+        background-color: #ffffff !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+        color: #2563eb !important;
+    }
+
+    /* 5. Estilo para alertas/mensajes */
+    .stAlert {
+        border-radius: 10px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
-# 📍 FIN DEL ESTILO VISUAL
 
 # --- AJUSTE DE ZONA HORARIA (BOLIVIA UTC-4) ---
 def obtener_hora_local_bo():
