@@ -948,7 +948,7 @@ else:
 # ==========================================
 # 2. PESTAÑA DE VALORIZACIÓN DEL INVENTARIO
 # ==========================================
-with tab_valorizacion:
+elif seccion == "Valorización del Inventario":
     if st.session_state["rol_actual"] == "Administrador":
         st.subheader("💰 Resumen Monetario del Inventario")
         if not df_insumos.empty:
@@ -998,9 +998,10 @@ with tab_valorizacion:
 # ==========================================
 # 3. PESTAÑA DE RENDIMIENTO DE INSUMOS
 # ==========================================
-with tab_rendimiento:
-    st.subheader("📈 Análisis de Rendimiento Promedio de Insumos")
-    st.write("Esta sección calcula el rendimiento histórico del equipamiento/tóner en función de las copias realizadas y el tiempo útil de uso.")
+elif seccion == "Rendimiento de Insumos":
+    with tab_rendimiento:
+        st.subheader("📈 Análisis de Rendimiento Promedio de Insumos")
+        st.write("Esta sección calcula el rendimiento histórico del equipamiento/tóner en función de las copias realizadas y el tiempo útil de uso.")
 
     try:
         datos_rend = hoja_alquileres.get_all_values()
@@ -1072,7 +1073,7 @@ with tab_rendimiento:
 # ==========================================
 # 4. PESTAÑA DE REPORTES Y EDICIÓN/ELIMINACIÓN
 # ==========================================
-with tab_reportes:
+elif seccion == "Reportes por Fecha / Edición":
     st.subheader("📅 Reportes de Inventario y Herramientas de Edición")
     
     tab_rep_general, tab_rep_ventas, tab_rep_alquileres, tab_admin_borrado = st.tabs([
@@ -1321,7 +1322,7 @@ with tab_reportes:
 # ==========================================
 # 5. PESTAÑA DE CONFIGURACIÓN Y USUARIOS
 # ==========================================
-with tab_usuarios:
+elif seccion == "Configuración y Usuarios":
     if st.session_state["rol_actual"] == "Administrador":
         
         st.subheader("⚙️ Configuración y Gestión de Usuarios")
@@ -1546,7 +1547,7 @@ with tab_usuarios:
 # ==========================================
 # 6.PESTAÑA DE INSUMOS DE RESPALDO (BACKUP)
 # ==========================================
-with tab_respaldo:
+elif seccion == "Insumos de Respaldo (Backup)":
     with st.expander("➕ Registrar Nuevo Insumo de Respaldo"):
         with st.form("form_nuevo_backup"):
             insumo_nuevo_bk = st.selectbox("Seleccionar Insumo:", df_insumos["Nombre"].tolist() if not df_insumos.empty else [])
@@ -1750,7 +1751,7 @@ with tab_respaldo:
 # =========================================================
 # PESTAÑA: SERVICIOS Y SOPORTE TÉCNICO (3 ETAPAS)
 # =========================================================
-with tab_servicios:
+elif seccion == "servicios y soporte técnico":
     st.header("📋 Gestión de Servicios y Soporte Técnico")
     
     subtab_solicitar, subtab_atender, subtab_historial = st.tabs([
