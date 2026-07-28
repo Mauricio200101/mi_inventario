@@ -106,118 +106,8 @@ st.markdown(f"""
         box-shadow: 0 0 15px rgba(220, 38, 38, 0.8) !important;
     }}
 </style>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True)s
 
-# 4. Control de sesión del usuario
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-# ---------------------------------------------------------
-# VISTA 1: PANTALLA DE LOGIN (DISEÑO TARJETA CENTRADA)
-# ---------------------------------------------------------
-if not st.session_state.logged_in:
-
-    # Estilos CSS para centrar y estilizar la tarjeta de login
-    st.markdown("""
-    <style>
-        /* Ocultar encabezados de Streamlit */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-
-        /* Contenedor principal del formulario (Tarjeta central) */
-        div[data-testid="stForm"] {
-            max-width: 420px !important;
-            margin: 30px auto !important;
-            background-color: rgba(255, 255, 255, 0.95) !important;
-            border-radius: 18px !important;
-            padding: 25px 30px 30px 30px !important;
-            border: 2px solid #e60000 !important;
-            box-shadow: 0px 0px 25px rgba(230, 0, 0, 0.4) !important;
-        }
-
-        /* Estilo del título dentro de la tarjeta */
-        .login-title {
-            text-align: center;
-            color: #1f2937;
-            font-size: 18px;
-            font-weight: 700;
-            margin-top: 10px;
-            margin-bottom: 20px;
-        }
-
-        /* Etiquetas de los campos (Usuario / Contraseña) */
-        div[data-testid="stForm"] label p {
-            color: #374151 !important;
-            font-weight: 600 !important;
-            font-size: 14px !important;
-        }
-
-        /* Botón INGRESAR */
-        div[data-testid="stForm"] button {
-            background-color: #d90429 !important;
-            color: white !important;
-            font-weight: bold !important;
-            border-radius: 8px !important;
-            border: none !important;
-            height: 42px !important;
-            margin-top: 10px !important;
-            transition: all 0.3s ease !important;
-        }
-        div[data-testid="stForm"] button:hover {
-            background-color: #ef233c !important;
-            box-shadow: 0px 4px 12px rgba(217, 4, 41, 0.4) !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Columnas para asegurar centrado horizontal perfecto en pantallas anchas
-    col_izq, col_central, col_der = st.columns([1, 2, 1])
-
-    with col_central:
-        with st.form("form_login"):
-            # Logo centrado dentro de la tarjeta
-            logo_col1, logo_col2, logo_col3 = st.columns([1, 2, 1])
-            with logo_col2:
-                try:
-                    st.image("logo.jpg", width=140)
-                except Exception:
-                    pass
-
-            st.markdown("<div class='login-title'>🔑 Acceso al Sistema de Inventario</div>", unsafe_allow_html=True)
-
-            usuario = st.text_input("Usuario:", placeholder="Ej: admin")
-            password = st.text_input("Contraseña:", type="password", placeholder="••••••••")
-
-            btn_ingresar = st.form_submit_button("INGRESAR", use_container_width=True)
-
-            if btn_ingresar:
-                if usuario == "admin" and password == "1234":
-                    st.session_state.logged_in = True
-                    st.rerun()
-                else:
-                    st.error("Usuario o contraseña incorrectos")
-
-# ---------------------------------------------------------
-# VISTA 2: SISTEMA PRINCIPAL (Solo se ve al iniciar sesión)
-# ---------------------------------------------------------
-else:
-    # Mostramos de nuevo el sidebar cuando ya se inició sesión
-    st.markdown("""
-    <style>
-        [data-testid="stSidebar"] { display: block !important; }
-        .main .block-container { max-width: 95% !important; padding-top: 1rem !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    with st.sidebar:
-        st.caption("Sesión activa")
-        if st.button("Cerrar Sesión"):
-            st.session_state.logged_in = False
-            st.rerun()
-
-    st.title("Bienvenido al Sistema de Inventario")
-    # AQUÍ CONTINÚA TODO EL CÓDIGO DE TUS PESTAÑAS Y FUNCIONES ORIGINALES
 
 # --- AJUSTE DE ZONA HORARIA (BOLIVIA UTC-4) ---
 def obtener_hora_local_bo():
@@ -472,23 +362,84 @@ def check_password():
     if st.session_state["logged_in"]:
         return True
 
-    st.subheader("🔑 Acceso al Sistema de Inventario")
-    usuario_input = st.text_input("Usuario:")
-    password_input = st.text_input("Contraseña:", type="password")
-    
-    if st.button("Ingresar"):
-        df_users = obtener_usuarios()
-        pass_input_hash = encriptar_password(password_input)
-        usuario_valido = df_users[(df_users["Usuario"] == usuario_input) & (df_users["Contraseña"] == str(password_input))]
-        
-        if not usuario_valido.empty:
-            st.session_state["logged_in"] = True
-            st.session_state["usuario_actual"] = usuario_input
-            st.session_state["rol_actual"] = usuario_valido.iloc[0]["Rol"]
-            st.success(f"¡Bienvenido, {usuario_input}! Rol: {st.session_state['rol_actual']}")
-            st.rerun()
-        else:
-            st.error("❌ Usuario o contraseña incorrectos. Inténtalo de nuevo.")
+    # Estilos para la tarjeta centrada y elegante
+    st.markdown("""
+    <style>
+        #MainMenu, footer, header {visibility: hidden;}
+
+        div[data-testid="stForm"] {
+            max-width: 420px !important;
+            margin: 20px auto !important;
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            border-radius: 18px !important;
+            padding: 25px 30px 30px 30px !important;
+            border: 2px solid #e60000 !important;
+            box-shadow: 0px 0px 25px rgba(230, 0, 0, 0.4) !important;
+        }
+
+        .login-title {
+            text-align: center;
+            color: #1f2937;
+            font-size: 18px;
+            font-weight: 700;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        div[data-testid="stForm"] label p {
+            color: #374151 !important;
+            font-weight: 600 !important;
+            font-size: 14px !important;
+        }
+
+        div[data-testid="stForm"] button {
+            background-color: #d90429 !important;
+            color: white !important;
+            font-weight: bold !important;
+            border-radius: 8px !important;
+            border: none !important;
+            height: 42px !important;
+            margin-top: 10px !important;
+            transition: all 0.3s ease !important;
+        }
+        div[data-testid="stForm"] button:hover {
+            background-color: #ef233c !important;
+            box-shadow: 0px 4px 12px rgba(217, 4, 41, 0.4) !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_izq, col_central, col_der = st.columns([1, 2, 1])
+
+    with col_central:
+        with st.form("form_login"):
+            # Logo centrado arriba del título
+            l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
+            with l_col2:
+                try:
+                    st.image("logo.jpg", width=140)
+                except Exception:
+                    pass
+
+            st.markdown("<div class='login-title'>🔑 Acceso al Sistema de Inventario</div>", unsafe_allow_html=True)
+
+            usuario_input = st.text_input("Usuario:", placeholder="Ingresa tu usuario")
+            password_input = st.text_input("Contraseña:", type="password", placeholder="••••••••")
+
+            if st.form_submit_button("INGRESAR", use_container_width=True):
+                df_users = obtener_usuarios()
+                pass_input_hash = encriptar_password(password_input)
+                usuario_valido = df_users[(df_users["Usuario"] == usuario_input) & (df_users["Contraseña"] == str(password_input))]
+
+                if not usuario_valido.empty:
+                    st.session_state["logged_in"] = True
+                    st.session_state["usuario_actual"] = usuario_input
+                    st.session_state["rol_actual"] = usuario_valido.iloc[0]["Rol"]
+                    st.success(f"¡Bienvenido, {usuario_input}! Rol: {st.session_state['rol_actual']}")
+                    st.rerun()
+                else:
+                    st.error("❌ Usuario o contraseña incorrectos. Inténtalo de nuevo.")
+
     return False
 
 if not check_password():
