@@ -574,6 +574,7 @@ def aplicar_fondo_vectorial():
         unsafe_allow_html=True
     )
 
+
 # --- FUNCIÓN PARA EL FONDO DE LA BARRA LATERAL HD ---
 def aplicar_fondo_sidebar_hd():
     sidebar_svg = """
@@ -624,11 +625,11 @@ def aplicar_fondo_sidebar_hd():
         unsafe_allow_html=True
     )
 
+# Llamamos a la función
+aplicar_fondo_sidebar_hd()
 
 if "menu_activo" not in st.session_state:
     st.session_state["menu_activo"] = "Inicio"
-    aplicar_fondo_vectorial()
-    aplicar_fondo_sidebar_hd()
 
 # Estilo CSS para tarjetas grandes y contenedor deslizable horizontal (scroll)
 # --- ESTILOS CSS CORREGIDOS ---
@@ -707,6 +708,7 @@ df_insumos = obtener_insumos()
 empresas_disponibles, areas_disponibles, agencias_disponibles = obtener_parametros()
 
 if st.session_state["menu_activo"] == "Inicio":
+    aplicar_fondo_vectorial()
     st.markdown("<h2 style='text-align: center; color: #1f2937;'>📋 Menú Principal del Sistema</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #6b7280; margin-bottom: 20px;'>Desliza hacia la derecha para ver todas las opciones y haz clic en una tarjeta</p>", unsafe_allow_html=True)
 
