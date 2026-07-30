@@ -750,6 +750,41 @@ if st.session_state["menu_activo"] == "Inicio":
         if st.button("👥 Configuración\ny Usuarios\n\nRoles y ajustes", key="card_config"):
             st.session_state["menu_activo"] = "Configuración y Usuarios"
             st.rerun()
+            
+    # --- PEGA AQUÍ EL BUSCADOR (Línea 753) ---
+    st.markdown("---")
+    st.subheader("🔍 Buscador Rápido de Insumos")
+
+    busqueda_menu = st.text_input(
+        "Buscar insumo por nombre o categoría:", 
+        placeholder="Escribe aquí para buscar...", 
+        key="busqueda_inicio"
+    )
+
+    if busqueda_menu.strip():
+        if not df_insumos.empty:
+            df_filtrado = df_insumos[
+                df_insumos["Nombre"].astype(str).str.lower().str.contains(busqueda_menu.lower()) |
+                df_insumos["Categoría"].astype(str).str.lower().str.contains(busqueda_menu.lower())
+            ]
+            
+            if not df_filtrado.empty:
+                if st.session_state.get("rol_actual") == "Administrador":
+                    with st.expander("🚨 Zona de Administración: Eliminar Insumos"):
+                        insumo_a_borrar = st.selectbox("Selecciona insumo a eliminar:", df_filtrado["Nombre"].tolist(), key="del_menu_insumo")
+                        if st.button("Confirmar Eliminación", key="btn_del_menu"):
+                            id_a_borrar = df_filtrado[df_filtrado["Nombre"] == insumo_a_borrar]["ID"].values[0]
+                            if eliminar_insumo(id_a_borrar):
+                                st.success(f"Insumo '{insumo_a_borrar}' eliminado.")
+                                st.rerun()
+                            else:
+                                st.error("No se pudo eliminar.")
+
+                df_filtrado_con_num = df_filtrado.copy()
+                df_filtrado_con_num.insert(0, "N°", range(1, len(df_filtrado_con_num) + 1))
+                st.dataframe(df_filtrado_con_num, use_container_width=True, hide_index=True)
+            else:
+                st.warning("No se encontraron insumos que coincidan con la búsqueda.")
 
 else:
     # Fuerza a que todos los botones de subpáginas (incluyendo Volver) sean compactos
