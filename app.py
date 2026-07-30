@@ -683,19 +683,19 @@ st.markdown("""
     [data-testid="stHorizontalBlock"] div.stButton > button {
     background-color: white;
     color: #1f2937;
-    padding: 25px 15px;
+    padding: 20px 10px;
     border-radius: 18px;
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07);
     border: 1px solid #e5e7eb;
     width: 100% !important;
-    height: 180px !important;
-    font-size: 16px !important;
+    height: 160px !important;
+    font-size: 15px !important;
     font-weight: 600;
     transition: all 0.3s ease;
     white-space: pre-wrap;
 }
 
-[data-testid="stHorizontalBlock"] div.stButton > button:hover {
+    [data-testid="stHorizontalBlock"] div.stButton > button:hover {
     transform: translateY(-6px);
     box-shadow: 0 12px 30px rgba(230, 0, 0, 0.18);
     border-color: #e60000;
@@ -752,11 +752,23 @@ if st.session_state["menu_activo"] == "Inicio":
             st.rerun()
 
 else:
-    col_volver, _ = st.columns([1, 4])
-    with col_volver:
-        if st.button("🏠 Volver al Menú Principal"):
-            st.session_state["menu_activo"] = "Inicio"
-            st.rerun()
+    # Fuerza a que todos los botones de subpáginas (incluyendo Volver) sean compactos
+    st.markdown("""
+        <style>
+        div.stButton > button {
+            height: auto !important;
+            width: auto !important;
+            padding: 8px 16px !important;
+            font-size: 14px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    if st.button("🏠 Volver al Menú Principal"):
+        st.session_state["menu_activo"] = "Inicio"
+        st.rerun()
     
     st.divider()
 
