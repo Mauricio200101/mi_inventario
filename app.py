@@ -750,7 +750,7 @@ if st.session_state["menu_activo"] == "Inicio":
         if st.button("👥 Configuración\ny Usuarios\n\nRoles y ajustes", key="card_config"):
             st.session_state["menu_activo"] = "Configuración y Usuarios"
             st.rerun()
-            
+
     # --- PEGA AQUÍ EL BUSCADOR (Línea 753) ---
     st.markdown("---")
     st.subheader("🔍 Buscador Rápido de Insumos")
@@ -1100,20 +1100,20 @@ else:
                 else:
                     st.info("Registra un insumo para habilitar los movimientos.")
 
-        st.markdown("---")
-
-    # --- LISTA DE EXISTENCIAS ---
+    st.markdown("---")
+    
+    # --- TABLA Y BUSCADOR EXCLUSIVOS DE OPERACIONES DE STOCK ---
     st.subheader("🔍 Buscador y Lista de Existencias")
     busqueda = st.text_input("Buscar insumo por nombre o categoría:", placeholder="Escribe aquí para buscar...")
 
     if not df_insumos.empty:
         df_filtrado = df_insumos[
-            df_insumos["Nombre"].str.lower().str.contains(busqueda.lower()) | 
-            df_insumos["Categoría"].str.lower().str.contains(busqueda.lower()) # <--- AQUÍ ESTABA EL ERROR
+            df_insumos["Nombre"].astype(str).str.lower().str.contains(busqueda.lower()) |
+            df_insumos["Categoría"].astype(str).str.lower().str.contains(busqueda.lower())
         ]
         
-        # Bloque de eliminación solo para Administradores
-        if st.session_state["rol_actual"] == "Administrador":
+        # --- SOLO EL ADMINISTRADOR PUEDE ELIMINAR ---
+        if st.session_state.get("rol_actual") == "Administrador":
             with st.expander("🚨 Zona de Administración: Eliminar Insumos"):
                 insumo_a_borrar = st.selectbox("Selecciona insumo a eliminar:", df_filtrado["Nombre"].tolist())
                 if st.button("Confirmar Eliminación"):
@@ -1123,10 +1123,10 @@ else:
                         st.rerun()
                     else:
                         st.error("No se pudo eliminar.")
-        
-        df_filtrado_con_num = df_filtrado.copy()
-        df_filtrado_con_num.insert(0, "N°", range(1, len(df_filtrado_con_num) + 1))
-        st.dataframe(df_filtrado_con_num, use_container_width=True, hide_index=True)
+
+            df_filtrado_con_num = df_filtrado.copy()
+            df_filtrado_con_num.insert(0, "N°", range(1, len(df_filtrado_con_num) + 1))
+            st.dataframe(df_filtrado_con_num, use_container_width=True, hide_index=True)
     else:
         st.warning("No se encontraron insumos.")
 
