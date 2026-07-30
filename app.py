@@ -12,6 +12,7 @@ import requests
 import base64
 import streamlit as st
 import os
+import urllib.parse
 
 # 1. Configuración de página
 st.set_page_config(
@@ -576,36 +577,58 @@ def aplicar_fondo_vectorial():
 # Llamada a la función
 aplicar_fondo_vectorial()
 
-# --- FUNCIÓN PARA EL FONDO DE LA BARRA LATERAL ---
-def aplicar_fondo_sidebar(archivo_png):
-    try:
-        with open(archivo_png, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode()
-        st.markdown(
-            f"""
-            <style>
-            /* Fondo para la barra lateral */
-            [data-testid="stSidebar"] {{
-                background-image: url("data:image/png;base64,{encoded_string}") !important;
-                background-size: cover !important;
-                background-position: center !important;
-                background-repeat: no-repeat !important;
-            }}
+# --- FUNCIÓN PARA EL FONDO DE LA BARRA LATERAL HD ---
+def aplicar_fondo_sidebar_hd():
+    sidebar_svg = """
+    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 350 1080' preserveAspectRatio='none'>
+      <defs>
+        <linearGradient id='redSide' x1='0%' y1='0%' x2='100%' y2='100%'>
+          <stop offset='0%' stop-color='#b91c1c'/>
+          <stop offset='100%' stop-color='#7f1d1d'/>
+        </linearGradient>
+        <linearGradient id='darkSide' x1='0%' y1='0%' x2='100%' y2='100%'>
+          <stop offset='0%' stop-color='#111827'/>
+          <stop offset='100%' stop-color='#030712'/>
+        </linearGradient>
+        <linearGradient id='lightSide' x1='0%' y1='0%' x2='100%' y2='100%'>
+          <stop offset='0%' stop-color='#f8fafc'/>
+          <stop offset='100%' stop-color='#cbd5e1'/>
+        </linearGradient>
+      </defs>
 
-            /* Color del texto del usuario y rol para que sea legible sobre la imagen */
-            [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {{
-                color: #0f172a !important;
-                font-weight: 700 !important;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-    except FileNotFoundError:
-        pass
+      <rect width='350' height='1080' fill='url(#lightSide)'/>
+      <path d='M0,0 L180,0 L125,600 L0,1080 Z' fill='url(#darkSide)'/>
+      <path d='M0,550 L350,1080 L0,1080 Z' fill='url(#darkSide)'/>
+      <path d='M0,0 L190,0 L125,600 Z' fill='url(#redSide)'/>
+    </svg>
+    """
+    
+    encoded_svg = urllib.parse.quote(sidebar_svg)
 
-# Llamamos a la función con el nombre de tu archivo
-aplicar_fondo_sidebar("fondo del costado.png")
+    st.markdown(
+        f"""
+        <style>
+        [data-testid="stSidebar"] {{
+            background-image: url("data:image/svg+xml;utf8,{encoded_svg}") !important;
+            background-size: 100% 100% !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+            border-right: none !important;
+        }}
+
+        [data-testid="stSidebar"] p, 
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] label {{
+            color: #0f172a !important;
+            font-weight: 700 !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+# Llamamos a la función
+aplicar_fondo_sidebar_hd()
 
 if "menu_activo" not in st.session_state:
     st.session_state["menu_activo"] = "Inicio"
