@@ -1901,7 +1901,7 @@ if st.session_state["menu_activo"] == "Insumos de Respaldo (Backup)":
 # =========================================================
 # PESTAÑA: SERVICIOS Y SOPORTE TÉCNICO (3 ETAPAS)
 # =========================================================
-if st.session_state["menu_activo"] == "Servicios y Soporte Técnico":
+if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Soporte Técnico"]:
     st.header("📋 Gestión de Servicios y Soporte Técnico")
     
     subtab_solicitar, subtab_atender, subtab_historial = st.tabs([
