@@ -713,43 +713,56 @@ if st.session_state["menu_activo"] == "Inicio":
     st.markdown("<h2 style='text-align: center; color: #1f2937;'>📋 Menú Principal del Sistema</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #6b7280; margin-bottom: 20px;'>Desliza hacia la derecha para ver todas las opciones y haz clic en una tarjeta</p>", unsafe_allow_html=True)
 
-    # Creamos las columnas en una sola fila larga para simular el carrusel
-    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
-
-    with col1:
-        if st.button("📦 Operaciones\nde Stock\n\nEntradas y alertas", key="card_stock"):
-            st.session_state["menu_activo"] = "Operaciones de Stock"
-            st.rerun()
-
-    with col2:
-        if st.button("📊 Valorización\ndel Inventario\n\nCostos y activos", key="card_val"):
-            st.session_state["menu_activo"] = "Valorización del Inventario"
-            st.rerun()
-
-    with col3:
-        if st.button("📈 Rendimiento\nde Insumos\n\nMétricas de uso", key="card_rend"):
-            st.session_state["menu_activo"] = "Rendimiento de Insumos"
-            st.rerun()
-
-    with col4:
-        if st.button("🛠️ Insumos\nde Respaldo\n\nAlternativas", key="card_respaldo"):
-            st.session_state["menu_activo"] = "Insumos de Respaldo"
-            st.rerun()
-
-    with col5:
-        if st.button("⚙️ Servicios\ny Soporte\n\nMantenimiento", key="card_soporte"):
-            st.session_state["menu_activo"] = "Servicios y Soporte"
-            st.rerun()
-
-    with col6:
-        if st.button("📑 Reportes\ny Edición\n\nFiltros por fecha", key="card_rep"):
-            st.session_state["menu_activo"] = "Reportes por Fecha / Edición"
-            st.rerun()
-
-    with col7:
-        if st.button("👥 Configuración\ny Usuarios\n\nRoles y ajustes", key="card_config"):
-            st.session_state["menu_activo"] = "Configuración y Usuarios"
-            st.rerun()
+    # --- AQUÍ EMPIEZA LO NUEVO PARA SEPARAR POR ROL ---
+    rol = st.session_state.get("rol_actual", "Administrador")
+    
+    if rol == "Administrador":
+        col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+        
+        with col1:
+            if st.button("📦 Operaciones\nde Stock\n\nEntradas y alertas", key="card_stock"):
+                st.session_state["menu_activo"] = "Operaciones de Stock"
+                st.rerun()
+        with col2:
+            if st.button("📊 Valorización\ndel Inventario\n\nCostos y activos", key="card_val"):
+                st.session_state["menu_activo"] = "Valorización del Inventario"
+                st.rerun()
+        with col3:
+            if st.button("📈 Rendimiento\nde Insumos\n\nMétricas de uso", key="card_rend"):
+                st.session_state["menu_activo"] = "Rendimiento de Insumos"
+                st.rerun()
+        with col4:
+            if st.button("🛠️ Insumos\nde Respaldo\n\nAlternativas", key="card_respaldo"):
+                st.session_state["menu_activo"] = "Insumos de Respaldo"
+                st.rerun()
+        with col5:
+            if st.button("⚙️ Servicios\ny Soporte\n\nMantenimiento", key="card_soporte"):
+                st.session_state["menu_activo"] = "Servicios y Soporte"
+                st.rerun()
+        with col6:
+            if st.button("📋 Reportes\ny Edición\n\nFiltros por fecha", key="card_rep"):
+                st.session_state["menu_activo"] = "Reportes por Fecha / Edición"
+                st.rerun()
+        with col7:
+            if st.button("👥 Configuración\ny Usuarios\n\nRoles y ajustes", key="card_config"):
+                st.session_state["menu_activo"] = "Configuración y Usuarios"
+                st.rerun()
+    else:
+        # --- VISTA PARA EL TÉCNICO (Solo 3 tarjetas) ---
+        col_t1, col_t2, col_t3 = st.columns(3)
+        
+        with col_t1:
+            if st.button("🛠️ Insumos\nde Respaldo\n\nAlternativas", key="card_respaldo_tec"):
+                st.session_state["menu_activo"] = "Insumos de Respaldo"
+                st.rerun()
+        with col_t2:
+            if st.button("⚙️ Servicios\ny Soporte\n\nMantenimiento", key="card_soporte_tec"):
+                st.session_state["menu_activo"] = "Servicios y Soporte"
+                st.rerun()
+        with col_t3:
+            if st.button("📋 Reportes\ny Edición\n\nFiltros por fecha", key="card_rep_tec"):
+                st.session_state["menu_activo"] = "Reportes por Fecha / Edición"
+                st.rerun()
 
     # --- PEGA AQUÍ EL BUSCADOR (Línea 753) ---
     st.markdown("---")
