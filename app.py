@@ -522,6 +522,10 @@ if "menu_activo" not in st.session_state:
 # --- ESTILOS CSS CORREGIDOS ---
 st.markdown("""
 <style>
+    /* Fondo con degradado suave para la pantalla principal */
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #cbd5e1 100%) !important;
+    }
     /* 1. BOTÓN DE CERRAR SESIÓN EN LA BARRA LATERAL (MÁS PEQUEÑO Y ELEGANTE) */
     [data-testid="stSidebar"] div.stButton > button {
         height: auto !important;
