@@ -1150,9 +1150,8 @@ if st.session_state["menu_activo"] == "Valorización del Inventario":
 # 3. PESTAÑA DE RENDIMIENTO DE INSUMOS
 # ==========================================
 if st.session_state["menu_activo"] == "Rendimiento de Insumos":
-    with tab_rendimiento:
-        st.subheader("📈 Análisis de Rendimiento Promedio de Insumos")
-        st.write("Esta sección calcula el rendimiento histórico del equipamiento/tóner en función de las copias realizadas y el tiempo útil de uso.")
+    st.subheader("📈 Análisis de Rendimiento Promedio de Insumos")
+    st.write("Esta sección calcula el rendimiento histórico del equipamiento/tóner en función de las copias realizadas y el tiempo útil de uso.")
 
     try:
         datos_rend = hoja_alquileres.get_all_values()
