@@ -513,8 +513,34 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                 st.error("No se encontró el ID del insumo en la hoja de cálculo.")
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
+# --- FUNCIÓN PARA CARGAR EL FONDO PNG ---
+def aplicar_fondo_png(archivo_png):
+    try:
+        with open(archivo_png, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode()
+        st.markdown(
+            f"""
+            <style>
+            .stApp, [data-testid="stAppViewContainer"], .main {{
+                background-image: url("data:image/png;base64,{encoded_string}");
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+            }}
+            [data-testid="stHeader"] {{
+                background-color: rgba(0,0,0,0) !important;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+    except FileNotFoundError:
+        pass
 
-# --- MENÚ PRINCIPAL: CARRUSEL HORIZONTAL DE TARJETAS GRANDES ---
+# Cargamos la imagen de fondo (asegúrate de que tu archivo se llame fondo.png)
+aplicar_fondo_png("fondo.png")
+
 if "menu_activo" not in st.session_state:
     st.session_state["menu_activo"] = "Inicio"
 
@@ -522,14 +548,6 @@ if "menu_activo" not in st.session_state:
 # --- ESTILOS CSS CORREGIDOS ---
 st.markdown("""
 <style>
-   /* Fondo oscuro moderno */
-    .stApp, [data-testid="stAppViewContainer"], .main {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%) !important;
-    }
-
-    [data-testid="stHeader"] {
-        background-color: transparent !important;
-    }
     /* 1. BOTÓN DE CERRAR SESIÓN EN LA BARRA LATERAL (MÁS PEQUEÑO Y ELEGANTE) */
     [data-testid="stSidebar"] div.stButton > button {
         height: auto !important;
