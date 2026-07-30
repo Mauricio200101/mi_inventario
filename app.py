@@ -514,35 +514,67 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
 
-# --- FUNCIÓN PARA CARGAR EL FONDO PNG (SIN PIXELEADO) ---
-def aplicar_fondo_png(archivo_png):
-    try:
-        with open(archivo_png, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode()
-        st.markdown(
-            f"""
-            <style>
-            .stApp, [data-testid="stAppViewContainer"], .main {{
-                background-image: url("data:image/png;base64,{encoded_string}");
-                background-size: 100% 100% !important; /* Ajusta la imagen a la pantalla sin deformar en exceso */
-                background-position: center center !important;
-                background-repeat: no-repeat !important;
-                background-attachment: fixed !important;
-                image-rendering: -webkit-optimize-contrast !important; /* Optimiza el contraste para bordes limpios */
-                image-rendering: crisp-edges !important;
-            }}
-            [data-testid="stHeader"] {{
-                background-color: rgba(0,0,0,0) !important;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-    except FileNotFoundError:
-        pass
+# --- FONDO VECTORIAL (NUNCA SE PIXELA) ---
+def aplicar_fondo_vectorial():
+    # Código SVG que recrea tu diseño exacto con nitidez vectorial infinita
+    svg_background = """
+    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1920 1080' preserveAspectRatio='none'>
+      <defs>
+        <linearGradient id='bg' x1='0%' y1='0%' x2='100%' y2='100%'>
+          <stop offset='0%' stop-color='#ffffff'/>
+          <stop offset='60%' stop-color='#f8fafc'/>
+          <stop offset='100%' stop-color='#e2e8f0'/>
+        </linearGradient>
+        <linearGradient id='redGrad' x1='0%' y1='0%' x2='100%' y2='100%'>
+          <stop offset='0%' stop-color='#b91c1c'/>
+          <stop offset='100%' stop-color='#7f1d1d'/>
+        </linearGradient>
+        <linearGradient id='darkGrad' x1='0%' y1='0%' x2='100%' y2='100%'>
+          <stop offset='0%' stop-color='#1e293b'/>
+          <stop offset='100%' stop-color='#0f172a'/>
+        </linearGradient>
+        <filter id='shadow' x='-10%' y='-10%' width='120%' height='120%'>
+          <feDropShadow dx='0' dy='-4' stdDeviation='10' flood-color='#000000' flood-opacity='0.15'/>
+        </filter>
+      </defs>
+      <rect width='1920' height='1080' fill='url(#bg)'/>
+      <!-- Rayos de luz suaves en la parte superior -->
+      <path d='M0,0 L700,0 L350,600 Z' fill='#ffffff' opacity='0.5'/>
+      <path d='M960,0 L1600,0 L1100,700 Z' fill='#ffffff' opacity='0.4'/>
+      
+      <!-- Franja Gris Oscura -->
+      <path d='M-100,680 Q500,920 1920,580 L1920,1080 L-100,1080 Z' fill='url(#darkGrad)' filter='url(#shadow)'/>
+      
+      <!-- Franja Roja Principal -->
+      <path d='M-100,850 Q600,1080 1920,640 L1920,1080 L-100,1080 Z' fill='url(#redGrad)' filter='url(#shadow)'/>
+      
+      <!-- Franja Gris Inferior de Solape -->
+      <path d='M350,1080 Q1100,820 2020,810 L2020,1080 Z' fill='url(#darkGrad)' filter='url(#shadow)'/>
+    </svg>
+    """
+    import urllib.parse
+    encoded_svg = urllib.parse.quote(svg_background)
+    
+    st.markdown(
+        f"""
+        <style>
+        .stApp, [data-testid="stAppViewContainer"], .main {{
+            background-image: url("data:image/svg+xml;utf8,{encoded_svg}");
+            background-size: cover !important;
+            background-position: center center !important;
+            background-repeat: no-repeat !important;
+            background-attachment: fixed !important;
+        }}
+        [data-testid="stHeader"] {{
+            background-color: rgba(0,0,0,0) !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
-# Llamamos a la función
-aplicar_fondo_png("fondo.png")
+# Llamada a la función
+aplicar_fondo_vectorial()
 
 if "menu_activo" not in st.session_state:
     st.session_state["menu_activo"] = "Inicio"
