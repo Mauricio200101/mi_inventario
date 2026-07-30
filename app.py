@@ -701,6 +701,12 @@ st.markdown("""
         color: #e60000;
         background-color: white;
     }
+    div.stButton > button:has(p:contains("Volver")) {
+    max-width: 240px !important;
+    height: auto !important;
+    padding: 8px 16px !important;
+    font-size: 14px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -751,9 +757,11 @@ if st.session_state["menu_activo"] == "Inicio":
             st.rerun()
 
 else:
-    if st.button("🏠 Volver al Menú Principal"):
-        st.session_state["menu_activo"] = "Inicio"
-        st.rerun()
+    col_volver, _ = st.columns([1, 4])
+    with col_volver:
+        if st.button("🏠 Volver al Menú Principal"):
+            st.session_state["menu_activo"] = "Inicio"
+            st.rerun()
     
     st.divider()
 
