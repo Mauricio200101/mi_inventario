@@ -576,6 +576,37 @@ def aplicar_fondo_vectorial():
 # Llamada a la función
 aplicar_fondo_vectorial()
 
+# --- FUNCIÓN PARA EL FONDO DE LA BARRA LATERAL ---
+def aplicar_fondo_sidebar(archivo_png):
+    try:
+        with open(archivo_png, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode()
+        st.markdown(
+            f"""
+            <style>
+            /* Fondo para la barra lateral */
+            [data-testid="stSidebar"] {{
+                background-image: url("data:image/png;base64,{encoded_string}") !important;
+                background-size: cover !important;
+                background-position: center !important;
+                background-repeat: no-repeat !important;
+            }}
+
+            /* Color del texto del usuario y rol para que sea legible sobre la imagen */
+            [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {{
+                color: #0f172a !important;
+                font-weight: 700 !important;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+    except FileNotFoundError:
+        pass
+
+# Llamamos a la función con el nombre de tu archivo
+aplicar_fondo_sidebar("fondo del costado.png")
+
 if "menu_activo" not in st.session_state:
     st.session_state["menu_activo"] = "Inicio"
 
