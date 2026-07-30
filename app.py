@@ -680,32 +680,27 @@ st.markdown("""
     }
 
     /* 3. TARJETAS MÁS GRANDES EN EL ÁREA PRINCIPAL */
-    [data-testid="stMainBlockContainer"] div.stButton > button {
-        background-color: white;
-        color: #1f2937;
-        padding: 25px 15px;
-        border-radius: 18px;
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07);
-        border: 1px solid #e5e7eb;
-        width: 100% !important;
-        height: 180px !important; /* Más grandes */
-        font-size: 16px !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        white-space: pre-wrap;
-    }
-    [data-testid="stMainBlockContainer"] div.stButton > button:hover {
-        transform: translateY(-6px);
-        box-shadow: 0 12px 30px rgba(230, 0, 0, 0.18);
-        border-color: #e60000;
-        color: #e60000;
-        background-color: white;
-    }
-    div.stButton > button:has(p:contains("Volver")) {
-    max-width: 240px !important;
-    height: auto !important;
-    padding: 8px 16px !important;
-    font-size: 14px !important;
+    [data-testid="stHorizontalBlock"] div.stButton > button {
+    background-color: white;
+    color: #1f2937;
+    padding: 25px 15px;
+    border-radius: 18px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07);
+    border: 1px solid #e5e7eb;
+    width: 100% !important;
+    height: 180px !important;
+    font-size: 16px !important;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    white-space: pre-wrap;
+}
+
+[data-testid="stHorizontalBlock"] div.stButton > button:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 30px rgba(230, 0, 0, 0.18);
+    border-color: #e60000;
+    color: #c60000;
+    background-color: white;
 }
 </style>
 """, unsafe_allow_html=True)
