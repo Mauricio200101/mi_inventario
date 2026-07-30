@@ -513,7 +513,8 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                 st.error("No se encontró el ID del insumo en la hoja de cálculo.")
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
-# --- FUNCIÓN PARA CARGAR EL FONDO PNG ---
+
+# --- FUNCIÓN PARA CARGAR EL FONDO PNG (SIN PIXELEADO) ---
 def aplicar_fondo_png(archivo_png):
     try:
         with open(archivo_png, "rb") as image_file:
@@ -523,10 +524,12 @@ def aplicar_fondo_png(archivo_png):
             <style>
             .stApp, [data-testid="stAppViewContainer"], .main {{
                 background-image: url("data:image/png;base64,{encoded_string}");
-                background-size: cover;
-                background-position: center;
-                background-repeat: no-repeat;
-                background-attachment: fixed;
+                background-size: 100% 100% !important; /* Ajusta la imagen a la pantalla sin deformar en exceso */
+                background-position: center center !important;
+                background-repeat: no-repeat !important;
+                background-attachment: fixed !important;
+                image-rendering: -webkit-optimize-contrast !important; /* Optimiza el contraste para bordes limpios */
+                image-rendering: crisp-edges !important;
             }}
             [data-testid="stHeader"] {{
                 background-color: rgba(0,0,0,0) !important;
@@ -538,7 +541,7 @@ def aplicar_fondo_png(archivo_png):
     except FileNotFoundError:
         pass
 
-# Cargamos la imagen de fondo (asegúrate de que tu archivo se llame fondo.png)
+# Llamamos a la función
 aplicar_fondo_png("fondo.png")
 
 if "menu_activo" not in st.session_state:
