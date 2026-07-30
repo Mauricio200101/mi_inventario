@@ -519,47 +519,69 @@ if "menu_activo" not in st.session_state:
     st.session_state["menu_activo"] = "Inicio"
 
 # Estilo CSS para tarjetas grandes y contenedor deslizable horizontal (scroll)
+# --- ESTILOS CSS CORREGIDOS ---
 st.markdown("""
 <style>
-    /* Contenedor principal con desplazamiento horizontal */
-    .scroll-container {
-        display: flex;
-        overflow-x: auto;
-        gap: 20px;
-        padding: 20px 10px;
-        scroll-behavior: smooth;
-        width: 100%;
-        margin-bottom: 20px;
+    /* 1. BOTÓN DE CERRAR SESIÓN EN LA BARRA LATERAL (MÁS PEQUEÑO Y ELEGANTE) */
+    [data-testid="stSidebar"] div.stButton > button {
+        height: auto !important;
+        min-width: unset !important;
+        width: 100% !important;
+        padding: 8px 15px !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        border-radius: 10px !important;
+        background-color: #f3f4f6 !important;
+        color: #374151 !important;
+        border: 1px solid #e5e7eb !important;
+        box-shadow: none !important;
+        transform: none !important;
     }
-    .scroll-container::-webkit-scrollbar {
+    [data-testid="stSidebar"] div.stButton > button:hover {
+        background-color: #fee2e2 !important;
+        color: #dc2626 !important;
+        border-color: #fca5a5 !important;
+    }
+
+    /* 2. CONTENEDOR HORIZONTAL SIN ENCIMAMIENTO (SCROLL FLUIDO) */
+    [data-testid="stHorizontalBlock"] {
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        padding: 15px 5px !important;
+        gap: 20px !important;
+    }
+    
+    /* Ancho fijo para cada columna para que no se amontonen ni se traslapen */
+    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+        min-width: 280px !important;
+        flex: 0 0 280px !important;
+    }
+
+    /* Barra de desplazamiento estética */
+    [data-testid="stHorizontalBlock"]::-webkit-scrollbar {
         height: 8px;
     }
-    .scroll-container::-webkit-scrollbar-thumb {
+    [data-testid="stHorizontalBlock"]::-webkit-scrollbar-thumb {
         background: #cbd5e1;
         border-radius: 4px;
     }
-    .scroll-container::-webkit-scrollbar-track {
-        background: #f1f5f9;
-        border-radius: 4px;
-    }
 
-    /* Tamaño grande y diseño de cada tarjeta convertida en botón */
-    div.stButton > button {
+    /* 3. TARJETAS MÁS GRANDES EN EL ÁREA PRINCIPAL */
+    [data-testid="stMainBlockContainer"] div.stButton > button {
         background-color: white;
         color: #1f2937;
-        padding: 30px 20px;
+        padding: 25px 15px;
         border-radius: 18px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-        border: 1px solid #eaeaea;
-        min-width: 260px;
-        height: 160px;
-        text-align: center;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07);
+        border: 1px solid #e5e7eb;
+        width: 100% !important;
+        height: 180px !important; /* Más grandes */
+        font-size: 16px !important;
         font-weight: 600;
-        font-size: 16px;
         transition: all 0.3s ease;
         white-space: pre-wrap;
     }
-    div.stButton > button:hover {
+    [data-testid="stMainBlockContainer"] div.stButton > button:hover {
         transform: translateY(-6px);
         box-shadow: 0 12px 30px rgba(230, 0, 0, 0.18);
         border-color: #e60000;
