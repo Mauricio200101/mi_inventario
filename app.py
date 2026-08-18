@@ -13,6 +13,31 @@ import base64
 import streamlit as st
 import os
 import urllib.parse
+import streamlit as st
+import pandas as pd
+from supabase import create_client, Client
+
+# ---------------------------------------------------------
+# 1. CONEXIÓN A SUPABASE (Se ejecuta una sola vez gracias a la caché)
+# ---------------------------------------------------------
+@st.cache_resource
+def conectar_supabase() -> Client:
+    # Lee las claves guardadas en .streamlit/secrets.toml
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase = conectar_supabase()
+
+# ---------------------------------------------------------
+# 2. FUNCIÓN PARA LEER TABLAS CON CACHÉ DE RÁPIDO ACCESO
+# ---------------------------------------------------------
+@st.cache_data(ttl=300) # Guarda los datos en memoria durante 5 minutos
+def obtener_datos_tabla(nombre_tabla: str):
+    # Consulta a Supabase
+    respuesta = supabase.table(nombre_tabla).select("*").execute()
+    # Convierte la respuesta JSON en un DataFrame de Pandas
+    return pd.DataFrame(respuesta.data)
 
 # 1. Configuración de página
 st.set_page_config(
