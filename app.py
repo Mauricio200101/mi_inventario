@@ -1,6 +1,6 @@
 import streamlit as st
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+#import gspread
+#from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 # Importamos timezone y timedelta para ajustar la hora a Bolivia (UTC-4)
 from datetime import datetime, timezone, timedelta 
@@ -102,54 +102,19 @@ def enviar_notificacion_telegram(empresa, agencia, area, problema, tecnico):
     except Exception as e:
         print(f"Error al enviar notificación a Telegram: {e}")
 
-# --- CONEXIÓN CON GOOGLE SHEETS (CON REINTENTOS AUTOMÁTICOS Y CACHÉ) ---
-@st.cache_resource
-def conectar_google_sheets():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    
-    if "gspread_credentials" in st.secrets:
-        import json
-        info_creds = json.loads(st.secrets["gspread_credentials"])
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(info_creds, scope)
-    else:
-        creds = ServiceAccountCredentials.from_json_keyfile_name("credenciales.json", scope)
-        
-    cliente = gspread.authorize(creds)
-    return cliente.open("Inventario_Empresa")
-
-# Inicializar pestañas guardándolas en st.session_state para no llamar a la API en cada rerun
 def inicializar_pestanas_seguras():
     if "pestanas" not in st.session_state:
-        max_intentos = 5
-        for intento in range(max_intentos):
+        tablas = [
+            "Insumos", "Historial", "Usuarios", "Parametros", 
+            "Ventas", "Alquileres", "Backup", "Servicios"
+        ]
+        st.session_state["pestanas"] = {}
+        for tabla in tablas:
             try:
-                sh = conectar_google_sheets()
-                st.session_state["pestanas"] = {
-                    "Insumos": sh.worksheet("Insumos"),
-                    "Historial": sh.worksheet("Historial"),
-                    "Usuarios": sh.worksheet("Usuarios"),
-                    "Parametros": sh.worksheet("Parametros"),
-                    "Ventas": sh.worksheet("Ventas"),
-                    "Alquileres": sh.worksheet("Alquileres"),
-                    "Backup": sh.worksheet("Backup"),
-                    "Servicios": sh.worksheet("Servicios")
-                }
-                break # Éxito, salimos del bucle
-            except gspread.exceptions.APIError as e:
-                if "429" in str(e):
-                    if intento < max_intentos - 1:
-                        tiempo_espera = (intento + 1) * 3
-                        st.warning(f"⚠️ Google Sheets saturado. Reintentando conexión en {tiempo_espera} segundos...")
-                        time.sleep(tiempo_espera)
-                        continue
-                    else:
-                        st.error("🚨 Se superó el límite de solicitudes a Google Sheets. Por favor, espera 30 segundos y recarga la página manualmente.")
-                        st.stop()
+                # Usa la función obtener_datos_tabla que ya tienes configurada para Supabase
+                st.session_state["pestanas"][tabla] = obtener_datos_tabla(tabla)
             except Exception as e:
-                st.error(f"❌ Error crítico de conexión: {e}")
-                st.stop()
-                
-    return st.session_state["pestanas"]
+                print(f"Error al cargar la tabla {tabla} desde Supabase: {e}")
 
 # Inicializamos las hojas de trabajo de forma segura usando la sesión
 pestanas_activas = inicializar_pestanas_seguras()
