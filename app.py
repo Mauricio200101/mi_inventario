@@ -22,12 +22,15 @@ from supabase import create_client, Client
 # ---------------------------------------------------------
 @st.cache_resource
 def conectar_supabase() -> Client:
-    # Lee las claves guardadas en .streamlit/secrets.toml
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
+    # Intenta leer de st.secrets (Local); si no existe, lee de os.getenv (Render/Nube)
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+    except Exception:
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+        
     return create_client(url, key)
-
-supabase = conectar_supabase()
 
 # ---------------------------------------------------------
 # 2. FUNCIÓN PARA LEER TABLAS CON CACHÉ DE RÁPIDO ACCESO
