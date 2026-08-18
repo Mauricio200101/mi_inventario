@@ -102,6 +102,7 @@ def enviar_notificacion_telegram(empresa, agencia, area, problema, tecnico):
     except Exception as e:
         print(f"Error al enviar notificación a Telegram: {e}")
 
+# Inicializar tablas de Supabase guardándolas en st.session_state
 def inicializar_pestanas_seguras():
     if "pestanas" not in st.session_state:
         tablas = [
@@ -111,10 +112,12 @@ def inicializar_pestanas_seguras():
         st.session_state["pestanas"] = {}
         for tabla in tablas:
             try:
-                # Usa la función obtener_datos_tabla que ya tienes configurada para Supabase
                 st.session_state["pestanas"][tabla] = obtener_datos_tabla(tabla)
             except Exception as e:
                 print(f"Error al cargar la tabla {tabla} desde Supabase: {e}")
+                st.session_state["pestanas"][tabla] = None
+                
+    return st.session_state["pestanas"]
 
 # Inicializamos las hojas de trabajo de forma segura usando la sesión
 pestanas_activas = inicializar_pestanas_seguras()
