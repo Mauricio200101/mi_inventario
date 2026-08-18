@@ -2,5 +2,7 @@ streamlit
 gspread
 oauth2client
 pandas
-openpyxl
 plotly
+requests
+supabase
+openpyxl
