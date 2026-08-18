@@ -35,12 +35,14 @@ def conectar_supabase() -> Client:
 # ---------------------------------------------------------
 # 2. FUNCIÓN PARA LEER TABLAS CON CACHÉ DE RÁPIDO ACCESO
 # ---------------------------------------------------------
-@st.cache_data(ttl=300) # Guarda los datos en memoria durante 5 minutos
+@st.cache_data(ttl=300)
 def obtener_datos_tabla(nombre_tabla: str):
-    # Consulta a Supabase
-    respuesta = supabase.table(nombre_tabla).select("*").execute()
-    # Convierte la respuesta JSON en un DataFrame de Pandas
-    return pd.DataFrame(respuesta.data)
+    try:
+        response = supabase.table(nombre_tabla).select("*").execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        print(f"Error al leer {nombre_tabla} desde Supabase: {e}")
+        return pd.DataFrame()  # Devuelve una tabla vacía en lugar de None
 
 # 1. Configuración de página
 st.set_page_config(
@@ -137,10 +139,10 @@ def encriptar_password(password_plano):
 @st.cache_data(ttl=60)
 def obtener_usuarios():
     try:
-        datos = hoja_usuarios.get_all_values()
-        if not datos or len(datos) <= 1:
-            return pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
-        df = pd.DataFrame(datos[1:], columns=datos[0])
+        df_usuarios = st.session_state["pestanas"].get("Usuarios", pd.DataFrame())
+        if not df_usuarios.empty:
+            return df_usuarios
+        return pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
     except Exception as e:
         st.warning(f"Aviso al leer Usuarios: {e}")
         return pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
