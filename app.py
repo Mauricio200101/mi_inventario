@@ -311,42 +311,62 @@ if st.sidebar.button("Cerrar Sesión"):
 @st.cache_data(ttl=15)
 def obtener_insumos():
     try:
-        datos = hoja_insumos.get_all_values()
-        if not datos or len(datos) <= 1:
-            return pd.DataFrame(columns=["ID", "Nombre", "Categoría", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
+        supabase = conectar_supabase()
+        response = supabase.table("Insumos").select("*").execute()
+        df = pd.DataFrame(response.data)
+        if df.empty:
+            return pd.DataFrame(columns=["ID", "Nombre", "Categoria", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
         
-        df = pd.DataFrame(datos[1:], columns=datos[0])
+        for col in ["Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        return df
     except Exception as e:
         st.warning(f"Aviso al leer Insumos: {e}")
-        return pd.DataFrame(columns=["ID", "Nombre", "Categoría", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
-        
-    for col in ["Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    return df
+        return pd.DataFrame(columns=["ID", "Nombre", "Categoria", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
 
 def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado):
-    df = obtener_insumos()
-    df["ID"] = pd.to_numeric(df["ID"], errors='coerce')
-    
-    # Calculamos el ID de forma segura
-    max_id = df["ID"].max()
-    nuevo_id = int(max_id) + 1 if pd.notna(max_id) else 1
-    
-    # Añadimos la fila y forzamos la limpieza de caché
-    hoja_insumos.append_row([nuevo_id, nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado])
-    st.cache_data.clear()
-    
-    fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
-    hoja_historial.append_row([fecha_actual, nombre, "Registro Inicial", cantidad, cantidad, st.session_state["usuario_actual"], "Abastecimiento", "", ""])
+    try:
+        supabase = conectar_supabase()
+        nuevo_registro = {
+            "Nombre": nombre,
+            "Categoria": categoria,
+            "Cantidad": cantidad,
+            "Stock Mínimo": stock_minimo,
+            "Precio Técnico": p_tecnico,
+            "Precio Cliente": p_cliente,
+            "Precio Facturado": p_facturado
+        }
+        supabase.table("Insumos").insert(nuevo_registro).execute()
+        
+        try:
+            fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
+            supabase.table("Historial").insert({
+                "Fecha": fecha_actual,
+                "Insumo": nombre,
+                "Accion": "Registro Inicial",
+                "Cantidad": cantidad,
+                "Stock Final": cantidad,
+                "Usuario": st.session_state.get("usuario_actual", ""),
+                "Motivo": "Abastecimiento"
+            }).execute()
+        except Exception:
+            pass
+
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Error al registrar insumo: {e}")
+
 def eliminar_insumo(id_insumo):
-    """Elimina un insumo de la hoja por su ID."""
-    celda = hoja_insumos.find(str(id_insumo))
-    if celda:
-        hoja_insumos.delete_rows(celda.row)
-        st.cache_data.clear() 
+    """Elimina un insumo de la tabla Insumos por su ID."""
+    try:
+        supabase = conectar_supabase()
+        supabase.table("Insumos").delete().eq("id", id_insumo).execute()
+        st.cache_data.clear()
         return True
-    return False
+    except Exception as e:
+        st.error(f"Error al eliminar insumo: {e}")
+        return False
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
