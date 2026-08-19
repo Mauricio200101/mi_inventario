@@ -136,18 +136,15 @@ hoja_servicios = pestanas_activas["Servicios"]
 def encriptar_password(password_plano):
     """Convierte una contraseña en texto plano a un hash SHA-256 encriptado."""
     return hashlib.sha256(str(password_plano).encode()).hexdigest()
-@st.cache_data(ttl=60)
 def obtener_usuarios():
     try:
         supabase = conectar_supabase()
         response = supabase.table("Usuarios").select("*").execute()
         df = pd.DataFrame(response.data)
-        if not df.empty:
-            return df
-        return pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
+        return df
     except Exception as e:
-        st.error(f"Error al leer Usuarios desde Supabase: {e}")
-        return pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
+        st.error(f"Error de conexión con Supabase: {e}")
+        return pd.DataFrame()
 
 def registrar_usuario(usuario, contrasena, rol):
     pass_encriptado = encriptar_password(contrasena)
