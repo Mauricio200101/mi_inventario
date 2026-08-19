@@ -136,6 +136,7 @@ hoja_servicios = pestanas_activas["Servicios"]
 def encriptar_password(password_plano):
     """Convierte una contraseña en texto plano a un hash SHA-256 encriptado."""
     return hashlib.sha256(str(password_plano).encode()).hexdigest()
+@st.cache_data(ttl=60)
 def obtener_usuarios():
     try:
         supabase = conectar_supabase()
@@ -308,7 +309,7 @@ if st.sidebar.button("Cerrar Sesión"):
     st.rerun()
 
 # --- FUNCIONES DE SOPORTES DE INVENTARIO ---
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=60)
 def obtener_insumos():
     try:
         supabase = conectar_supabase()
