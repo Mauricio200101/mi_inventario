@@ -371,104 +371,105 @@ def eliminar_insumo(id_insumo):
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
-    """
-    Busca en la pestaña de Alquileres asignando correctamente Agencia y Área.
-    """
+    """Busca en la tabla Alquileres de Supabase asignando correctamente Agencia y Área."""
     try:
-        datos = hoja_alquileres.get_all_values()
-        if not datos or len(datos) <= 1:
+        supabase = conectar_supabase()
+        response = supabase.table("Alquileres").select("*").execute()
+        if not response.data:
             return None
-        
+
+        df = pd.DataFrame(response.data)
+        if df.empty:
+            return None
+
         busq_insumo = str(insumo).strip().lower()
         busq_empresa = str(empresa).strip().lower()
-        
-        # Leemos los selectores tal cual entran (sin intercambiarlos)
         busq_agencia = str(agencia).split(" - ")[-1].strip().lower() if agencia else ""
         busq_area = str(area).split(" - ")[-1].strip().lower() if area else ""
 
-        for fila in reversed(datos[1:]):
-            if len(fila) < 6:
-                continue
-            
-            r_insumo = str(fila[1]).strip().lower()   # Columna B: Insumo
-            r_empresa = str(fila[3]).strip().lower()  # Columna D: Empresa Destino
-            
-            # Columna E es Agencia, Columna F es Área en tu Google Sheets
-            r_agencia = str(fila[4]).split(" - ")[-1].strip().lower() 
-            r_area = str(fila[5]).split(" - ")[-1].strip().lower()    
+        for _, fila in df.iloc[::-1].iterrows():
+            r_insumo = str(fila.get("Insumo", "")).strip().lower()
+            r_empresa = str(fila.get("Empresa", "")).strip().lower()
 
-            # Si al buscar se invierten, probamos ambas combinaciones para ser 100% robustos
+            r_agencia = str(fila.get("Agencia", "")).split(" - ")[-1].strip().lower()
+            r_area = str(fila.get("Area", "")).split(" - ")[-1].strip().lower()
+
             coincide_sitio = (
-                (r_agencia == busq_agencia and r_area == busq_area) or 
+                (r_agencia == busq_agencia and r_area == busq_area) or
                 (r_agencia == busq_area and r_area == busq_agencia)
             )
 
             if r_insumo == busq_insumo and r_empresa == busq_empresa and coincide_sitio:
-                columnas = datos[0]
-                return pd.Series(fila, index=columnas)
-                
+                return fila
+
         return None
     except Exception as e:
         st.error(f"Error al buscar historial de contadores: {e}")
         return None
+
+
 def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant_movida, motivo="", empresa="", area_o_precio="", precio_unitario=0.0, contador_anterior=0, contador_actual=0, paginas=0, dias=0, agencia=""):
     try:
-        df_local = obtener_insumos()
-        idx_lista = df_local[df_local["ID"].astype(str) == str(id_insumo)].index
-        
-        if not idx_lista.empty:
-            fila_sheet = int(idx_lista[0]) + 2
-            
-            hoja_insumos.update_cell(fila_sheet, 4, nuevo_stock)
-            fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
-            
-            # Separamos la agencia y el área de forma limpia para el historial
-            agencia_para_historial = agencia if agencia else ""
-            area_para_historial = area_o_precio if area_o_precio else ""
-            
-            hoja_historial.append_row([
-                fecha_actual,
-                nombre_insumo,
-                tipo_mov,
-                cant_movida,
-                nuevo_stock,
-                st.session_state["usuario_actual"],
-                motivo,
-                empresa,
-                agencia_para_historial,
-                area_para_historial
-            ])
-            
-            if tipo_mov == "Salida":
-                if motivo == "Venta":
-                    total_venta = float(cant_movida) * float(precio_unitario)
-                    hoja_ventas.append_row([
-                        fecha_actual,
-                        nombre_insumo,
-                        cant_movida,
-                        area_o_precio, 
-                        total_venta,
-                        st.session_state["usuario_actual"]
-                    ])
-                elif motivo == "Alquiler":
-                    fila_registro = [
-                    fecha_actual,
-                    nombre_insumo,
-                    cant_movida,
-                    empresa,
-                    str(agencia).split(" - ")[-1].strip(),       # Extrae solo la agencia final
-                    str(area_o_precio).split(" - ")[-1].strip(), # Extrae solo el área final
-                    st.session_state["usuario_actual"],
-                    int(contador_anterior),
-                    int(contador_actual),
-                    int(paginas),
-                    int(dias)
-                    ]
-                    hoja_alquileres.append_row(fila_registro)
-            else:
-                st.error("No se encontró el ID del insumo en la hoja de cálculo.")
+        supabase = conectar_supabase()
+
+        # 1. Actualizar el stock en la tabla Insumos
+        supabase.table("Insumos").update({"Cantidad": nuevo_stock}).eq("id", id_insumo).execute()
+
+        fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
+
+        agencia_para_historial = agencia if agencia else ""
+        area_para_historial = area_o_precio if area_o_precio else ""
+
+        # 2. Registrar el movimiento en la tabla Historial
+        supabase.table("Historial").insert({
+            "Fecha": fecha_actual,
+            "Insumo": nombre_insumo,
+            "Accion": tipo_mov,
+            "Cantidad": cant_movida,
+            "Stock Final": nuevo_stock,
+            "Usuario": st.session_state.get("usuario_actual", ""),
+            "Motivo": motivo,
+            "Empresa": empresa,
+            "Agencia": agencia_para_historial,
+            "Area": area_para_historial
+        }).execute()
+
+        # 3. Registrar en Ventas o Alquileres según corresponda
+        if tipo_mov == "Salida":
+            if motivo == "Venta":
+                total_venta = float(cant_movida) * float(precio_unitario)
+                supabase.table("Ventas").insert({
+                    "Fecha": fecha_actual,
+                    "Insumo": nombre_insumo,
+                    "Cantidad": cant_movida,
+                    "Area o Precio": area_o_precio,
+                    "Total Venta": total_venta,
+                    "Usuario": st.session_state.get("usuario_actual", "")
+                }).execute()
+
+            elif motivo == "Alquiler":
+                agencia_limpia = str(agencia).split(" - ")[-1].strip() if agencia else ""
+                area_limpia = str(area_o_precio).split(" - ")[-1].strip() if area_o_precio else ""
+
+                supabase.table("Alquileres").insert({
+                    "Fecha": fecha_actual,
+                    "Insumo": nombre_insumo,
+                    "Cantidad": cant_movida,
+                    "Empresa": empresa,
+                    "Agencia": agencia_limpia,
+                    "Area": area_limpia,
+                    "Usuario": st.session_state.get("usuario_actual", ""),
+                    "Contador Anterior": int(contador_anterior),
+                    "Contador Actual": int(contador_actual),
+                    "Paginas": int(paginas),
+                    "Dias": int(dias)
+                }).execute()
+
+        st.cache_data.clear()
+        return True
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
+        return False
 
 # --- FONDO VECTORIAL (NUNCA SE PIXELA) ---
 def aplicar_fondo_vectorial():
@@ -1244,41 +1245,40 @@ if st.session_state["menu_activo"] == "Reportes por Fecha / Edición":
             fecha_inicio_gen = st.date_input("Desde (General):", value=obtener_hora_local_bo().date(), key="f_gen_ini")
         with col_fg2:
             fecha_fin_gen = st.date_input("Hasta (General):", value=obtener_hora_local_bo().date(), key="f_gen_fin")
-            
+
         try:
-            datos_hist = hoja_historial.get_all_values()
-            if datos_hist and len(datos_hist) > 1:
-                df_hist = pd.DataFrame(datos_hist[1:], columns=datos_hist[0])
-            else:
-                df_hist = pd.DataFrame(columns=["Fecha", "Insumo", "Movimiento", "Cantidad", "Stock Resultante", "Usuario", "Motivo", "Empresa/Precio", "Detalle"])
-        except:
+            supabase = conectar_supabase()
+            response = supabase.table("Historial").select("*").execute()
+            df_hist = pd.DataFrame(response.data)
+        except Exception as e:
+            st.error(f"Error al obtener el historial: {e}")
             df_hist = pd.DataFrame()
-            
+
         if not df_hist.empty and "Fecha" in df_hist.columns:
             df_hist["Fecha_dt"] = pd.to_datetime(df_hist["Fecha"], errors='coerce')
             df_filtrado_fecha = df_hist[(df_hist["Fecha_dt"].dt.date >= fecha_inicio_gen) & (df_hist["Fecha_dt"].dt.date <= fecha_fin_gen)]
-            
+
             if df_filtrado_fecha.empty:
                 st.warning("No se registraron movimientos en este rango.")
             else:
                 df_mostrar = df_filtrado_fecha.drop(columns=["Fecha_dt"], errors='ignore').copy()
-                    
-                 # --- LIMPIEZA INTELIGENTE PARA AGENCIA Y ÁREA EN HISTORIAL ---
+
+                # --- LIMPIEZA INTELIGENTE PARA AGENCIA Y ÁREA EN HISTORIAL ---
                 for col_agencia in ["Agencia Destino", "Agencia"]:
                     if col_agencia in df_mostrar.columns:
                         df_mostrar[col_agencia] = df_mostrar[col_agencia].apply(
                             lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
                         )
-                            
-                for col_area in ["Área Destino", "Area Destino", "Detalle"]:
+
+                for col_area in ["Area Destino", "Area", "Detalle"]:
                     if col_area in df_mostrar.columns:
                         df_mostrar[col_area] = df_mostrar[col_area].apply(
                             lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
                         )
 
-                df_mostrar.insert(0, "N°", range(1, len(df_mostrar) + 1))
+                df_mostrar.insert(0, "#", range(1, len(df_mostrar) + 1))
                 st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
-                
+
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                     df_mostrar.to_excel(writer, sheet_name='Historial_General', index=False)
@@ -1288,124 +1288,141 @@ if st.session_state["menu_activo"] == "Reportes por Fecha / Edición":
 
     # --- 2. SUBPESTAÑA VENTAS ---
     with tab_rep_ventas:
-        st.write("📆 **Segmentación Mensual de Ventas**")
+        st.write("📅 **Segmentación Mensual de Ventas**")
         try:
-            datos_v = hoja_ventas.get_all_values()
-            if datos_v and len(datos_v) > 1:
-                df_v = pd.DataFrame(datos_v[1:], columns=datos_v[0])
-            else:
-                df_v = pd.DataFrame(columns=["Fecha", "Insumo", "Cantidad", "Precio Aplicado", "Monto Total (Bs.)", "Usuario"])
-        except:
+            supabase = conectar_supabase()
+            response = supabase.table("Ventas").select("*").execute()
+            df_v = pd.DataFrame(response.data)
+        except Exception as e:
+            st.error(f"Error al obtener los datos de ventas: {e}")
             df_v = pd.DataFrame()
-            
+
         if not df_v.empty and "Fecha" in df_v.columns:
             df_v["Fecha_dt"] = pd.to_datetime(df_v["Fecha"], errors='coerce')
             df_v["Año"] = df_v["Fecha_dt"].dt.year
             df_v["Mes_Num"] = df_v["Fecha_dt"].dt.month
-            
+
             meses_es = {
                 1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
                 7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
             }
             df_v["Mes"] = df_v["Mes_Num"].map(meses_es)
             anos_disponibles = sorted(df_v["Año"].dropna().unique().astype(int).tolist(), reverse=True)
-            
+
             col_v1, col_v2 = st.columns(2)
             with col_v1:
                 ano_seleccionado = st.selectbox("Selecciona el Año:", anos_disponibles if anos_disponibles else [obtener_hora_local_bo().year])
-            
-            meses_del_ano = df_v[df_v["Año"] == ano_seleccionado]["Mes_Num"].unique()
-            meses_opciones = [meses_es[m] for m in sorted(meses_del_ano)]
-            
+
+            meses_del_ano = df_v[df_v["Año"] == ano_seleccionado]["Mes_Num"].dropna().unique()
+            meses_opciones = [meses_es[m] for m in sorted(meses_del_ano) if m in meses_es]
+
             with col_v2:
                 mes_seleccionado = st.selectbox("Selecciona el Mes:", meses_opciones if meses_opciones else ["Ninguno"])
-            
+
             mes_num_sel = [k for k, v in meses_es.items() if v == mes_seleccionado][0] if mes_seleccionado != "Ninguno" else None
             df_filtrado_v = df_v[(df_v["Año"] == ano_seleccionado) & (df_v["Mes_Num"] == mes_num_sel)]
-            
+
             if df_filtrado_v.empty:
                 st.warning(f"No se registraron ventas en {mes_seleccionado} del {ano_seleccionado}.")
             else:
                 df_v_mostrar = df_filtrado_v.drop(columns=["Fecha_dt", "Año", "Mes_Num", "Mes"], errors='ignore').copy()
-                suma_ventas = pd.to_numeric(df_v_mostrar["Monto Total (Bs.)"], errors='coerce').sum()
+                
+                col_monto = "Total Venta" if "Total Venta" in df_v_mostrar.columns else ("Monto Total (Bs.)" if "Monto Total (Bs.)" in df_v_mostrar.columns else None)
+                suma_ventas = pd.to_numeric(df_v_mostrar[col_monto], errors='coerce').sum() if col_monto else 0.0
+
                 st.success(f"💰 **Monto Total Facturado en {mes_seleccionado} del {ano_seleccionado}:** {suma_ventas:,.2f} Bs.")
-                
-                df_v_mostrar.insert(0, "N°", range(1, len(df_v_mostrar) + 1))
+
+                df_v_mostrar.insert(0, "#", range(1, len(df_v_mostrar) + 1))
                 st.dataframe(df_v_mostrar, use_container_width=True, hide_index=True)
-                
+
                 buffer_v = io.BytesIO()
                 with pd.ExcelWriter(buffer_v, engine='openpyxl') as writer:
                     df_v_mostrar.to_excel(writer, sheet_name=f'Ventas_{mes_seleccionado}_{ano_seleccionado}', index=False)
                 st.download_button(
-                    label=f"📥 Descargar Ventas de {mes_seleccionado} - {ano_seleccionado} (Excel)", 
-                    data=buffer_v.getvalue(), 
+                    label=f"📥 Descargar Ventas de {mes_seleccionado} - {ano_seleccionado} (Excel)",
+                    data=buffer_v.getvalue(),
                     file_name=f"Ventas_{mes_seleccionado}_{ano_seleccionado}.xlsx"
                 )
         else:
-            st.info("No se han registrado ventas en la hoja 'Ventas' de Google Sheets todavía.")
+            st.info("No se han registrado ventas en la base de datos todavía.")
 
     # --- 3. SUBPESTAÑA ALQUILERES ---
     with tab_rep_alquileres:
         st.write("🔍 **Búsqueda Filtrada de Alquileres**")
         try:
-            datos_a = hoja_alquileres.get_all_values()
-            df_a = pd.DataFrame(datos_a[1:], columns=datos_a[0]) if len(datos_a) > 1 else pd.DataFrame()
-            st.write("📊 Total de filas leídas de Google Sheets:", len(df_a))
-        except:
+            supabase = conectar_supabase()
+            response = supabase.table("Alquileres").select("*").execute()
+            df_a = pd.DataFrame(response.data)
+        except Exception as e:
+            st.error(f"Error al obtener los alquileres: {e}")
             df_a = pd.DataFrame()
 
         if not df_a.empty:
-            # 1. Selector de Empresa
-            lista_empresas = ["Todas"] + sorted(df_a["Empresa Destino"].unique().tolist())
-            empresa_sel = st.selectbox("Seleccione Empresa:", lista_empresas)
-            
-            # Filtrado intermedio por Empresa
-            df_temp = df_a if empresa_sel == "Todas" else df_a[df_a["Empresa Destino"] == empresa_sel]
-            
-            # 2. Selector de Agencia (Extraemos la agencia real del penúltimo segmento)
-            agencias_raw = sorted(df_temp["Agencia Destino"].unique().tolist())
-            agencias_limpias = sorted(list(set([str(a).split(" - ")[-2].strip() if " - " in str(a) and len(str(a).split(" - ")) >= 2 else str(a) for a in agencias_raw])))
-            mapeo_agencias = { (str(a).split(" - ")[-2].strip() if " - " in str(a) and len(str(a).split(" - ")) >= 2 else str(a)): a for a in agencias_raw }
-            
-            agencia_display = st.selectbox("Seleccione Agencia:", ["Todas"] + agencias_limpias)
-            agencia_sel = "Todas" if agencia_display == "Todas" else mapeo_agencias[agencia_display]
-            
-            # Filtrado final por Empresa y Agencia
-            df_filtrado_a = df_temp if agencia_sel == "Todas" else df_temp[df_temp["Agencia Destino"] == agencia_sel]
-            
-            # 3. Fechas
+            st.write("📊 Total de filas leídas de la base de datos:", len(df_a))
+
+            col_empresa = "Empresa" if "Empresa" in df_a.columns else ("Empresa Destino" if "Empresa Destino" in df_a.columns else None)
+            col_agencia = "Agencia" if "Agencia" in df_a.columns else ("Agencia Destino" if "Agencia Destino" in df_a.columns else None)
+
+            # # 1. Selector de Empresa
+            if col_empresa:
+                lista_empresas = ["Todas"] + sorted(df_a[col_empresa].dropna().astype(str).unique().tolist())
+                empresa_sel = st.selectbox("Seleccione Empresa:", lista_empresas)
+                df_temp = df_a if empresa_sel == "Todas" else df_a[df_a[col_empresa] == empresa_sel]
+            else:
+                empresa_sel = "Todas"
+                df_temp = df_a.copy()
+
+            # # 2. Selector de Agencia
+            if col_agencia and not df_temp.empty:
+                agencias_raw = sorted(df_temp[col_agencia].dropna().astype(str).unique().tolist())
+                agencias_limpias = sorted(list(set([str(a).split(" - ")[-1].strip() if " - " in str(a) else str(a) for a in agencias_raw])))
+                mapeo_agencias = {str(a).split(" - ")[-1].strip() if " - " in str(a) else str(a): a for a in agencias_raw}
+
+                agencia_display = st.selectbox("Seleccione Agencia:", ["Todas"] + agencias_limpias)
+                agencia_sel = "Todas" if agencia_display == "Todas" else mapeo_agencias.get(agencia_display, agencia_display)
+                df_filtrado_a = df_temp if agencia_display == "Todas" else df_temp[df_temp[col_agencia] == agencia_sel]
+            else:
+                df_filtrado_a = df_temp.copy()
+
+            # # 3. Fechas
             col_fa1, col_fa2 = st.columns(2)
             with col_fa1:
                 fecha_inicio_alq = st.date_input("Desde:", value=obtener_hora_local_bo().date(), key="f_alq_ini_new")
             with col_fa2:
                 fecha_fin_alq = st.date_input("Hasta:", value=obtener_hora_local_bo().date(), key="f_alq_fin_new")
-                    
+
             # Filtro de fecha
-            df_filtrado_a["Fecha_dt"] = pd.to_datetime(df_filtrado_a["Fecha"], errors='coerce')
-            df_filtrado_a = df_filtrado_a[(df_filtrado_a["Fecha_dt"].dt.date >= fecha_inicio_alq) & 
-                                        (df_filtrado_a["Fecha_dt"].dt.date <= fecha_fin_alq)]
+            if "Fecha" in df_filtrado_a.columns:
+                df_filtrado_a["Fecha_dt"] = pd.to_datetime(df_filtrado_a["Fecha"], errors='coerce')
+                df_filtrado_a = df_filtrado_a[
+                    (df_filtrado_a["Fecha_dt"].dt.date >= fecha_inicio_alq) &
+                    (df_filtrado_a["Fecha_dt"].dt.date <= fecha_fin_alq)
+                ]
+
             if df_filtrado_a.empty:
                 st.warning("No se encontraron registros con los filtros seleccionados.")
             else:
                 df_a_mostrar = df_filtrado_a.drop(columns=["Fecha_dt"], errors='ignore').copy()
-                
-                # --- LIMPIEZA LIMPIA PARA LA VISTA ---
-                if "Agencia Destino" in df_a_mostrar.columns:
-                    df_a_mostrar["Agencia Destino"] = df_a_mostrar["Agencia Destino"].apply(
-                        lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
-                    )
-                
-                if "Area Destino" in df_a_mostrar.columns:
-                    df_a_mostrar["Area Destino"] = df_a_mostrar["Area Destino"].apply(
-                        lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
-                    )
 
-                if "N°" in df_a_mostrar.columns:
-                    df_a_mostrar = df_a_mostrar.drop(columns=["N°"])
-                    
-                df_a_mostrar.insert(0, "N°", range(1, len(df_a_mostrar) + 1))
+                # --- LIMPIEZA LIMPIA PARA LA VISTA ---
+                for c_ag in ["Agencia", "Agencia Destino"]:
+                    if c_ag in df_a_mostrar.columns:
+                        df_a_mostrar[c_ag] = df_a_mostrar[c_ag].apply(
+                            lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
+                        )
+
+                for c_ar in ["Area", "Area Destino"]:
+                    if c_ar in df_a_mostrar.columns:
+                        df_a_mostrar[c_ar] = df_a_mostrar[c_ar].apply(
+                            lambda x: str(x).split(" - ")[-1].strip() if " - " in str(x) else str(x)
+                        )
+
+                if "Nº" in df_a_mostrar.columns:
+                    df_a_mostrar = df_a_mostrar.drop(columns=["Nº"])
+
+                df_a_mostrar.insert(0, "#", range(1, len(df_a_mostrar) + 1))
                 st.dataframe(df_a_mostrar, use_container_width=True, hide_index=True)
-                
+
                 buffer_a = io.BytesIO()
                 with pd.ExcelWriter(buffer_a, engine='openpyxl') as writer:
                     df_a_mostrar.to_excel(writer, index=False)
@@ -1415,53 +1432,65 @@ if st.session_state["menu_activo"] == "Reportes por Fecha / Edición":
 
     # --- 4. SUBPESTAÑA ADM BORRADO / MODIFICACIÓN ---
     with tab_admin_borrado:
-        if st.session_state["rol_actual"] == "Administrador":
-            st.warning("🚨 **Zona de Edición Crítica:** Como Administrador, puedes depurar y eliminar registros del historial general, ventas o alquileres si hubo un error de transcripción.")
-            
+        if st.session_state.get("rol_actual") == "Administrador":
+            st.warning("⚠️ **Zona de Edición Crítica:** Como Administrador, puedes depurar y eliminar registros del historial general, ventas o alquileres si hubo un error.")
+
             tipo_tabla_editar = st.selectbox("Selecciona el Historial a depurar:", ["Alquileres", "Ventas", "Historial General"])
-            
+
+            mapeo_tablas = {
+                "Alquileres": "Alquileres",
+                "Ventas": "Ventas",
+                "Historial General": "Historial"
+            }
+            tabla_nombre = mapeo_tablas[tipo_tabla_editar]
+
             try:
-                if tipo_tabla_editar == "Alquileres":
-                    hoja_activa_borrar = hoja_alquileres
-                elif tipo_tabla_editar == "Ventas":
-                    hoja_activa_borrar = hoja_ventas
-                else:
-                    hoja_activa_borrar = hoja_historial
-                
-                datos_crud = hoja_activa_borrar.get_all_values()
-                
-                if datos_crud and len(datos_crud) > 1:
-                    df_crud = pd.DataFrame(datos_crud[1:], columns=datos_crud[0]).copy()
-                    df_crud["Fila_Sheet"] = [i for i in range(2, len(df_crud) + 2)]
-                    
-                    st.write("Selecciona el registro que deseas eliminar permanentemente de Google Sheets:")
-                    
+                supabase = conectar_supabase()
+                response = supabase.table(tabla_nombre).select("*").execute()
+                datos_crud = response.data
+
+                if datos_crud:
+                    df_crud = pd.DataFrame(datos_crud)
+
+                    st.write("Selecciona el registro que deseas eliminar permanentemente de Supabase:")
+
                     df_crud_visual = df_crud.copy()
-                    df_crud_visual.insert(0, "N°", range(1, len(df_crud_visual) + 1))
+                    df_crud_visual.insert(0, "#", range(1, len(df_crud_visual) + 1))
                     st.dataframe(df_crud_visual, use_container_width=True, hide_index=True)
-                    
-                    options_eliminar = []
+
+                    options_eliminar = {}
                     for index, row in df_crud.iterrows():
+                        reg_id = row.get("id", index)
                         fecha_r = row.get("Fecha", "Sin Fecha")
                         insumo_r = row.get("Insumo", "Sin Insumo")
-                        det_r = row.get("Empresa Destino", row.get("Area Destino", row.get("Motivo", "")))
-                        options_eliminar.append(f"Fila {row['Fila_Sheet']} | {fecha_r} | {insumo_r} | {det_r}")
-                        
-                    seleccion_borrado = st.selectbox("Selecciona fila a eliminar:", options_eliminar)
-                    
-                    if seleccion_borrado:
-                        fila_eliminar_real = int(seleccion_borrado.split(" | ")[0].replace("Fila ", ""))
-                        st.error(f"⚠️ ¿Estás completamente seguro de eliminar permanentemente la **Fila {fila_eliminar_real}** de Google Sheets?")
+                        det_r = row.get("Empresa", row.get("Empresa Destino", row.get("Area Destino", row.get("Motivo", ""))))
+                        label = f"ID: {reg_id} | {fecha_r} | {insumo_r} | {det_r}"
+                        options_eliminar[label] = row
+
+                    seleccion_label = st.selectbox("Selecciona la fila a eliminar:", list(options_eliminar.keys()))
+
+                    if seleccion_label:
+                        registro_sel = options_eliminar[seleccion_label]
+                        st.error(f"🚨 ¿Estás completamente seguro de eliminar permanentemente este registro de **{tipo_tabla_editar}**?")
                         confirmacion_borrado = st.text_input("Escribe 'ELIMINAR' en mayúsculas para proceder:")
-                        
+
                         if st.button("Proceder con la Eliminación"):
                             if confirmacion_borrado == "ELIMINAR":
-                                with st.spinner("Eliminando fila en Google Sheets..."):
-                                    hoja_activa_borrar.delete_rows(fila_eliminar_real)
-                                st.success(f"¡Fila {fila_eliminar_real} eliminada exitosamente!")
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
-                                st.rerun()
+                                with st.spinner("Eliminando registro en Supabase..."):
+                                    if "id" in registro_sel and pd.notna(registro_sel["id"]):
+                                        supabase.table(tabla_nombre).delete().eq("id", registro_sel["id"]).execute()
+                                    else:
+                                        query = supabase.table(tabla_nombre).delete()
+                                        if "Fecha" in registro_sel:
+                                            query = query.eq("Fecha", registro_sel["Fecha"])
+                                        if "Insumo" in registro_sel:
+                                            query = query.eq("Insumo", registro_sel["Insumo"])
+                                        query.execute()
+
+                                    st.success("¡Registro eliminado exitosamente!")
+                                    st.cache_data.clear()
+                                    st.cache_resource.clear()
+                                    st.rerun()
                             else:
                                 st.error("Debes ingresar la palabra 'ELIMINAR' para confirmar.")
                 else:
@@ -1470,7 +1499,6 @@ if st.session_state["menu_activo"] == "Reportes por Fecha / Edición":
                 st.error(f"Error al cargar herramientas de borrado: {e}")
         else:
             st.info("🔒 Solo la cuenta de Administrador tiene privilegios de eliminación de registros.")
-
 
 # ==========================================
 # 5. PESTAÑA DE CONFIGURACIÓN Y USUARIOS
@@ -1697,45 +1725,66 @@ if st.session_state["menu_activo"] == "Configuración y Gestión de Usuarios":
                         
     else:
         st.warning("🔒 Esta sección es exclusiva para el Administrador de la plataforma.")
-# ==========================================
-# 6.PESTAÑA DE INSUMOS DE RESPALDO (BACKUP)
-# ==========================================
-if st.session_state["menu_activo"] == "Insumos de Respaldo (Backup)":
+# ----------------------------------------------------------------------------------
+# 6. PESTAÑA DE INSUMOS DE RESPALDO (BACKUP)
+# ----------------------------------------------------------------------------------
+if st.session_state.get("menu_activo") == "Insumos de Respaldo (Backup)":
     with st.expander("➕ Registrar Nuevo Insumo de Respaldo"):
         with st.form("form_nuevo_backup"):
-            insumo_nuevo_bk = st.selectbox("Seleccionar Insumo:", df_insumos["Nombre"].tolist() if not df_insumos.empty else [])
+            lista_insumos = df_insumos["Nombre"].tolist() if "df_insumos" in locals() and not df_insumos.empty else []
+            insumo_nuevo_bk = st.selectbox("Seleccionar Insumo:", lista_insumos)
             cantidad_bk = st.number_input("Cantidad:", min_value=1, step=1, value=1)
-            empresa_bk = st.selectbox("Empresa Destino:", empresas_disponibles if 'empresas_disponibles' in locals() else [])
-            
+            lista_empresas_avail = empresas_disponibles if 'empresas_disponibles' in locals() else []
+            empresa_bk = st.selectbox("Empresa Destino:", lista_empresas_avail)
+
             btn_guardar_bk = st.form_submit_button("💾 Guardar Respaldo")
-            
+
             if btn_guardar_bk:
                 fecha_bk = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
                 usuario_bk = st.session_state.get("usuario_actual", "admin")
                 estado_bk = "Disponible"
-                
-                hoja_respaldo.append_row([fecha_bk, insumo_nuevo_bk, cantidad_bk, empresa_bk, usuario_bk, estado_bk])
-                st.success(f"¡Respaldo de {insumo_nuevo_bk} registrado para {empresa_bk} con éxito!")
-                st.rerun()
-    st.subheader("🛡️ Gestión de Insumos de Respaldo (Backup por Empresa)")
-    st.write("Consulta los insumos en stock de respaldo y asígnales Agencia, Área y Contadores al momento de utilizarlos.")
+
+                try:
+                    supabase = conectar_supabase()
+                    registro_bk = {
+                        "Fecha": fecha_bk,
+                        "Insumo": insumo_nuevo_bk,
+                        "Cantidad": cantidad_bk,
+                        "Empresa Destino": empresa_bk,
+                        "Usuario": usuario_bk,
+                        "Estado": estado_bk
+                    }
+                    supabase.table("Respaldo").insert(registro_bk).execute()
+                    st.success(f"¡Respaldo de {insumo_nuevo_bk} registrado para {empresa_bk} con éxito!")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al registrar respaldo en Supabase: {e}")
+
+    st.subheader("📌 Gestión de Insumos de Respaldo (Backup por Empresa)")
+    st.write("Consulta los insumos en stock de respaldo y asígnales Agencia, Área y contadores al momento de utilizarlos.")
 
     try:
-        datos_resp = hoja_respaldo.get_all_values()
-        
-        if datos_resp and len(datos_resp) > 1:
-            df_resp = pd.DataFrame(datos_resp[1:], columns=datos_resp[0])
-            
-            if "Estado" in df_resp.columns:
-                df_disponibles = df_resp[df_resp["Estado"].str.strip().str.lower() == "disponible"]
-            else:
-                df_disponibles = df_resp
+        supabase = conectar_supabase()
+        res_resp = supabase.table("Respaldo").select("*").execute()
+        datos_resp = res_resp.data
 
-            if not df_disponibles.empty:
-                empresas_backup = sorted(df_disponibles["Empresa Destino"].dropna().unique().tolist())
+        if datos_resp:
+            df_resp = pd.DataFrame(datos_resp)
+
+            col_estado = "Estado" if "Estado" in df_resp.columns else None
+            col_empresa_dest = "Empresa Destino" if "Empresa Destino" in df_resp.columns else ("Empresa" if "Empresa" in df_resp.columns else None)
+
+            if col_estado:
+                df_disponibles = df_resp[df_resp[col_estado].astype(str).str.strip().str.lower() == "disponible"]
+            else:
+                df_disponibles = df_resp.copy()
+
+            if not df_disponibles.empty and col_empresa_dest:
+                empresas_backup = sorted(df_disponibles[col_empresa_dest].dropna().astype(str).unique().tolist())
                 empresa_elegida = st.selectbox("Selecciona la Empresa para ver su Respaldo:", empresas_backup, key="busq_empresa_backup")
 
-                df_filtrado_empresa = df_disponibles[df_disponibles["Empresa Destino"] == empresa_elegida]
+                df_filtrado_empresa = df_disponibles[df_disponibles[col_empresa_dest] == empresa_elegida].copy()
 
                 st.markdown(f"### Insumos de Respaldo disponibles en: {empresa_elegida}")
                 st.dataframe(df_filtrado_empresa, use_container_width=True, hide_index=True)
@@ -1743,23 +1792,20 @@ if st.session_state["menu_activo"] == "Insumos de Respaldo (Backup)":
                 st.markdown("---")
                 st.subheader("🔄 Activar y Asignar Destino (Enviar a Alquileres)")
 
-                # Usamos st.container para que Streamlit se recargue en tiempo real al cambiar de Agencia
                 with st.container():
-                    opciones_items = [
-                        f"Fila {idx+2} - Insumo: {row['Insumo']} (Cantidad: {row['Cantidad']})"
-                        for idx, row in df_filtrado_empresa.iterrows()
-                    ]
-                    
-                    item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", opciones_items)
-                    idx_sel = opciones_items.index(item_a_usar) if item_a_usar in opciones_items else 0
-                    respaldo_sel = df_filtrado_empresa.iloc[idx_sel]
-                    cant_max = int(respaldo_sel["Cantidad"])
-                    
+                    opciones_map = {}
+                    for idx, row in df_filtrado_empresa.iterrows():
+                        reg_id = row.get("id", idx)
+                        lbl = f"ID: {reg_id} - Insumo: {row.get('Insumo', '')} (Cantidad: {row.get('Cantidad', 0)})"
+                        opciones_map[lbl] = row
+
+                    item_a_usar = st.selectbox("Selecciona el insumo de respaldo a utilizar:", list(opciones_map.keys()))
+                    respaldo_sel = opciones_map[item_a_usar]
+                    cant_max = int(respaldo_sel.get("Cantidad", 1))
+
                     # 1. Filtrado de Agencias según la Empresa elegida
-                    agencias_filtradas = [
-                        ag for ag in agencias_disponibles 
-                        if ag.startswith(empresa_elegida.strip())
-                    ]
+                    agencias_avail = agencias_disponibles if 'agencias_disponibles' in locals() else []
+                    agencias_filtradas = [ag for ag in agencias_avail if str(ag).startswith(empresa_elegida.strip())]
                     if not agencias_filtradas:
                         agencias_filtradas = [f"{empresa_elegida} - Principal"]
 
@@ -1769,15 +1815,13 @@ if st.session_state["menu_activo"] == "Insumos de Respaldo (Backup)":
                         agencia_destino_uso = st.selectbox(
                             "Agencia:",
                             agencias_filtradas,
-                            format_func=lambda x: x.replace(empresa_elegida.strip() + " - ", "").strip(),
+                            format_func=lambda x: str(x).replace(empresa_elegida.strip() + " - ", "").strip(),
                             key="backup_agencia_destino"
                         )
 
-                    # Filtrado de Áreas según la Agencia seleccionada
-                    areas_filtradas = [
-                        ar for ar in areas_disponibles
-                        if ar.startswith(agencia_destino_uso.strip())
-                    ]
+                    # 2. Filtrado de Áreas según la Agencia seleccionada
+                    areas_avail = areas_disponibles if 'areas_disponibles' in locals() else []
+                    areas_filtradas = [ar for ar in areas_avail if str(ar).startswith(agencia_destino_uso.strip())]
                     if not areas_filtradas:
                         areas_filtradas = [f"{agencia_destino_uso} - General"]
 
@@ -1785,7 +1829,7 @@ if st.session_state["menu_activo"] == "Insumos de Respaldo (Backup)":
                         area_destino_uso = st.selectbox(
                             "Área:",
                             areas_filtradas,
-                            format_func=lambda x: x.replace(agencia_destino_uso.strip() + " - ", "").strip(),
+                            format_func=lambda x: str(x).replace(agencia_destino_uso.strip() + " - ", "").strip(),
                             key="backup_area_destino"
                         )
 
@@ -1800,104 +1844,98 @@ if st.session_state["menu_activo"] == "Insumos de Respaldo (Backup)":
                         )
 
                     st.markdown("#### Control por Fechas y Duración:")
-                    
-                    # 2. Buscamos automáticamente la última fecha del cambio anterior para este insumo/agencia
+
+                    # Buscamos fecha anterior
                     fecha_anterior_sugerida = pd.Timestamp.now().strftime("%Y-%m-%d")
                     dias_duracion_calculados = 0
-                        
+
                     try:
-                        # Extraemos el insumo limpio
-                        insumo_temp = item_a_usar.split("Insumo: ")[1].split(" (Cantidad:")[0].strip()
-
-                        if 'df_alq_hist' in locals() and not df_alq_hist.empty:
-                            df_temp = df_alq_hist.copy()
-                            # Limpiamos espacios en blanco de los nombres de columnas
-                            df_temp.columns = [str(col).strip() for col in df_temp.columns]
-
-                            # Obtenemos las palabras clave finales (ej. "central" y "plataforma p1")
+                        insumo_temp = str(respaldo_sel.get("Insumo", ""))
+                        res_alq = supabase.table("Alquileres").select("*").execute()
+                        if res_alq.data:
+                            df_alq_hist = pd.DataFrame(res_alq.data)
                             ins_buscado = insumo_temp.strip().lower()
-                            ag_buscada = agencia_destino_uso.split("-")[-1].strip().lower()
-                            ar_buscada = area_destino_uso.split("-")[-1].strip().lower()
+                            ag_buscada = str(agencia_destino_uso).split("-")[-1].strip().lower()
+                            ar_buscada = str(area_destino_uso).split("-")[-1].strip().lower()
 
-                            # Función de coincidencia flexible por fila
                             def coincide_registro(row):
                                 val_ins = str(row.get("Insumo", "")).strip().lower()
-                                val_ag  = str(row.get("Agencia Destino", "")).strip().lower()
-                                val_ar  = str(row.get("Area Destino", "")).strip().lower()
-
-                                # Comprueba si el insumo coincide y si las agencias/áreas coinciden parcial o totalmente
+                                val_ag = str(row.get("Agencia Destino", "")).strip().lower()
+                                val_ar = str(row.get("Area Destino", "")).strip().lower()
                                 match_ins = (ins_buscado == val_ins)
-                                match_ag  = (ag_buscada in val_ag) or (val_ag in agencia_destino_uso.lower())
-                                match_ar  = (ar_buscada in val_ar) or (val_ar in area_destino_uso.lower())
-
+                                match_ag = (ag_buscada in val_ag) or (val_ag in str(agencia_destino_uso).lower())
+                                match_ar = (ar_buscada in val_ar) or (val_ar in str(area_destino_uso).lower())
                                 return match_ins and match_ag and match_ar
 
-                            # Aplicamos el filtro flexible
-                            df_match = df_temp[df_temp.apply(coincide_registro, axis=1)]
-
+                            df_match = df_alq_hist[df_alq_hist.apply(coincide_registro, axis=1)]
                             if not df_match.empty:
                                 ultimo_registro = df_match.iloc[-1]
-                                fecha_str = str(ultimo_registro["Fecha"]).strip()
-                                # Extraemos solo la fecha (YYYY-MM-DD)
+                                fecha_str = str(ultimo_registro.get("Fecha", "")).strip()
                                 fecha_anterior_sugerida = fecha_str.split(" ")[0]
-                    except Exception as e:
+                    except Exception:
                         pass
 
-                    # Mostramos la fecha del último cambio detectada
-                    st.info(f"última fecha de cambio registrada para este insumo: **{fecha_anterior_sugerida}**")
-                    
-                    # Permite confirmar o ajustar la fecha del cambio anterior y la fecha de hoy
+                    st.info(f"Última fecha de cambio registrada para este insumo: **{fecha_anterior_sugerida}**")
+
                     col_f1, col_f2 = st.columns(2)
                     with col_f1:
                         f_anterior = st.date_input("Fecha del Cambio Anterior:", value=pd.to_datetime(fecha_anterior_sugerida).date())
                     with col_f2:
                         f_actual = st.date_input("Fecha de Hoy (Instalación de Respaldo):", value=pd.Timestamp.now().date())
-                    
-                    # Calculamos automáticamente los días de duración
+
                     dias_duracion_calculados = max(0, (pd.to_datetime(f_actual) - pd.to_datetime(f_anterior)).days)
                     st.success(f"⏱️ Tiempo estimado que duró el insumo anterior: **{dias_duracion_calculados} días**")
 
                     btn_activar = st.button("🚀 Dar de Baja en Backup y Registrar en Alquileres")
 
                     if btn_activar:
-                        fila_idx = int(item_a_usar.split(" - ")[0].replace("Fila ", ""))
-                        fila_datos = hoja_respaldo.row_values(fila_idx)
+                        try:
+                            insumo_bk = respaldo_sel.get("Insumo", "")
+                            cant_disponible = int(respaldo_sel.get("Cantidad", 0))
+                            empresa_bk = respaldo_sel.get("Empresa Destino", respaldo_sel.get("Empresa", ""))
 
-                        insumo_bk = fila_datos[1]
-                        cant_disponible = int(fila_datos[2])  # Cantidad total en el backup (ej. 3)
-                        empresa_bk = fila_datos[3]
+                            cant_usar = int(cant_a_usar)
+                            fecha_actual_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                            usuario_actual = st.session_state.get("usuario_actual", "admin")
 
-                        cant_usar = int(cant_a_usar)  # Cantidad que eligió el usuario (ej. 1)
+                            nueva_fila_alquiler = {
+                                "Fecha": fecha_actual_str,
+                                "Insumo": insumo_bk,
+                                "Cantidad": cant_usar,
+                                "Empresa Destino": empresa_bk,
+                                "Agencia Destino": agencia_destino_uso,
+                                "Area Destino": area_destino_uso,
+                                "Usuario": usuario_actual,
+                                "Lectura Anterior": 0,
+                                "Lectura Actual": 0,
+                                "Duración Días": dias_duracion_calculados
+                            }
 
-                        fecha_actual_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-                        usuario_actual = st.session_state.get("usuario_actual", "admin")
+                            supabase.table("Alquileres").insert(nueva_fila_alquiler).execute()
 
-                        # 1. Guardamos en Alquileres usando 'cant_usar' (la cantidad real utilizada)
-                        nueva_fila_alquiler = [
-                            fecha_actual_str, insumo_bk, cant_usar, empresa_bk,
-                            agencia_destino_uso, area_destino_uso, usuario_actual,
-                            0, 0, 0, dias_duracion_calculados
-                        ]
-                        hoja_alquileres.append_row(nueva_fila_alquiler)
+                            # Actualizar o cambiar estado en Respaldo
+                            reg_id = respaldo_sel.get("id")
+                            if cant_usar >= cant_disponible:
+                                if reg_id is not None:
+                                    supabase.table("Respaldo").update({"Estado": "Utilizado"}).eq("id", reg_id).execute()
+                                else:
+                                    supabase.table("Respaldo").update({"Estado": "Utilizado"}).eq("Insumo", insumo_bk).eq("Empresa Destino", empresa_bk).execute()
+                            else:
+                                nueva_cant = cant_disponible - cant_usar
+                                if reg_id is not None:
+                                    supabase.table("Respaldo").update({"Cantidad": nueva_cant}).eq("id", reg_id).execute()
+                                else:
+                                    supabase.table("Respaldo").update({"Cantidad": nueva_cant}).eq("Insumo", insumo_bk).eq("Empresa Destino", empresa_bk).execute()
 
-                        # 2. Actualizamos la hoja de Respaldo según el consumo
-                        if cant_usar >= cant_disponible:
-                            # Si se usó todo, cambiamos el estado a "Utilizado"
-                            hoja_respaldo.update_cell(fila_idx, 6, "Utilizado")
-                        else:
-                            # Si fue consumo parcial, restamos y actualizamos la columna Cantidad (Columna 3 / 'C')
-                            nueva_cant = cant_disponible - cant_usar
-                            hoja_respaldo.update_cell(fila_idx, 3, nueva_cant)
-
-                        st.success(f"¡Se asignaron {cant_usar} unidad(es) de {insumo_bk} a {agencia_destino_uso} ({area_destino_uso})!")
-                        st.cache_data.clear()
-                        st.rerun()
-
+                            st.success(f"¡Se asignaron {cant_usar} unidad(es) de {insumo_bk} a {agencia_destino_uso} ({area_destino_uso})!")
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as e_act:
+                            st.error(f"Error al activar respaldo: {e_act}")
             else:
                 st.info("No hay insumos de respaldo disponibles para esta empresa.")
         else:
             st.info("Aún no hay registros en la sección de respaldo.")
-            
     except Exception as e:
         st.error(f"Error al cargar la gestión de respaldos: {e}")
 
@@ -1905,97 +1943,97 @@ if st.session_state["menu_activo"] == "Insumos de Respaldo (Backup)":
 # PESTAÑA: SERVICIOS Y SOPORTE TÉCNICO (3 ETAPAS)
 # =========================================================
 if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Soporte Técnico"]:
-    st.header("📋 Gestión de Servicios y Soporte Técnico")
-    
-    subtab_solicitar, subtab_atender, subtab_historial = st.tabs([
-        "1️⃣ Registrar Solicitud (Pendiente)", 
-        "2️⃣ Atender Servicio Pendiente", 
-        "3️⃣ Historial de Servicios"
-    ])
+st.header("📋 Gestión de Servicios y Soporte Técnico")
 
-    # ---------------------------------------------------------
-    # PARTE 1: REGISTRAR SOLICITUD DE SERVICIO
-    # ---------------------------------------------------------
-    with subtab_solicitar:
-        st.subheader("➕ Registrar Nueva Solicitud de Atención")
-        st.caption("Llena este formulario cuando una agencia reporte un problema.")
+subtab_solicitar, subtab_atender, subtab_historial = st.tabs([
+    "1️⃣ Registrar Solicitud (Pendiente)", 
+    "2️⃣ Atender Servicio Pendiente", 
+    "3️⃣ Historial de Servicios"
+])
 
-        empresa_servicio = st.selectbox("Empresa Solicitante:", empresas_disponibles, key="serv_empresa_sol")
+# ---------------------------------------------------------
+# PARTE 1: REGISTRAR SOLICITUD DE SERVICIO
+# ---------------------------------------------------------
+with subtab_solicitar:
+    st.subheader("➕ Registrar Nueva Solicitud de Atención")
+    st.caption("Llena este formulario cuando una agencia reporte un problema.")
 
-        agencias_serv_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_servicio.strip())]
-        if not agencias_serv_filtradas:
-            agencias_serv_filtradas = [f"{empresa_servicio} - Principal"]
+    empresa_servicio = st.selectbox("Empresa Solicitante:", empresas_disponibles, key="serv_empresa_sol")
 
-        col_s1, col_s2 = st.columns(2)
+    agencias_serv_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_servicio.strip())]
+    if not agencias_serv_filtradas:
+        agencias_serv_filtradas = [f"{empresa_servicio} - Principal"]
 
-        with col_s1:
-            agencia_servicio = st.selectbox(
-                "Agencia:", 
-                agencias_serv_filtradas, 
-                format_func=lambda x: x.split(" - ")[-1] if " - " in x else x,
-                key="serv_agencia_sol"
-            )
+    col_s1, col_s2 = st.columns(2)
 
-            areas_serv_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_servicio.strip())]
-            if not areas_serv_filtradas:
-                areas_serv_filtradas = [f"{agencia_servicio} - General"]
-
-            area_servicio = st.selectbox(
-                "Área:", 
-                areas_serv_filtradas, 
-                format_func=lambda x: x.split(" - ")[-1] if " - " in x else x,
-                key="serv_area_sol"
-            )
-
-        with col_s2:
-            # Seleccionamos Fecha y Hora
-            col_fecha, col_hora = st.columns(2)
-            with col_fecha:
-                fecha_solicitud = st.date_input("Fecha de Solicitud:", value=obtener_hora_local_bo().date(), key="serv_fecha_sol")
-            with col_hora:
-                hora_solicitud = st.time_input("Hora:", value=obtener_hora_local_bo().time(), key="serv_hora_sol")
-                
-            quien_registro = st.session_state.get("usuario_actual", "Secretaría")
-
-        problema_falla = st.text_area(
-            "Descripción del Problema o Falla Reportada:", 
-            placeholder="Ejemplo: Impresora no enciende, ruido extraño, atasco de papel...",
-            key="serv_problema_sol"
+    with col_s1:
+        agencia_servicio = st.selectbox(
+            "Agencia:", 
+            agencias_serv_filtradas, 
+            format_func=lambda x: x.split(" - ")[-1] if " - " in x else x,
+            key="serv_agencia_sol"
         )
 
-        btn_guardar_solicitud = st.button("🚨 Registrar y Notificar Solicitud")
+        areas_serv_filtradas = [ar for ar in areas_disponibles if ar.startswith(agencia_servicio.strip())]
+        if not areas_serv_filtradas:
+            areas_serv_filtradas = [f"{agencia_servicio} - General"]
 
-        if btn_guardar_solicitud:
-            if not problema_falla.strip():
-                st.warning("⚠️ Por favor ingresa el detalle del problema.")
-            else:
-                # Concatenamos fecha y hora
-                fecha_hora_completa = f"{fecha_solicitud} {hora_solicitud.strftime('%H:%M')}"
-                
-                nueva_fila_servicio = [
-                    fecha_hora_completa,    # Col 1: Fecha y Hora Solicitud
-                    empresa_servicio,       # Col 2: Empresa
-                    agencia_servicio,       # Col 3: Agencia
-                    area_servicio,          # Col 4: Área
-                    problema_falla,         # Col 5: Detalle Problema
-                    "Sin asignar",          # Col 6: Técnico
-                    "Ninguno",              # Col 7: Insumos
-                    "Pendiente",            # Col 8: Fecha Realizado
-                    "Pendiente"             # Col 9: Estado
-                ]
-                
-                hoja_servicios.append_row(nueva_fila_servicio)
-                
-                enviar_notificacion_telegram(
-                    empresa_servicio,
-                    agencia_servicio,
-                    area_servicio,
-                    problema_falla,
-                    quien_registro
-                )
-                
-                st.success(f"✅ Solicitud registrada con hora **{hora_solicitud.strftime('%H:%M')}** y notificada a Telegram.")
-                st.rerun()
+        area_servicio = st.selectbox(
+            "Área:", 
+            areas_serv_filtradas, 
+            format_func=lambda x: x.split(" - ")[-1] if " - " in x else x,
+            key="serv_area_sol"
+        )
+
+    with col_s2:
+        # Seleccionamos Fecha y Hora
+        col_fecha, col_hora = st.columns(2)
+        with col_fecha:
+            fecha_solicitud = st.date_input("Fecha de Solicitud:", value=obtener_hora_local_bo().date(), key="serv_fecha_sol")
+        with col_hora:
+            hora_solicitud = st.time_input("Hora:", value=obtener_hora_local_bo().time(), key="serv_hora_sol")
+            
+        quien_registro = st.session_state.get("usuario_actual", "Secretaría")
+
+    problema_falla = st.text_area(
+        "Descripción del Problema o Falla Reportada:", 
+        placeholder="Ejemplo: Impresora no enciende, ruido extraño, atasco de papel...",
+        key="serv_problema_sol"
+    )
+
+    btn_guardar_solicitud = st.button("🚨 Registrar y Notificar Solicitud")
+
+    if btn_guardar_solicitud:
+        if not problema_falla.strip():
+            st.warning("⚠️ Por favor ingresa el detalle del problema.")
+        else:
+            # Concatenamos fecha y hora
+            fecha_hora_completa = f"{fecha_solicitud} {hora_solicitud.strftime('%H:%M')}"
+            
+            nueva_fila_servicio = [
+                fecha_hora_completa,    # Col 1: Fecha y Hora Solicitud
+                empresa_servicio,       # Col 2: Empresa
+                agencia_servicio,       # Col 3: Agencia
+                area_servicio,          # Col 4: Área
+                problema_falla,         # Col 5: Detalle Problema
+                "Sin asignar",          # Col 6: Técnico
+                "Ninguno",              # Col 7: Insumos
+                "Pendiente",            # Col 8: Fecha Realizado
+                "Pendiente"             # Col 9: Estado
+            ]
+            
+            hoja_servicios.append_row(nueva_fila_servicio)
+            
+            enviar_notificacion_telegram(
+                empresa_servicio,
+                agencia_servicio,
+                area_servicio,
+                problema_falla,
+                quien_registro
+            )
+            
+            st.success(f"✅ Solicitud registrada con hora **{hora_solicitud.strftime('%H:%M')}** y notificada a Telegram.")
+            st.rerun()
 
     # ---------------------------------------------------------
     # PARTE 2: ATENDER SERVICIO PENDIENTE (CON CONTADORES Y REGISTRO EN ALQUILERES)
