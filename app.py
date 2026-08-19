@@ -139,49 +139,50 @@ def encriptar_password(password_plano):
 @st.cache_data(ttl=60)
 def obtener_usuarios():
     try:
-        df_usuarios = st.session_state["pestanas"].get("Usuarios", pd.DataFrame())
-        if not df_usuarios.empty:
-            return df_usuarios
+        supabase = conectar_supabase()
+        response = supabase.table("Usuarios").select("*").execute()
+        df = pd.DataFrame(response.data)
+        if not df.empty:
+            return df
         return pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
     except Exception as e:
-        st.warning(f"Aviso al leer Usuarios: {e}")
+        st.error(f"Error al leer Usuarios desde Supabase: {e}")
         return pd.DataFrame(columns=["Usuario", "Contraseña", "Rol"])
-    return df
 
-def registrar_usuario(usuario, contrasenia, rol):
-    pass_encriptado = encriptar_password(contrasenia)
-    hoja_usuarios.append_row([usuario, pass_encriptado, rol])
+def registrar_usuario(usuario, contrasena, rol):
+    pass_encriptado = encriptar_password(contrasena)
+    supabase = conectar_supabase()
+    supabase.table("Usuarios").insert({
+        "Usuario": usuario, 
+        "Contraseña": pass_encriptado, 
+        "Rol": rol
+    }).execute()
 
-def editar_usuario(usuario_viejo, nuevo_usuario, nueva_contrasenia, nuevo_rol):
-    """Edita un registro de usuario existente encriptando su contraseña."""
-    pass_encriptado = encriptar_password(nueva_contrasenia)
-    datos = hoja_usuarios.get_all_values()
-    for i, fila in enumerate(datos):
-        if fila[0] == usuario_viejo:
-            fila_idx = i + 1
-            hoja_usuarios.update_cell(fila_idx, 1, nuevo_usuario)
-            hoja_usuarios.update_cell(fila_idx, 2, pass_encriptado)
-            hoja_usuarios.update_cell(fila_idx, 3, nuevo_rol)
-            break
+def editar_usuario(usuario_viejo, nuevo_usuario, nueva_contrasena, nuevo_rol):
+    """Edita un registro de usuario existente en Supabase."""
+    pass_encriptado = encriptar_password(nueva_contrasena)
+    supabase = conectar_supabase()
+    supabase.table("Usuarios").update({
+        "Usuario": nuevo_usuario,
+        "Contraseña": pass_encriptado,
+        "Rol": nuevo_rol
+    }).eq("Usuario", usuario_viejo).execute()
 
 def eliminar_usuario(usuario_a_eliminar):
-    """Elimina un usuario de la hoja."""
-    datos = hoja_usuarios.get_all_values()
-    for i, fila in enumerate(datos):
-        if fila[0] == usuario_a_eliminar:
-            hoja_usuarios.delete_rows(i + 1)
-            break
+    """Elimina un usuario de Supabase."""
+    supabase = conectar_supabase()
+    supabase.table("Usuarios").delete().eq("Usuario", usuario_a_eliminar).execute()
 
 # --- FUNCIONES DE PARÁMETROS (EMPRESAS, ÁREAS Y AGENCIAS) ---
 @st.cache_data(ttl=60)
 def obtener_parametros():
     try:
-        datos = hoja_parametros.get_all_values()
-        if not datos or len(datos) <= 1:
+        df_parametros = st.session_state["pestanas"].get("Parámetros", pd.DataFrame())
+        if df_parametros.empty:
             return ["Sin Registrar"], ["Sin Registrar"], ["Sin Registrar"]
-            
-        df = pd.DataFrame(datos[1:], columns=datos[0])
-        
+
+        df = df_parametros
+
         lista_empresas = df["Empresa"].dropna().astype(str).str.strip().tolist() if "Empresa" in df.columns else []
         lista_areas = df["Area"].dropna().astype(str).str.strip().tolist() if "Area" in df.columns else []
         lista_agencias = df["Agencia"].dropna().astype(str).str.strip().tolist() if "Agencia" in df.columns else []
@@ -197,13 +198,10 @@ def obtener_parametros():
     return lista_empresas, lista_areas, lista_agencias
 
 def registrar_parametro(nuevo_valor, tipo):
-    registros = hoja_parametros.get_all_values()
-    if not registros:
-        hoja_parametros.append_row(["Empresa", "Agencia", "Area"])
-        registros = [["Empresa", "Agencia", "Area"]]
-        
-    df = pd.DataFrame(registros[1:], columns=registros[0])
-    
+    df_parametros = st.session_state["pestanas"].get("Parámetros", pd.DataFrame())
+    if df_parametros.empty:
+        df_parametros = pd.DataFrame(columns=["Empresa", "Agencia", "Area"])
+
     if tipo == "Empresa":
         lista_actual = df["Empresa"].dropna().tolist()
         lista_actual = [x for x in lista_actual if x != ""]
@@ -229,7 +227,7 @@ def registrar_parametro(nuevo_valor, tipo):
 def eliminar_parametro(valor_a_eliminar, tipo):
     """Elimina de forma segura un parámetro de la lista reescribiendo la columna sin dejar celdas fantasmas."""
     try:
-        registros = hoja_parametros.get_all_values()
+       df_usuarios = st.session_state["pestanas"].get("parametros", pd.DataFrame())
         if not registros:
             return
             
