@@ -1153,45 +1153,45 @@ if st.session_state["menu_activo"] == "Valorización del Inventario":
 # 3. PESTAÑA DE RENDIMIENTO DE INSUMOS
 # ==========================================
 if st.session_state["menu_activo"] == "Rendimiento de Insumos":
-    st.subheader("📈 Análisis de Rendimiento Promedio de Insumos")
+    st.subheader("📊 Análisis de Rendimiento Promedio de Insumos")
     st.write("Esta sección calcula el rendimiento histórico del equipamiento/tóner en función de las copias realizadas y el tiempo útil de uso.")
 
     try:
-        datos_rend = hoja_alquileres.get_all_values()
-        if datos_rend and len(datos_rend) > 1:
-            df_rend = pd.DataFrame(datos_rend[1:], columns=datos_rend[0])
-            
-            df_rend["Páginas Impresas"] = pd.to_numeric(df_rend["Páginas Impresas"], errors="coerce").fillna(0)
-            df_rend["Días Transcurridos"] = pd.to_numeric(df_rend["Días Transcurridos"], errors="coerce").fillna(0)
-            
+        supabase = conectar_supabase()
+        response = supabase.table("Alquileres").select("*").execute()
+        df_rend = pd.DataFrame(response.data)
+
+        if not df_rend.empty:
+            df_rend["Páginas Impresas"] = pd.to_numeric(df_rend.get("Páginas Impresas", 0), errors="coerce").fillna(0)
+            df_rend["Días Transcurridos"] = pd.to_numeric(df_rend.get("Días Transcurridos", 0), errors="coerce").fillna(0)
+
             df_rend_filtrado = df_rend[(df_rend["Páginas Impresas"] > 0) | (df_rend["Días Transcurridos"] > 0)]
-            
+
             if not df_rend_filtrado.empty:
-                # --- NUEVO: Selector / Buscador de Insumo ---
+                # --- Selector / Buscador de Insumo ---
                 lista_insumos_disponibles = ["Todos"] + sorted(df_rend_filtrado["Insumo"].dropna().unique().tolist())
                 insumo_seleccionado = st.selectbox("Filtrar por Insumo:", lista_insumos_disponibles, key="filtro_rendimiento_insumo")
-                
+
                 if insumo_seleccionado != "Todos":
                     df_rend_filtrado = df_rend_filtrado[df_rend_filtrado["Insumo"] == insumo_seleccionado]
-                # -------------------------------------------
 
                 df_promedios = df_rend_filtrado.groupby("Insumo").agg(
                     Promedio_Paginas=("Páginas Impresas", "mean"),
                     Promedio_Dias=("Días Transcurridos", "mean"),
                     Total_Registros=("Insumo", "count")
                 ).reset_index()
-                
-                df_promedios.columns = ["Insumo", "Páginas Promedio por Periodo", "Duración Promedio (Días)", "№ Mediciones Realizadas"]
-                
+
+                df_promedios.columns = ["Insumo", "Páginas Promedio por Periodo", "Duración Promedio (Días)", "Nº Mediciones Realizadas"]
+
                 st.write("📊 **Tabla de Rendimiento Promedio por Insumo**")
-                
+
                 df_promedios_con_num = df_promedios.copy()
-                df_promedios_con_num.insert(0, "№", range(1, len(df_promedios_con_num) + 1))
+                df_promedios_con_num.insert(0, "#", range(1, len(df_promedios_con_num) + 1))
                 st.dataframe(df_promedios_con_num, use_container_width=True, hide_index=True)
-                
+
                 st.markdown("---")
                 col_graf1, col_graf2 = st.columns(2)
-                
+
                 with col_graf1:
                     fig_pag = px.bar(
                         df_promedios,
@@ -1203,7 +1203,7 @@ if st.session_state["menu_activo"] == "Rendimiento de Insumos":
                         color="Insumo"
                     )
                     st.plotly_chart(fig_pag, use_container_width=True)
-                    
+
                 with col_graf2:
                     fig_dias = px.bar(
                         df_promedios,
