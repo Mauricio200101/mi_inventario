@@ -195,79 +195,20 @@ def obtener_parametros():
     return lista_empresas, lista_areas, lista_agencias
 
 def registrar_parametro(nuevo_valor, tipo):
-    df_parametros = st.session_state["pestanas"].get("Parámetros", pd.DataFrame())
-    if df_parametros.empty:
-        df_parametros = pd.DataFrame(columns=["Empresa", "Agencia", "Area"])
-
-    if tipo == "Empresa":
-        lista_actual = df["Empresa"].dropna().tolist()
-        lista_actual = [x for x in lista_actual if x != ""]
-        lista_actual.append(nuevo_valor)
-        col_index = 1
-        nueva_lista = lista_actual
-    elif tipo == "Agencia":
-        lista_actual = df["Agencia"].dropna().tolist() if "Agencia" in df.columns else []
-        lista_actual = [x for x in lista_actual if x != ""]
-        lista_actual.append(nuevo_valor)
-        col_index = 2
-        nueva_lista = lista_actual
-    else: # Area
-        lista_actual = df["Area"].dropna().tolist()
-        lista_actual = [x for x in lista_actual if x != ""]
-        lista_actual.append(nuevo_valor)
-        col_index = 3
-        nueva_lista = lista_actual
-
-    row_to_write = len(nueva_lista) + 1
-    hoja_parametros.update_cell(row_to_write, col_index, nuevo_valor)
+    """Registra un nuevo parámetro en la tabla Parametros de Supabase."""
+    try:
+        supabase = conectar_supabase()
+        supabase.table("Parametros").insert({tipo: nuevo_valor}).execute()
+    except Exception as e:
+        st.error(f"Error al registrar parámetro: {e}")
 
 def eliminar_parametro(valor_a_eliminar, tipo):
-    """Elimina de forma segura un parámetro de la lista reescribiendo la columna sin dejar celdas fantasmas."""
+    """Elimina un parámetro de la tabla Parametros en Supabase."""
     try:
-       df_usuarios = st.session_state["pestanas"].get("parametros", pd.DataFrame())
-        if not registros:
-            return
-            
-        cabeceras = registros[0]
-        df = pd.DataFrame(registros[1:], columns=cabeceras)
-        
-        # Filtrado y estructuración por tipo
-        if tipo == "Empresa" and "Empresa" in df.columns:
-            lista_actual = df["Empresa"].dropna().astype(str).str.strip().tolist()
-            lista_actual = [x for x in lista_actual if x != ""]
-            if valor_a_eliminar in lista_actual:
-                lista_actual.remove(valor_a_eliminar)
-            col_index = 1
-            col_letra = "A"
-            nueva_lista = lista_actual
-        elif tipo == "Agencia" and "Agencia" in df.columns:
-            lista_actual = df["Agencia"].dropna().astype(str).str.strip().tolist()
-            lista_actual = [x for x in lista_actual if x != ""]
-            if valor_a_eliminar in lista_actual:
-                lista_actual.remove(valor_a_eliminar)
-            col_index = 3
-            col_letra = "B"
-            nueva_lista = lista_actual
-        elif tipo == "Area" and "Area" in df.columns:
-            lista_actual = df["Area"].dropna().astype(str).str.strip().tolist()
-            lista_actual = [x for x in lista_actual if x != ""]
-            if valor_a_eliminar in lista_actual:
-                lista_actual.remove(valor_a_eliminar)
-            col_index = 2
-            col_letra = "C"
-            nueva_lista = lista_actual
-        else:
-            return
-            
-        # 1. Limpiamos la columna entera del Google Sheet para evitar que queden datos duplicados abajo
-        hoja_parametros.batch_clear([f"{col_letra}2:{col_letra}500"])
-        
-        # 2. Escribimos ordenadamente la nueva lista resultante
-        for idx, val in enumerate(nueva_lista):
-            hoja_parametros.update_cell(idx + 2, col_index, val)
-            
+        supabase = conectar_supabase()
+        supabase.table("Parametros").delete().eq(tipo, valor_a_eliminar).execute()
     except Exception as e:
-        st.error(f"Error al eliminar parámetro en base de datos: {e}")
+        st.error(f"Error al eliminar parámetro: {e}")
 
 # --- CONTROL DE ACCESO (LOGIN) ---
 def check_password():
