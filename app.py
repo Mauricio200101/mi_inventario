@@ -1954,17 +1954,17 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
 # ---------------------------------------------------------
 # PARTE 1: REGISTRAR SOLICITUD DE SERVICIO
 # ---------------------------------------------------------
-with subtab_solicitar:
-    st.subheader("➕ Registrar Nueva Solicitud de Atención")
-    st.caption("Llena este formulario cuando una agencia reporte un problema.")
+    with subtab_solicitar:
+        st.subheader("➕ Registrar Nueva Solicitud de Atención")
+        st.caption("Llena este formulario cuando una agencia reporte un problema.")
 
-    empresa_servicio = st.selectbox("Empresa Solicitante:", empresas_disponibles, key="serv_empresa_sol")
+        empresa_servicio = st.selectbox("Empresa Solicitante:", empresas_disponibles, key="serv_empresa_sol")
 
-    agencias_serv_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_servicio.strip())]
-    if not agencias_serv_filtradas:
-        agencias_serv_filtradas = [f"{empresa_servicio} - Principal"]
+        agencias_serv_filtradas = [ag for ag in agencias_disponibles if ag.startswith(empresa_servicio.strip())]
+        if not agencias_serv_filtradas:
+            agencias_serv_filtradas = [f"{empresa_servicio} - Principal"]
 
-    col_s1, col_s2 = st.columns(2)
+        col_s1, col_s2 = st.columns(2)
 
     with col_s1:
         agencia_servicio = st.selectbox(
