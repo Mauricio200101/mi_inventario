@@ -440,15 +440,22 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
 
         # 3. Registrar en Ventas o Alquileres según corresponda
         if tipo_mov == "Salida":
-            if motivo == "Venta":
-                total_venta = float(cant_movida) * float(precio_unitario)
-                supabase.table("Ventas").insert({
-                    "Fecha": fecha_actual,
-                    "Insumo": nombre_insumo,
-                    "Cantidad": str(cant_movida),
-                    "Precio Aplicado": str(precio_unitario),
-                    "Monto Total (Bs.)": str(total_venta)
-                }).execute()
+            if str(motivo).strip().lower() == "venta":
+                try:
+                    cant_num = float(cant_movida) if cant_movida else 0.0
+                    prec_num = float(precio_unitario) if precio_unitario else 0.0
+                    total_venta = cant_num * prec_num
+
+                    supabase.table("Ventas").insert({
+                        "Fecha": fecha_actual,
+                        "Insumo": str(nombre_insumo),
+                        "Cantidad": str(cant_num),
+                        "Precio Aplicado": str(prec_num),
+                        "Monto Total (Bs.)": str(total_venta)
+                    }).execute()
+                except Exception as e_venta:
+                    st.error(f"❌ Error al insertar en Ventas: {e_venta}")
+                    st.stop()  # Detiene la pantalla para que no se borre el error
 
             elif motivo == "Alquiler":
                 agencia_limpia = str(agencia).split(" - ")[-1].strip() if agencia else ""
