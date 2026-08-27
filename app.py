@@ -877,7 +877,7 @@ else:
                                             "Precio Cliente": int(round(float(nuevo_pc))),
                                             "Precio Facturado": int(round(float(nuevo_pf)))
                                         }
-                                        supabase.table("Insumos").update(datos_actualizados).eq("ID", cel_id).execute()
+                                        supabase.table("Insumos").update(datos_actualizados).eq("id", cel_id).execute()
                                         st.cache_data.clear()
                                         st.success("✅ ¡Datos actualizados con éxito!")
                                         st.rerun()
@@ -916,7 +916,7 @@ else:
                     
                     if seleccionado:
                         datos_insumo = df_insumos[df_insumos["Nombre"] == seleccionado].iloc[0]
-                        id_insumo = datos_insumo["ID"]
+                        id_insumo = datos_insumo["id"]
                         cant_actual = int(datos_insumo["Cantidad"])
                         
                         st.info(f"Cantidad actual en bodega: **{cant_actual}** unidades.")
