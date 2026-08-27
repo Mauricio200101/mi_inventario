@@ -38,7 +38,8 @@ def conectar_supabase() -> Client:
 @st.cache_data(ttl=300)
 def obtener_datos_tabla(nombre_tabla: str):
     try:
-        response = supabase.table(nombre_tabla).select("*").execute()
+        cliente = conectar_supabase()
+        response = cliente.table(nombre_tabla).select("*").execute()
         return pd.DataFrame(response.data)
     except Exception as e:
         print(f"Error al leer {nombre_tabla} desde Supabase: {e}")
@@ -175,7 +176,7 @@ def eliminar_usuario(usuario_a_eliminar):
 @st.cache_data(ttl=60)
 def obtener_parametros():
     try:
-        df_parametros = st.session_state["pestanas"].get("Parámetros", pd.DataFrame())
+        df_parametros = st.session_state["pestanas"].get("Parametros", pd.DataFrame())
         if df_parametros.empty:
             return ["Sin Registrar"], ["Sin Registrar"], ["Sin Registrar"]
 
@@ -336,53 +337,41 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
     try:
         supabase = conectar_supabase()
         
-        # 1. Mapeo con nombres exactos de Supabase
+        # Mapeo con nombres exactos de Supabase y conversión a entero (int)
         nuevo_registro = {
-            "Nombre": nombre,
-            "Categoria": categoria,
-            "Cantidad": cantidad,
-            "Stock Minimo": stock_minimo,  # Sin acento
-            "Precio Técnico": p_tecnico,
-            "Precio Cliente": p_cliente,
-            "Precio Facturado": p_facturado
+            "Nombre": str(nombre).strip(),
+            "Categoria": str(categoria).strip().upper(),
+            "Cantidad": int(cantidad),
+            "Stock Minimo": int(stock_minimo),
+            "Precio Técnico": int(round(float(p_tecnico))),
+            "Precio Cliente": int(round(float(p_cliente))),
+            "Precio Facturado": int(round(float(p_facturado)))
         }
         
-        supabase.table("Insumos").insert(nuevo_registro).execute()
+        # Inserción principal en Insumos
+        res = supabase.table("Insumos").insert(nuevo_registro).execute()
         
-        # 2. Intentar guardar en Historial sin silenciar errores totalmente
+        # Intento opcional de registro en Historial
         try:
             fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
             supabase.table("Historial").insert({
                 "Fecha": fecha_actual,
                 "Insumo": nombre,
                 "Accion": "Registro Inicial",
-                "Cantidad": cantidad,
-                "Stock Final": cantidad,
-                "Usuario": st.session_state.get("usuario_actual", ""),
+                "Cantidad": int(cantidad),
+                "Stock Final": int(cantidad),
+                "Usuario": st.session_state.get("usuario_actual", "admin"),
                 "Motivo": "Abastecimiento"
             }).execute()
-        except Exception as err_hist:
-            st.warning(f"Insumo guardado, pero no se pudo registrar en Historial: {err_hist}")
-            
+        except Exception as e_hist:
+            pass # Si falla el historial, no detiene el registro principal
+
+        # Limpiar caché de datos para que el buscador lea el nuevo insumo
         st.cache_data.clear()
-        return True
+        return True, "✅ ¡Insumo registrado correctamente en Supabase!"
 
     except Exception as e:
-        st.error(f"Error al registrar insumo en Supabase: {e}")
-        return False
-
-
-def eliminar_insumo(id_insumo):
-    """Elimina un insumo de la tabla Insumos por su ID."""
-    try:
-        supabase = conectar_supabase()
-        # "ID" en mayúsculas para coincidir con la columna de Supabase
-        supabase.table("Insumos").delete().eq("ID", id_insumo).execute()
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Error al eliminar insumo: {e}")
-        return False
+        return False, f"❌ Error de Supabase: {e}"
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
@@ -823,31 +812,35 @@ else:
                     
                     with tab_reg:
                         # Aquí mantienes tu código de registro actual (líneas 418 a 443)
-                        st.write("**Registrar Nuevo Insumo**")
                         with st.form("nuevo_insumo_form", clear_on_submit=True):
+                            st.subheader("Registrar Nuevo Insumo")
+                            
                             nombre = st.text_input("Nombre del Insumo", placeholder="Ej: GPR-57")
-                            categoria = st.text_input("Categoria", placeholder="Ej: Toner")
-                            amount_ini = st.number_input("Cantidad Inicial", min_value=0, step=1, value=0)
-                            stock_min = st.number_input("Stock Mínimo (Alerta)", min_value=1, step=1, value=5)
+                            categoria = st.text_input("Categoría", placeholder="Ej: TONER")
+                            amount_ini = st.number_input("Cantidad Inicial", min_value=0, value=0, step=1)
+                            stock_min = st.number_input("Stock Mínimo (Alerta)", min_value=0, value=5, step=1)
                             
-                            st.markdown("**💰 Configuración de Precios (Bs.)**")
-                            p_tecnico = st.number_input("Precio Técnico", min_value=0.0, step=0.1, value=0.0)
-                            p_cliente = st.number_input("Precio Cliente", min_value=0.0, step=0.1, value=0.0)
-                            p_faclurado = st.number_input("Precio Facturado", min_value=0.0, step=0.1, value=0.0)
+                            st.markdown("💰 **Configuración de Precios (Bs.)**")
+                            p_tecnico = st.number_input("Precio Técnico", min_value=0, value=0, step=1)
+                            p_cliente = st.number_input("Precio Cliente", min_value=0, value=0, step=1)
+                            p_facturado = st.number_input("Precio Facturado", min_value=0, value=0, step=1)
                             
-                            guardado = st.form_submit_button("Guardar Insumo")
-                            
-                            if guardado:
-                                if nombre.strip() == "":
-                                    st.error("Por favor, ingresa el nombre del insumo.")
-                                elif not df_insumos.empty and nombre.lower() in df_insumos["Nombre"].str.lower().values:
-                                    st.warning("Ese insumo ya existe en la lista.")
-                                else:
-                                    with st.spinner("Guardando en Google Sheets..."):
-                                        registrar_insumo(nombre, categoria, amount_ini, stock_min, p_tecnico, p_cliente, p_faclurado)
-                                        st.success(f"Insumo {nombre} registrado correctamente!")
-                                        st.rerun()
+                            guardado = st.form_submit_button("💾 Guardar Insumo")
 
+                        if guardado:
+                            if not nombre.strip():
+                                st.warning("⚠️ Por favor, ingresa el nombre del insumo.")
+                            elif not df_insumos.empty and nombre.strip().lower() in df_insumos["Nombre"].astype(str).str.lower().values:
+                                st.warning("⚠️ Ese insumo ya existe en el inventario.")
+                            else:
+                                with st.spinner("Guardando en Supabase..."):
+                                    exito, mensaje = registrar_insumo(
+                                        nombre, categoria, amount_ini, stock_min, p_tecnico, p_cliente, p_facturado
+                                    )
+                                    if exito:
+                                        st.success(mensaje)
+                                    else:
+                                        st.error(mensaje)
                     # Solo si es Administrador, mostramos el contenido de la pestaña de edición
                     if st.session_state["rol_actual"] == "Administrador":
                         with tab_edit:
