@@ -865,16 +865,21 @@ else:
                                 nuevo_pf = st.number_input("Nuevo Precio Facturado:", min_value=0.0, step=0.1, value=pf_acl)
 
                                 if st.button("Actualizar Parámetros"):
-                                    celda_id = hoja_insumos.find(str(cel_id))
-                                    if celda_id:
-                                        # Actualizamos el nombre en la columna 2 (Columna B: Insumo) y los demás parámetros
-                                        hoja_insumos.update_cell(celda_id.row, 2, nuevo_nombre)
-                                        hoja_insumos.update_cell(celda_id.row, 5, nuevo_minimo)
-                                        hoja_insumos.update_cell(celda_id.row, 6, nuevo_pt)
-                                        hoja_insumos.update_cell(celda_id.row, 7, nuevo_pc)
-                                        hoja_insumos.update_cell(celda_id.row, 8, nuevo_pf)
-                                        st.success("¡Datos actualizados con éxito!")
+                                    try:
+                                        supabase = conectar_supabase()
+                                        datos_actualizados = {
+                                            "Nombre": str(nuevo_nombre).strip(),
+                                            "Stock Minimo": int(nuevo_minimo),
+                                            "Precio Técnico": int(round(float(nuevo_pt))),
+                                            "Precio Cliente": int(round(float(nuevo_pc))),
+                                            "Precio Facturado": int(round(float(nuevo_pf)))
+                                        }
+                                        supabase.table("Insumos").update(datos_actualizados).eq("ID", cel_id).execute()
+                                        st.cache_data.clear()
+                                        st.success("✅ ¡Datos actualizados con éxito!")
                                         st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Error al actualizar en Supabase: {e}")
 
             with col_der:
                 st.subheader("🔄 Registrar Movimiento (Entrada/Salida)")
