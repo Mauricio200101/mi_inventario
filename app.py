@@ -1086,7 +1086,7 @@ else:
     if not df_insumos.empty:
         df_filtrado = df_insumos[
             df_insumos["Nombre"].astype(str).str.lower().str.contains(busqueda.lower()) |
-            df_insumos["Categoría"].astype(str).str.lower().str.contains(busqueda.lower())
+            df_insumos["Categoria"].astype(str).str.lower().str.contains(busqueda.lower())
         ]
         
         # --- SOLO EL ADMINISTRADOR PUEDE ELIMINAR ---
