@@ -782,6 +782,9 @@ else:
 
     seccion = st.session_state["menu_activo"]
 
+# ----------------------------------------------------------------------------------
+# 2. PESTAÑA DE VALORIZACIÓN DEL INVENTARIO
+# ----------------------------------------------------------------------------------
     if seccion == "Operaciones de Stock":
         if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
             st.subheader("⚠️ Alertas de Stock Crítico")
@@ -1081,38 +1084,29 @@ else:
                                 st.rerun()
                 else:
                     st.info("Registra un insumo para habilitar los movimientos.")
+                # --- TABLA Y BUSCADOR EXCLUSIVOS DE OPERACIONES DE STOCK ---
+                st.markdown("---")
+                st.subheader("🔍 Buscador y Lista de Existencias")
+                busqueda = st.text_input("Buscar insumo por nombre o categoría:", placeholder="Escribe aquí para buscar...")
 
-    st.markdown("---")
-    
-    # --- TABLA Y BUSCADOR EXCLUSIVOS DE OPERACIONES DE STOCK ---
-    st.subheader("🔍 Buscador y Lista de Existencias")
-    busqueda = st.text_input("Buscar insumo por nombre o categoría:", placeholder="Escribe aquí para buscar...")
+                if not df_insumos.empty:
+                    df_filtrado = df_insumos[
+                        df_insumos["Nombre"].astype(str).str.lower().str.contains(busqueda.lower()) |
+                        df_insumos["Categoria"].astype(str).str.lower().str.contains(busqueda.lower())
+                    ]
 
-    if not df_insumos.empty:
-        df_filtrado = df_insumos[
-            df_insumos["Nombre"].astype(str).str.lower().str.contains(busqueda.lower()) |
-            df_insumos["Categoria"].astype(str).str.lower().str.contains(busqueda.lower())
-        ]
-        
-        # --- SOLO EL ADMINISTRADOR PUEDE ELIMINAR ---
-        if st.session_state.get("rol_actual") == "Administrador":
-            with st.expander("🚨 Zona de Administración: Eliminar Insumos"):
-                insumo_a_borrar = st.selectbox("Selecciona insumo a eliminar:", df_filtrado["Nombre"].tolist())
-                if st.button("Confirmar Eliminación"):
-                    id_a_borrar = df_filtrado[df_filtrado["Nombre"] == insumo_a_borrar]["ID"].values[0]
-                    if eliminar_insumo(id_a_borrar):
-                        st.success(f"Insumo '{insumo_a_borrar}' eliminado.")
-                        st.rerun()
-                    else:
-                        st.error("No se pudo eliminar.")
+                    st.dataframe(df_filtrado, use_container_width=True)
 
-            df_filtrado_con_num = df_filtrado.copy()
-            df_filtrado_con_num.insert(0, "N°", range(1, len(df_filtrado_con_num) + 1))
-            st.dataframe(df_filtrado_con_num, use_container_width=True, hide_index=True)
-    else:
-        st.warning("No se encontraron insumos.")
-
-
+                    if st.session_state.get("rol_actual") == "Administrador":
+                        with st.expander("🚨 Zona de Administración: Eliminar Insumos"):
+                            insumo_a_borrar = st.selectbox("Selecciona insumo a eliminar:", df_filtrado["Nombre"].tolist())
+                            if st.button("Confirmar Eliminación"):
+                                id_a_borrar = df_filtrado[df_filtrado["Nombre"] == insumo_a_borrar]["ID"].values[0]
+                                if eliminar_insumo(id_a_borrar):
+                                    st.success(f"Insumo '{insumo_a_borrar}' eliminado.")
+                                    st.rerun()
+                                else:
+                                    st.error("No se pudo eliminar.")
 # ----------------------------------------------------------------------------------
 # 2. PESTAÑA DE VALORIZACIÓN DEL INVENTARIO
 # ----------------------------------------------------------------------------------
