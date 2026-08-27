@@ -441,14 +441,14 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
         # 3. Registrar en Ventas o Alquileres según corresponda
         if tipo_mov == "Salida":
             if motivo == "Venta":
-            total_venta = float(cant_movida) * float(precio_unitario)
-            supabase.table("Ventas").insert({
-                "Fecha": fecha_actual,
-                "Insumo": nombre_insumo,
-                "Cantidad": str(cant_movida),
-                "Precio Aplicado": str(precio_unitario),
-                "Monto Total (Bs.)": str(total_venta)
-            }).execute()
+                total_venta = float(cant_movida) * float(precio_unitario)
+                supabase.table("Ventas").insert({
+                    "Fecha": fecha_actual,
+                    "Insumo": nombre_insumo,
+                    "Cantidad": str(cant_movida),
+                    "Precio Aplicado": str(precio_unitario),
+                    "Monto Total (Bs.)": str(total_venta)
+                }).execute()
 
             elif motivo == "Alquiler":
                 agencia_limpia = str(agencia).split(" - ")[-1].strip() if agencia else ""
