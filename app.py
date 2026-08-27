@@ -1776,18 +1776,38 @@ if st.session_state.get("menu_activo") == "Insumos de Respaldo (Backup)":
 
                 try:
                     supabase = conectar_supabase()
-                    registro_bk = {
-                        "Fecha": fecha_bk,
-                        "Insumo": insumo_nuevo_bk,
-                        "Cantidad": cantidad_bk,
-                        "Empresa Destino": empresa_bk,
-                        "Usuario": usuario_bk,
-                        "Estado": estado_bk
-                    }
-                    supabase.table("Respaldo").insert(registro_bk).execute()
-                    st.success(f"¡Respaldo de {insumo_nuevo_bk} registrado para {empresa_bk} con éxito!")
-                    st.cache_data.clear()
-                    st.rerun()
+
+                    # 1. Consultar el stock actual en el inventario principal
+                    res_insumo = supabase.table("Insumos").select("*").eq("Nombre", insumo_nuevo_bk).execute()
+
+                    if res_insumo.data:
+                        stock_actual = int(res_insumo.data[0].get("Cantidad", 0))
+
+                        # 2. Validar que exista suficiente stock
+                        if cantidad_bk > stock_actual:
+                            st.error(f"⚠️ Stock insuficiente. Solo quedan {stock_actual} unidades de {insumo_nuevo_bk}.")
+                        else:
+                            # 3. Insertar el registro en la tabla Respaldo
+                            registro_bk = {
+                                "Fecha": fecha_bk,
+                                "Insumo": insumo_nuevo_bk,
+                                "Cantidad": cantidad_bk,
+                                "Empresa Destino": empresa_bk,
+                                "Usuario": usuario_bk,
+                                "Estado": estado_bk
+                            }
+                            supabase.table("Respaldo").insert(registro_bk).execute()
+
+                            # 4. Restar del stock principal en la tabla Insumos
+                            nuevo_stock = stock_actual - cantidad_bk
+                            supabase.table("Insumos").update({"Cantidad": nuevo_stock}).eq("Nombre", insumo_nuevo_bk).execute()
+
+                            st.success(f"✅ Se registraron {cantidad_bk} unidades en Respaldo y se descontaron del inventario (Quedan: {nuevo_stock}).")
+                            st.cache_data.clear()
+                            st.rerun()
+                    else:
+                        st.error("No se encontró el insumo seleccionado en la base de datos.")
+
                 except Exception as e:
                     st.error(f"Error al registrar respaldo en Supabase: {e}")
 
