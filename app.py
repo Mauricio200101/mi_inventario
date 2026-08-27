@@ -790,7 +790,7 @@ else:
             if not df_insumos.empty:
                 for index, fila in df_insumos.iterrows():
                     cant_actual = int(fila["Cantidad"])
-                    cant_minima = int(fila["Stock Mínimo"])
+                    cant_minima = int(fila["Stock Minimo"])
                     if cant_actual <= cant_minima:
                         st.error(f"🚨 **¡ALERTA DE STOCK BAJO!** El insumo **{fila['Nombre']}** tiene solo **{cant_actual}** unidades. (Mínimo: {cant_minima})")
                         alertas_activas = True
