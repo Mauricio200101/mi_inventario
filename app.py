@@ -441,15 +441,14 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
         # 3. Registrar en Ventas o Alquileres según corresponda
         if tipo_mov == "Salida":
             if motivo == "Venta":
-                total_venta = float(cant_movida) * float(precio_unitario)
-                supabase.table("Ventas").insert({
-                    "Fecha": fecha_actual,
-                    "Insumo": nombre_insumo,
-                    "Cantidad": cant_movida,
-                    "Area o Precio": area_o_precio,
-                    "Total Venta": total_venta,
-                    "Usuario": st.session_state.get("usuario_actual", "")
-                }).execute()
+            total_venta = float(cant_movida) * float(precio_unitario)
+            supabase.table("Ventas").insert({
+                "Fecha": fecha_actual,
+                "Insumo": nombre_insumo,
+                "Cantidad": str(cant_movida),
+                "Precio Aplicado": str(precio_unitario),
+                "Monto Total (Bs.)": str(total_venta)
+            }).execute()
 
             elif motivo == "Alquiler":
                 agencia_limpia = str(agencia).split(" - ")[-1].strip() if agencia else ""
@@ -814,7 +813,6 @@ else:
                         tab_reg = st.tabs(["➕ Registrar Insumo"])[0]
                     
                     with tab_reg:
-                        # Aquí mantienes tu código de registro actual (líneas 418 a 443)
                         with st.form("nuevo_insumo_form", clear_on_submit=True):
                             st.subheader("Registrar Nuevo Insumo")
                             
@@ -848,7 +846,6 @@ else:
                     if st.session_state["rol_actual"] == "Administrador":
                         with tab_edit:
                             st.write("**Modificar Alerta o Precios**")
-                            # Aquí va el código que tenías para editar (líneas 446 a 472 de tu archivo original)
                             if not df_insumos.empty:
                                 insumo_editar = st.selectbox("Selecciona el insumo a editar:", df_insumos["Nombre"].tolist(), key="sel_edit")
                                 datos_insumo_editar = df_insumos[df_insumos["Nombre"] == insumo_editar].iloc[0]
