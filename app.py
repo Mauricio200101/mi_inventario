@@ -693,7 +693,7 @@ if st.session_state["menu_activo"] == "Inicio":
                 st.rerun()
         with col4:
             if st.button("🛠️ Insumos\nde Respaldo\n\nAlternativas", key="card_respaldo"):
-                st.session_state["menu_activo"] = "Insumos de Respaldo"
+                st.session_state["menu_activo"] = "Insumos de Respaldo (Backup)"
                 st.rerun()
         with col5:
             if st.button("⚙️ Servicios\ny Soporte\n\nMantenimiento", key="card_soporte"):
@@ -713,7 +713,7 @@ if st.session_state["menu_activo"] == "Inicio":
         
         with col_t1:
             if st.button("🛠️ Insumos\nde Respaldo\n\nAlternativas", key="card_respaldo_tec"):
-                st.session_state["menu_activo"] = "Insumos de Respaldo"
+                st.session_state["menu_activo"] = "Insumos de Respaldo (Backup)"
                 st.rerun()
         with col_t2:
             if st.button("⚙️ Servicios\ny Soporte\n\nMantenimiento", key="card_soporte_tec"):
@@ -783,7 +783,7 @@ else:
     seccion = st.session_state["menu_activo"]
 
 # ----------------------------------------------------------------------------------
-# 2. PESTAÑA DE VALORIZACIÓN DEL INVENTARIO
+# 1.    OPERACIONES DE STOCK (ENTRADAS, SALIDAS Y ALERTAS)
 # ----------------------------------------------------------------------------------
     if seccion == "Operaciones de Stock":
         if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
