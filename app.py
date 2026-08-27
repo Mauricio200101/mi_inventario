@@ -309,37 +309,47 @@ if st.sidebar.button("Cerrar Sesión"):
     st.rerun()
 
 # --- FUNCIONES DE SOPORTES DE INVENTARIO ---
+
 @st.cache_data(ttl=60)
 def obtener_insumos():
     try:
         supabase = conectar_supabase()
         response = supabase.table("Insumos").select("*").execute()
         df = pd.DataFrame(response.data)
-        if df.empty:
-            return pd.DataFrame(columns=["ID", "Nombre", "Categoria", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
         
-        for col in ["Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"]:
+        cols_estandar = ["ID", "Nombre", "Categoria", "Cantidad", "Stock Minimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"]
+        
+        if df.empty:
+            return pd.DataFrame(columns=cols_estandar)
+            
+        for col in ["Cantidad", "Stock Minimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                
         return df
     except Exception as e:
         st.warning(f"Aviso al leer Insumos: {e}")
-        return pd.DataFrame(columns=["ID", "Nombre", "Categoria", "Cantidad", "Stock Mínimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
+        return pd.DataFrame(columns=["ID", "Nombre", "Categoria", "Cantidad", "Stock Minimo", "Precio Técnico", "Precio Cliente", "Precio Facturado"])
+
 
 def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cliente, p_facturado):
     try:
         supabase = conectar_supabase()
+        
+        # 1. Mapeo con nombres exactos de Supabase
         nuevo_registro = {
             "Nombre": nombre,
             "Categoria": categoria,
             "Cantidad": cantidad,
-            "Stock Mínimo": stock_minimo,
+            "Stock Minimo": stock_minimo,  # Sin acento
             "Precio Técnico": p_tecnico,
             "Precio Cliente": p_cliente,
             "Precio Facturado": p_facturado
         }
+        
         supabase.table("Insumos").insert(nuevo_registro).execute()
         
+        # 2. Intentar guardar en Historial sin silenciar errores totalmente
         try:
             fecha_actual = obtener_hora_local_bo().strftime("%Y-%m-%d %H:%M:%S")
             supabase.table("Historial").insert({
@@ -351,18 +361,23 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
                 "Usuario": st.session_state.get("usuario_actual", ""),
                 "Motivo": "Abastecimiento"
             }).execute()
-        except Exception:
-            pass
-
+        except Exception as err_hist:
+            st.warning(f"Insumo guardado, pero no se pudo registrar en Historial: {err_hist}")
+            
         st.cache_data.clear()
+        return True
+
     except Exception as e:
-        st.error(f"Error al registrar insumo: {e}")
+        st.error(f"Error al registrar insumo en Supabase: {e}")
+        return False
+
 
 def eliminar_insumo(id_insumo):
     """Elimina un insumo de la tabla Insumos por su ID."""
     try:
         supabase = conectar_supabase()
-        supabase.table("Insumos").delete().eq("id", id_insumo).execute()
+        # "ID" en mayúsculas para coincidir con la columna de Supabase
+        supabase.table("Insumos").delete().eq("ID", id_insumo).execute()
         st.cache_data.clear()
         return True
     except Exception as e:
