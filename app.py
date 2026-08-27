@@ -851,7 +851,7 @@ else:
                                 datos_insumo_editar = df_insumos[df_insumos["Nombre"] == insumo_editar].iloc[0]
                                 
                                 cel_id = datos_insumo_editar["ID"]
-                                min_actual = int(datos_insumo_editar["Stock Mínimo"])
+                                min_actual = int(datos_insumo_editar["Stock Minimo"])
                                 pt_act = float(datos_insumo_editar["Precio Técnico"])
                                 pc_act = float(datos_insumo_editar["Precio Cliente"])
                                 pf_acl = float(datos_insumo_editar["Precio Facturado"])
