@@ -853,7 +853,7 @@ else:
                                 insumo_editar = st.selectbox("Selecciona el insumo a editar:", df_insumos["Nombre"].tolist(), key="sel_edit")
                                 datos_insumo_editar = df_insumos[df_insumos["Nombre"] == insumo_editar].iloc[0]
                                 
-                                cel_id = datos_insumo_editar["ID"]
+                                cel_id = datos_insumo_editar["id"]
                                 min_actual = int(datos_insumo_editar["Stock Minimo"])
                                 pt_act = float(datos_insumo_editar["Precio Técnico"])
                                 pc_act = float(datos_insumo_editar["Precio Cliente"])
