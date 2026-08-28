@@ -451,22 +451,22 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                 }).execute()
 
            elif "alquiler" in str(motivo).strip().lower():
-            try:
-                agencia_limpia = str(agencia).split(" - ")[-1].strip() if agencia else ""
-                area_limpia = str(area_o_precio).split(" - ")[-1].strip() if area_o_precio else ""
+                try:
+                    agencia_limpia = str(agencia).split(" - ")[-1].strip() if agencia else ""
+                    area_limpia = str(area_o_precio).split(" - ")[-1].strip() if area_o_precio else ""
 
-                supabase.table("Alquileres").insert({
-                    "Fecha": fecha_actual,
-                    "Insumo": nombre_insumo,
-                    "Cantidad": str(cant_movida),
-                    "Empresa": empresa,
-                    "Agencia": agencia_limpia,
-                    "Area": area_limpia,
-                    "Usuario": st.session_state.get("usuario_actual", "")
-                }).execute()
-            except Exception as e_alq:
-                st.error(f"❌ Error al insertar en Alquileres: {e_alq}")
-                st.stop()
+                    supabase.table("Alquileres").insert({
+                        "Fecha": fecha_actual,
+                        "Insumo": nombre_insumo,
+                        "Cantidad": str(cant_movida),
+                        "Empresa": empresa,
+                        "Agencia": agencia_limpia,
+                        "Area": area_limpia,
+                        "Usuario": st.session_state.get("usuario_actual", "")
+                    }).execute()
+                except Exception as e_alq:
+                    st.error(f"❌ Error al insertar en Alquileres: {e_alq}")
+                    st.stop()
 
 # --- FONDO VECTORIAL (NUNCA SE PIXELA) ---
 def aplicar_fondo_vectorial():
