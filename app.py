@@ -699,7 +699,7 @@ if st.session_state["menu_activo"] == "Inicio":
                 st.rerun()
         with col7:
             if st.button("👥 Configuración\ny Usuarios\n\nRoles y ajustes", key="card_config"):
-                st.session_state["menu_activo"] = "Configuración y Usuarios"
+                st.session_state["menu_activo"] = "Configuración y Gestión de Usuarios"
                 st.rerun()
     else:
         # --- VISTA PARA EL TÉCNICO (Solo 3 tarjetas) ---
