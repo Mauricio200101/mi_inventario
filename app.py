@@ -427,35 +427,28 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
         # 2. Registrar el movimiento en la tabla Historial
         supabase.table("Historial").insert({
             "Fecha": fecha_actual,
-            "Insumo": nombre_insumo,
-            "Accion": tipo_mov,
-            "Cantidad": cant_movida,
-            "Stock Final": nuevo_stock,
+            "Nombre Insumo": nombre_insumo,
+            "Tipo de Movimiento": tipo_mov,
+            "Cantidad Movida": str(cant_movida),
+            "Stock Resultante": str(nuevo_stock),
             "Usuario": st.session_state.get("usuario_actual", ""),
             "Motivo": motivo,
-            "Empresa": empresa,
-            "Agencia": agencia_para_historial,
-            "Area": area_para_historial
+            "Empresa Destino": empresa,
+            "Agencia Destino": agencia_para_historial,
+            "Área Destino": area_para_historial
         }).execute()
 
         # 3. Registrar en Ventas o Alquileres según corresponda
         if tipo_mov == "Salida":
             if str(motivo).strip().lower() == "venta":
-                try:
-                    cant_num = float(cant_movida) if cant_movida else 0.0
-                    prec_num = float(precio_unitario) if precio_unitario else 0.0
-                    total_venta = cant_num * prec_num
-
-                    supabase.table("Ventas").insert({
-                        "Fecha": fecha_actual,
-                        "Insumo": str(nombre_insumo),
-                        "Cantidad": str(cant_num),
-                        "Precio Aplicado": str(prec_num),
-                        "Monto Total (Bs.)": str(total_venta)
-                    }).execute()
-                except Exception as e_venta:
-                    st.error(f"❌ Error al insertar en Ventas: {e_venta}")
-                    st.stop()  # Detiene la pantalla para que no se borre el error
+                total_venta = float(cant_movida) * float(precio_unitario)
+                supabase.table("Ventas").insert({
+                    "Fecha": fecha_actual,
+                    "Insumo": nombre_insumo,
+                    "Cantidad": str(cant_movida),
+                    "Precio Aplicado": str(precio_unitario),
+                    "Monto Total (Bs.)": str(total_venta)
+                }).execute()
 
             elif motivo == "Alquiler":
                 agencia_limpia = str(agencia).split(" - ")[-1].strip() if agencia else ""
