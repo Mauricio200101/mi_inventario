@@ -438,7 +438,7 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
             "Área Destino": area_para_historial
         }).execute()
 
-        # 3. Registrar en Ventas o Alquileres según corresponda
+       # 3. Registrar en Ventas o Alquileres según corresponda
         if tipo_mov == "Salida":
             if str(motivo).strip().lower() == "venta":
                 total_venta = float(cant_movida) * float(precio_unitario)
@@ -467,6 +467,9 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                 except Exception as e_alq:
                     st.error(f"❌ Error al insertar en Alquileres: {e_alq}")
                     st.stop()
+
+        except Exception as e:
+            st.error(f"Error al conectar con la base de datos: {e}")
 # --- FONDO VECTORIAL (NUNCA SE PIXELA) ---
 def aplicar_fondo_vectorial():
     # Código SVG que recrea tu diseño exacto con nitidez vectorial infinita
