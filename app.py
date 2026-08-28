@@ -461,7 +461,7 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                         "Cantidad": str(cant_movida),
                         "Empresa Destino": empresa,
                         "Agencia Destino": agencia_limpia,
-                        "Área Destino": area_limpia
+                        "Area Destino": area_limpia
                     }).execute()
                 except Exception as e_alq:
                     st.error(f"❌ Error al insertar en Alquileres: {e_alq}")
