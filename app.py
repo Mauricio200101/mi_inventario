@@ -467,9 +467,9 @@ def actualizar_stock_sheet(id_insumo, nuevo_stock, nombre_insumo, tipo_mov, cant
                 except Exception as e_alq:
                     st.error(f"❌ Error al insertar en Alquileres: {e_alq}")
                     st.stop()
-
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
+
 # --- FONDO VECTORIAL (NUNCA SE PIXELA) ---
 def aplicar_fondo_vectorial():
     # Código SVG que recrea tu diseño exacto con nitidez vectorial infinita
