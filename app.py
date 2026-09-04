@@ -2052,19 +2052,22 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
             # Concatenamos fecha y hora
             fecha_hora_completa = f"{fecha_solicitud} {hora_solicitud.strftime('%H:%M')}"
             
-            nueva_fila_servicio = [
-                fecha_hora_completa,    # Col 1: Fecha y Hora Solicitud
-                empresa_servicio,       # Col 2: Empresa
-                agencia_servicio,       # Col 3: Agencia
-                area_servicio,          # Col 4: Área
-                problema_falla,         # Col 5: Detalle Problema
-                "Sin asignar",          # Col 6: Técnico
-                "Ninguno",              # Col 7: Insumos
-                "Pendiente",            # Col 8: Fecha Realizado
-                "Pendiente"             # Col 9: Estado
-            ]
-            
-            hoja_servicios.append_row(nueva_fila_servicio)
+            # Servicios ahora se guarda directamente en Supabase.
+            # Antes este bloque usaba gspread/Google Sheets (append_row).
+            supabase = conectar_supabase()
+            nuevo_servicio = {
+                "Fecha Solicitud": fecha_hora_completa,
+                "Empresa": empresa_servicio,
+                "Agencia": agencia_servicio,
+                "Área": area_servicio,
+                "Problema": problema_falla,
+                "Técnico": "Sin asignar",
+                "Insumos": "Ninguno",
+                "Fecha Realizado": "Pendiente",
+                "Estado": "Pendiente",
+                "Registrado Por": quien_registro
+            }
+            supabase.table("Servicios").insert(nuevo_servicio).execute()
             
             enviar_notificacion_telegram(
                 empresa_servicio,
@@ -2086,10 +2089,11 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
 
         @st.cache_data(ttl=60)
         def obtener_datos_servicios_cacheados():
-            return hoja_servicios.get_all_records()
+            # hoja_servicios es un DataFrame porque proviene de Supabase.
+            # No usar get_all_records(), que pertenece a gspread.
+            return obtener_datos_tabla("Servicios")
 
-        todos_datos = obtener_datos_servicios_cacheados()
-        df_todos = pd.DataFrame(todos_datos)
+        df_todos = obtener_datos_servicios_cacheados()
 
         if df_todos.empty:
             st.info("No hay servicios registrados en la base de datos.")
@@ -2106,10 +2110,10 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
                 st.success("🎉 ¡Excelente! No hay servicios técnicos pendientes.")
             else:
                 opciones_pendientes = []
-                indices_hoja = []
+                indices_servicios = []
                 
                 for idx, fila in df_pendientes.iterrows():
-                    indices_hoja.append(idx + 2)
+                    indices_servicios.append(fila.get("id"))
                     empresa_val = str(fila.get('Empresa', 'N/A'))
                     agencia_val = str(fila.get('Agencia', 'N/A'))
                     area_val = str(fila.get('Área', fila.get('Area', 'N/A')))
@@ -2128,8 +2132,8 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
                     key="select_servicio_atender"
                 )
 
-                fila_num_hoja = indices_hoja[seleccion_idx]
                 servicio_seleccionado = df_pendientes.iloc[seleccion_idx]
+                servicio_id = servicio_seleccionado.get("id")
 
                 emp_sel = str(servicio_seleccionado.get('Empresa', 'N/A'))
                 ag_raw = str(servicio_seleccionado.get('Agencia', 'N/A'))
@@ -2155,7 +2159,7 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
                     lista_usuarios_sistema = []
                     if 'hoja_usuarios' in locals():
                         try:
-                            df_u = pd.DataFrame(hoja_usuarios.get_all_records())
+                            df_u = hoja_usuarios.copy() if isinstance(hoja_usuarios, pd.DataFrame) else pd.DataFrame()
                             if not df_u.empty and "Usuario" in df_u.columns:
                                 lista_usuarios_sistema = df_u["Usuario"].tolist()
                         except:
@@ -2259,32 +2263,38 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
                     fecha_str_limpia = fecha_trabajo.strftime('%Y-%m-%d')
                     fecha_hora_realizado = f"{fecha_str_limpia} {hora_trabajo.strftime('%H:%M')}"
                     
-                    # 1️⃣ Actualizar Hoja de Servicios
-                    hoja_servicios.update_cell(fila_num_hoja, 6, tecnico_atendio)
-                    hoja_servicios.update_cell(fila_num_hoja, 7, f"[{tipo_operacion}] {insumos_texto}")
-                    hoja_servicios.update_cell(fila_num_hoja, 8, fecha_hora_realizado)
-                    hoja_servicios.update_cell(fila_num_hoja, 9, "Completado")
+                    # 1️⃣ Actualizar Servicio en Supabase
+                    if servicio_id is None or pd.isna(servicio_id):
+                        st.error("❌ No se encontró el ID del servicio seleccionado. No se realizó la actualización.")
+                        st.stop()
+
+                    supabase = conectar_supabase()
+                    supabase.table("Servicios").update({
+                        "Técnico": tecnico_atendio,
+                        "Insumos": f"[{tipo_operacion}] {insumos_texto}",
+                        "Fecha Realizado": fecha_hora_realizado,
+                        "Estado": "Completado"
+                    }).eq("id", servicio_id).execute()
 
                     # 2️⃣ Descontar TODOS los insumos seleccionados en el stock
                     stock_actualizado = 0
-                    if insumos_usados and 'hoja_insumos' in locals():
+                    if insumos_usados and isinstance(hoja_insumos, pd.DataFrame):
                         try:
-                            datos_insumos = hoja_insumos.get_all_records()
                             for insumo_nom in insumos_usados:
-                                for idx_ins, fila_ins in enumerate(datos_insumos):
-                                    nombre_item = str(fila_ins.get("Nombre", fila_ins.get("Insumo", ""))).strip()
-                                    if nombre_item.lower() == insumo_nom.strip().lower():
-                                        col_stock_key = [k for k in fila_ins.keys() if "stock" in str(k).lower() or "cantidad" in str(k).lower()]
-                                        if col_stock_key:
-                                            campo_stock = col_stock_key[0]
-                                            stock_actual = int(fila_ins[campo_stock]) if str(fila_ins[campo_stock]).isdigit() else 0
-                                            nuevo_stock = max(0, stock_actual - 1)
-                                            stock_actualizado = nuevo_stock # Para el historial general
-                                            
-                                            fila_ins[campo_stock] = nuevo_stock
-                                            headers = list(fila_ins.keys())
-                                            hoja_insumos.update_cell(idx_ins + 2, headers.index(campo_stock) + 1, nuevo_stock)
-                                            break
+                                coincidencias = hoja_insumos[
+                                    hoja_insumos["Nombre"].astype(str).str.strip().str.lower() == insumo_nom.strip().lower()
+                                ] if "Nombre" in hoja_insumos.columns else pd.DataFrame()
+
+                                if not coincidencias.empty:
+                                    fila_ins = coincidencias.iloc[0]
+                                    id_insumo = fila_ins.get("id")
+                                    stock_valor = pd.to_numeric(fila_ins.get("Cantidad", 0), errors="coerce")
+                                    stock_actual = int(stock_valor) if pd.notna(stock_valor) else 0
+                                    nuevo_stock = max(0, stock_actual - 1)
+                                    stock_actualizado = nuevo_stock
+
+                                    if id_insumo is not None and not pd.isna(id_insumo):
+                                        supabase.table("Insumos").update({"Cantidad": nuevo_stock}).eq("id", id_insumo).execute()
                         except Exception as e:
                             st.error(f"⚠️ Error al actualizar stock: {e}")
 
@@ -2292,51 +2302,49 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
                     try:
                         cant_descontada = len(insumos_usados) if insumos_usados else 1
 
-                        # A) Si eligió Alquiler -> Guarda en la pestaña de Alquileres con el orden CORRECTO
-                        if "Alquiler" in tipo_operacion and 'hoja_alquileres' in locals():
+                        # A) Si eligió Alquiler -> guardar directamente en Supabase
+                        if "Alquiler" in tipo_operacion:
                             fecha_hora_realizado = f"{fecha_trabajo} {hora_trabajo.strftime('%H:%M:%S')}"
-                            nueva_fila_alq = [
-                                fecha_hora_realizado,      # 1. Fecha
-                                insumos_texto,             # 2. Insumo
-                                cant_descontada,           # 3. Cantidad
-                                emp_sel,                   # 4. Empresa
-                                ag_sel,                    # 5. Agencia
-                                ar_sel,                    # 6. Área
-                                tecnico_atendio,           # 7. Usuario
-                                int(cnt_ant),              # 8. Contador Anterior
-                                int(cnt_act),              # 9. Contador Actual
-                                int(paginas_impresas),     # 10. Páginas Impresas
-                                int(dias_calculados)       # 11. Días transcurridos
-                            ]
-                            hoja_alquileres.append_row(nueva_fila_alq)
+                            supabase.table("Alquileres").insert({
+                                "Fecha": fecha_hora_realizado,
+                                "Insumo": insumos_texto,
+                                "Cantidad": cant_descontada,
+                                "Empresa": emp_sel,
+                                "Agencia": ag_sel,
+                                "Area": ar_sel,
+                                "Usuario": tecnico_atendio,
+                                "Contador Anterior": int(cnt_ant),
+                                "Contador Actual": int(cnt_act),
+                                "Páginas Impresas": int(paginas_impresas),
+                                "Días Transcurridos": int(dias_calculados)
+                            }).execute()
 
-                        # B) Si eligió Venta -> Guarda en Ventas con el orden CORRECTO
-                        elif "Venta" in tipo_operacion and 'hoja_ventas' in locals():
-                            nueva_fila_vta = [
-                                fecha_hora_realizado,      # 1. Fecha
-                                insumos_texto,             # 2. Insumo
-                                cant_descontada,           # 3. Cantidad
-                                ar_sel,                    # 4. Área o Precio
-                                0.0,                       # 5. Monto (0 por defecto, lo calcula aparte)
-                                tecnico_atendio            # 6. Usuario
-                            ]
-                            hoja_ventas.append_row(nueva_fila_vta)
+                        # B) Si eligió Venta -> guardar directamente en Supabase
+                        elif "Venta" in tipo_operacion:
+                            total_venta = float(precio_facturado) * cant_descontada
+                            supabase.table("Ventas").insert({
+                                "Fecha": fecha_hora_realizado,
+                                "Insumo": insumos_texto,
+                                "Cantidad": cant_descontada,
+                                "Precio Aplicado": float(precio_facturado),
+                                "Monto Total (Bs.)": total_venta,
+                                "Usuario": tecnico_atendio
+                            }).execute()
 
-                        # C) Siempre enviar copia al Historial General (hoja_historial, no hoja_movimientos)
-                        if 'hoja_historial' in locals() and insumos_usados:
-                            nueva_fila_mov = [
-                                fecha_hora_realizado,      # 1. Fecha
-                                insumos_texto,             # 2. Insumo
-                                "Salida",                  # 3. Movimiento
-                                cant_descontada,           # 4. Cantidad
-                                stock_actualizado,         # 5. Stock Resultante
-                                tecnico_atendio,           # 6. Usuario
-                                tipo_operacion,            # 7. Motivo
-                                emp_sel,                   # 8. Empresa/Precio
-                                ag_sel,                    # 9. Agencia
-                                ar_sel                     # 10. Area Destino (Detalle)
-                            ]
-                            hoja_historial.append_row(nueva_fila_mov)
+                        # C) Siempre enviar copia al Historial General
+                        if insumos_usados:
+                            supabase.table("Historial").insert({
+                                "Fecha": fecha_hora_realizado,
+                                "Nombre Insumo": insumos_texto,
+                                "Tipo de Movimiento": "Salida",
+                                "Cantidad Movida": str(cant_descontada),
+                                "Stock Resultante": str(stock_actualizado),
+                                "Usuario": tecnico_atendio,
+                                "Motivo": tipo_operacion,
+                                "Empresa Destino": emp_sel,
+                                "Agencia Destino": ag_sel,
+                                "Área Destino": ar_sel
+                            }).execute()
 
                     except Exception as e:
                         st.warning(f"⚠️ Nota al guardar en reportes: {e}")
@@ -2353,8 +2361,8 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
         st.subheader("📊 Historial Completo de Servicios")
         st.caption("Consulta el estado general de todas las atenciones registradas.")
 
-        datos_historial = hoja_servicios.get_all_records()
-        df_historial = pd.DataFrame(datos_historial)
+        datos_historial = obtener_datos_tabla("Servicios")
+        df_historial = datos_historial.copy() if isinstance(datos_historial, pd.DataFrame) else pd.DataFrame(datos_historial)
 
         if df_historial.empty:
             st.info("No hay atenciones técnicas registradas aún.")
