@@ -309,6 +309,128 @@ if st.sidebar.button("Cerrar Sesión"):
         del st.session_state["pestanas"]
     st.rerun()
 
+
+# --- FUNCIONES DE GESTIÓN DE EQUIPOS Y CONTADORES ---
+@st.cache_data(ttl=60)
+def obtener_equipos():
+    try:
+        supabase = conectar_supabase()
+        response = supabase.table("Equipos").select("*").order("id", desc=False).execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        st.warning(f"Aviso al leer Equipos: {e}")
+        return pd.DataFrame()
+
+
+def _valor_opcional(valor):
+    if valor is None:
+        return None
+    valor = str(valor).strip()
+    return valor if valor else None
+
+
+def registrar_equipo(empresa, agencia, area, marca, modelo, numero_serie, tipo,
+                     ip, modalidad, estado, contador_actual, fecha_instalacion,
+                     observaciones):
+    try:
+        supabase = conectar_supabase()
+        registro = {
+            "Empresa": _valor_opcional(empresa),
+            "Agencia": _valor_opcional(agencia),
+            "Area": _valor_opcional(area),
+            "Marca": _valor_opcional(marca),
+            "Modelo": _valor_opcional(modelo),
+            "Numero Serie": _valor_opcional(numero_serie),
+            "Tipo": _valor_opcional(tipo),
+            "IP": _valor_opcional(ip),
+            "Modalidad": _valor_opcional(modalidad),
+            "Estado": _valor_opcional(estado),
+            "Contador Actual": int(contador_actual or 0),
+            "Fecha Instalacion": fecha_instalacion.isoformat() if fecha_instalacion else None,
+            "Observaciones": _valor_opcional(observaciones),
+        }
+        supabase.table("Equipos").insert(registro).execute()
+        st.cache_data.clear()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def actualizar_equipo(equipo_id, empresa, agencia, area, marca, modelo, numero_serie,
+                      tipo, ip, modalidad, estado, contador_actual,
+                      fecha_instalacion, observaciones):
+    try:
+        supabase = conectar_supabase()
+        cambios = {
+            "Empresa": _valor_opcional(empresa),
+            "Agencia": _valor_opcional(agencia),
+            "Area": _valor_opcional(area),
+            "Marca": _valor_opcional(marca),
+            "Modelo": _valor_opcional(modelo),
+            "Numero Serie": _valor_opcional(numero_serie),
+            "Tipo": _valor_opcional(tipo),
+            "IP": _valor_opcional(ip),
+            "Modalidad": _valor_opcional(modalidad),
+            "Estado": _valor_opcional(estado),
+            "Contador Actual": int(contador_actual or 0),
+            "Fecha Instalacion": fecha_instalacion.isoformat() if fecha_instalacion else None,
+            "Observaciones": _valor_opcional(observaciones),
+        }
+        supabase.table("Equipos").update(cambios).eq("id", int(equipo_id)).execute()
+        st.cache_data.clear()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def eliminar_equipo(equipo_id):
+    try:
+        supabase = conectar_supabase()
+        supabase.table("Equipos").delete().eq("id", int(equipo_id)).execute()
+        st.cache_data.clear()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def obtener_lecturas_equipo(equipo_id):
+    try:
+        supabase = conectar_supabase()
+        response = (
+            supabase.table("Lecturas_Contadores")
+            .select("*")
+            .eq("equipo_id", int(equipo_id))
+            .order("Fecha", desc=True)
+            .execute()
+        )
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        st.warning(f"Aviso al leer contadores: {e}")
+        return pd.DataFrame()
+
+
+def registrar_lectura_equipo(equipo_id, contador, fuente, usuario, observaciones):
+    try:
+        supabase = conectar_supabase()
+        supabase.table("Lecturas_Contadores").insert({
+            "equipo_id": int(equipo_id),
+            "Fecha": obtener_hora_local_bo().isoformat(),
+            "Contador": int(contador),
+            "Fuente": _valor_opcional(fuente),
+            "Usuario": _valor_opcional(usuario),
+            "Observaciones": _valor_opcional(observaciones),
+        }).execute()
+
+        supabase.table("Equipos").update({
+            "Contador Actual": int(contador)
+        }).eq("id", int(equipo_id)).execute()
+
+        st.cache_data.clear()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
 # --- FUNCIONES DE SOPORTES DE INVENTARIO ---
 
 @st.cache_data(ttl=60)
@@ -701,6 +823,17 @@ if st.session_state["menu_activo"] == "Inicio":
             if st.button("👥 Configuración\ny Usuarios\n\nRoles y ajustes", key="card_config"):
                 st.session_state["menu_activo"] = "Configuración y Gestión de Usuarios"
                 st.rerun()
+
+
+        # --- GESTIÓN DE EQUIPOS ---
+        st.markdown("---")
+        st.subheader("🖨️ Gestión de Equipos y Contadores")
+        col_eq1, col_eq2, col_eq3 = st.columns(3)
+
+        with col_eq1:
+            if st.button("🖨️ Equipos\n\nClientes y máquinas", key="card_equipos"):
+                st.session_state["menu_activo"] = "Gestión de Equipos"
+                st.rerun()
     else:
         # --- VISTA PARA EL TÉCNICO (Solo 3 tarjetas) ---
         col_t1, col_t2, col_t3 = st.columns(3)
@@ -779,6 +912,248 @@ else:
 # ----------------------------------------------------------------------------------
 # 1.    OPERACIONES DE STOCK (ENTRADAS, SALIDAS Y ALERTAS)
 # ----------------------------------------------------------------------------------
+    if seccion == "Gestión de Equipos":
+        st.subheader("🖨️ Gestión de Equipos")
+        st.caption("Administra clientes, máquinas, datos de red, estado y contadores.")
+
+        df_equipos = obtener_equipos()
+
+        tab_lista, tab_nuevo, tab_contador = st.tabs([
+            "📋 Equipos registrados",
+            "➕ Registrar equipo",
+            "🔢 Registrar contador"
+        ])
+
+        with tab_lista:
+            if df_equipos.empty:
+                st.info("No hay equipos registrados todavía.")
+            else:
+                busqueda_eq = st.text_input(
+                    "🔍 Buscar equipo",
+                    placeholder="Empresa, agencia, marca, modelo o número de serie...",
+                    key="buscar_equipos"
+                )
+
+                df_mostrar = df_equipos.copy()
+                if busqueda_eq.strip():
+                    texto = df_mostrar.fillna("").astype(str).agg(" ".join, axis=1)
+                    df_mostrar = df_mostrar[
+                        texto.str.contains(busqueda_eq.strip(), case=False, na=False)
+                    ]
+
+                columnas_visibles = [
+                    "id", "Empresa", "Agencia", "Area", "Marca", "Modelo",
+                    "Numero Serie", "Tipo", "IP", "Modalidad", "Estado",
+                    "Contador Actual", "Fecha Instalacion", "Observaciones"
+                ]
+                columnas_visibles = [c for c in columnas_visibles if c in df_mostrar.columns]
+                st.dataframe(
+                    df_mostrar[columnas_visibles],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                st.markdown("### ✏️ Editar / eliminar equipo")
+                opciones = {
+                    f'#{int(row["id"])} — {row.get("Marca", "")} {row.get("Modelo", "")} — {row.get("Numero Serie", "")}': int(row["id"])
+                    for _, row in df_mostrar.iterrows()
+                }
+
+                if opciones:
+                    equipo_sel_label = st.selectbox(
+                        "Selecciona el equipo:",
+                        list(opciones.keys()),
+                        key="equipo_editar_sel"
+                    )
+                    equipo_id = opciones[equipo_sel_label]
+                    fila = df_equipos[df_equipos["id"] == equipo_id].iloc[0]
+
+                    with st.expander("✏️ Editar datos del equipo"):
+                        e1, e2, e3 = st.columns(3)
+
+                        with e1:
+                            empresa_e = st.text_input("Empresa", value=str(fila.get("Empresa") or ""), key="ed_emp")
+                            agencia_e = st.text_input("Agencia", value=str(fila.get("Agencia") or ""), key="ed_ag")
+                            area_e = st.text_input("Área", value=str(fila.get("Area") or ""), key="ed_area")
+                            marca_e = st.text_input("Marca", value=str(fila.get("Marca") or ""), key="ed_marca")
+                            modelo_e = st.text_input("Modelo", value=str(fila.get("Modelo") or ""), key="ed_modelo")
+
+                        with e2:
+                            serie_e = st.text_input("Número de serie", value=str(fila.get("Numero Serie") or ""), key="ed_serie")
+                            tipo_e = st.text_input("Tipo", value=str(fila.get("Tipo") or ""), key="ed_tipo")
+                            ip_e = st.text_input("IP", value=str(fila.get("IP") or ""), key="ed_ip")
+
+                            modalidades = ["Alquiler", "Venta", "Propio", "Otro"]
+                            modalidad_actual = str(fila.get("Modalidad") or "")
+                            modalidad_e = st.selectbox(
+                                "Modalidad",
+                                modalidades,
+                                index=modalidades.index(modalidad_actual) if modalidad_actual in modalidades else 0,
+                                key="ed_modalidad"
+                            )
+
+                            estados = ["Activo", "Mantenimiento", "Baja", "Retirado"]
+                            estado_actual = str(fila.get("Estado") or "")
+                            estado_e = st.selectbox(
+                                "Estado",
+                                estados,
+                                index=estados.index(estado_actual) if estado_actual in estados else 0,
+                                key="ed_estado"
+                            )
+
+                        with e3:
+                            try:
+                                contador_base = int(fila.get("Contador Actual") or 0)
+                            except Exception:
+                                contador_base = 0
+
+                            contador_e = st.number_input(
+                                "Contador actual",
+                                min_value=0,
+                                value=contador_base,
+                                step=1,
+                                key="ed_contador"
+                            )
+
+                            try:
+                                fecha_e = pd.to_datetime(fila.get("Fecha Instalacion")).date()
+                            except Exception:
+                                fecha_e = datetime.now().date()
+
+                            fecha_e = st.date_input(
+                                "Fecha de instalación",
+                                value=fecha_e,
+                                key="ed_fecha"
+                            )
+
+                            observaciones_e = st.text_area(
+                                "Observaciones",
+                                value=str(fila.get("Observaciones") or ""),
+                                key="ed_obs"
+                            )
+
+                        b1, b2 = st.columns(2)
+                        with b1:
+                            if st.button("💾 Guardar cambios", key="guardar_equipo_editado", use_container_width=True):
+                                ok, err = actualizar_equipo(
+                                    equipo_id, empresa_e, agencia_e, area_e, marca_e, modelo_e,
+                                    serie_e, tipo_e, ip_e, modalidad_e, estado_e,
+                                    contador_e, fecha_e, observaciones_e
+                                )
+                                if ok:
+                                    st.success("✅ Equipo actualizado correctamente.")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ No se pudo actualizar: {err}")
+
+                        with b2:
+                            if st.button("🗑️ Eliminar equipo", key="eliminar_equipo", use_container_width=True):
+                                st.session_state["confirmar_eliminacion_equipo"] = equipo_id
+
+                    if st.session_state.get("confirmar_eliminacion_equipo") == equipo_id:
+                        st.warning("Se eliminará el equipo seleccionado.")
+                        c1, c2 = st.columns(2)
+
+                        with c1:
+                            if st.button("Sí, eliminar definitivamente", key="confirmar_borrado_equipo"):
+                                ok, err = eliminar_equipo(equipo_id)
+                                if ok:
+                                    st.session_state.pop("confirmar_eliminacion_equipo", None)
+                                    st.success("🗑️ Equipo eliminado.")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ No se pudo eliminar: {err}")
+
+                        with c2:
+                            if st.button("Cancelar", key="cancelar_borrado_equipo"):
+                                st.session_state.pop("confirmar_eliminacion_equipo", None)
+                                st.rerun()
+
+        with tab_nuevo:
+            st.markdown("### ➕ Registrar nuevo equipo")
+            n1, n2, n3 = st.columns(3)
+
+            with n1:
+                empresa_n = st.text_input("Empresa", key="nuevo_eq_empresa")
+                agencia_n = st.text_input("Agencia", key="nuevo_eq_agencia")
+                area_n = st.text_input("Área", key="nuevo_eq_area")
+                marca_n = st.text_input("Marca", key="nuevo_eq_marca")
+                modelo_n = st.text_input("Modelo", key="nuevo_eq_modelo")
+
+            with n2:
+                serie_n = st.text_input("Número de serie", key="nuevo_eq_serie")
+                tipo_n = st.text_input("Tipo", placeholder="Multifuncional, impresora, etc.", key="nuevo_eq_tipo")
+                ip_n = st.text_input("IP", key="nuevo_eq_ip")
+                modalidad_n = st.selectbox("Modalidad", ["Alquiler", "Venta", "Propio", "Otro"], key="nuevo_eq_modalidad")
+                estado_n = st.selectbox("Estado", ["Activo", "Mantenimiento", "Baja", "Retirado"], key="nuevo_eq_estado")
+
+            with n3:
+                contador_n = st.number_input("Contador actual", min_value=0, value=0, step=1, key="nuevo_eq_contador")
+                fecha_n = st.date_input("Fecha de instalación", value=datetime.now().date(), key="nuevo_eq_fecha")
+                observaciones_n = st.text_area("Observaciones", key="nuevo_eq_obs")
+
+            if st.button("💾 Registrar equipo", type="primary", use_container_width=True, key="registrar_equipo"):
+                ok, err = registrar_equipo(
+                    empresa_n, agencia_n, area_n, marca_n, modelo_n, serie_n, tipo_n,
+                    ip_n, modalidad_n, estado_n, contador_n, fecha_n, observaciones_n
+                )
+                if ok:
+                    st.success("🎉 Equipo registrado correctamente.")
+                    st.rerun()
+                else:
+                    st.error(f"❌ No se pudo registrar el equipo: {err}")
+
+        with tab_contador:
+            if df_equipos.empty:
+                st.info("Primero registra al menos un equipo.")
+            else:
+                opciones_cont = {
+                    f'#{int(row["id"])} — {row.get("Marca", "")} {row.get("Modelo", "")} — Serie: {row.get("Numero Serie", "")} — Contador: {row.get("Contador Actual", 0)}': int(row["id"])
+                    for _, row in df_equipos.iterrows()
+                }
+
+                equipo_cont_label = st.selectbox(
+                    "Selecciona el equipo",
+                    list(opciones_cont.keys()),
+                    key="equipo_contador_sel"
+                )
+                equipo_cont_id = opciones_cont[equipo_cont_label]
+
+                fc1, fc2 = st.columns(2)
+                with fc1:
+                    contador_nuevo = st.number_input("Nuevo contador", min_value=0, value=0, step=1, key="nuevo_contador")
+                    fuente_nueva = st.selectbox(
+                        "Fuente",
+                        ["Lectura física", "Lectura remota", "Reporte cliente", "Otro"],
+                        key="fuente_contador"
+                    )
+
+                with fc2:
+                    usuario_lectura = st.text_input(
+                        "Usuario",
+                        value=st.session_state.get("usuario_actual", ""),
+                        key="usuario_contador"
+                    )
+                    obs_lectura = st.text_area("Observaciones", key="obs_contador")
+
+                if st.button("🔢 Registrar lectura", type="primary", use_container_width=True, key="registrar_lectura"):
+                    ok, err = registrar_lectura_equipo(
+                        equipo_cont_id, contador_nuevo, fuente_nueva,
+                        usuario_lectura, obs_lectura
+                    )
+                    if ok:
+                        st.success("✅ Lectura registrada y contador actualizado.")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ No se pudo registrar la lectura: {err}")
+
+                st.markdown("### 📊 Historial de lecturas")
+                df_lecturas = obtener_lecturas_equipo(equipo_cont_id)
+                if df_lecturas.empty:
+                    st.info("Este equipo todavía no tiene lecturas registradas.")
+                else:
+                    st.dataframe(df_lecturas, use_container_width=True, hide_index=True)
+
     if seccion == "Operaciones de Stock":
         if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
             st.subheader("⚠️ Alertas de Stock Crítico")
