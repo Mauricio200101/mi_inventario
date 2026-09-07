@@ -1305,19 +1305,106 @@ else:
             st.markdown("### ➕ Registrar nuevo equipo")
             n1, n2, n3 = st.columns(3)
 
+            # Listas desplegables alimentadas desde Parametros y desde los equipos ya registrados.
+            def _opciones_unicas(valores, incluir_seleccione=True):
+                resultado = []
+                for valor in valores:
+                    if pd.isna(valor):
+                        continue
+                    texto = str(valor).strip()
+                    if texto and texto not in resultado and texto != "Sin Registrar":
+                        resultado.append(texto)
+                resultado.sort(key=lambda x: x.lower())
+                return (["— Seleccionar —"] + resultado) if incluir_seleccione else resultado
+
+            empresas_eq = _opciones_unicas(empresas_disponibles)
+            areas_eq = _opciones_unicas(areas_disponibles)
+            agencias_eq_todas = _opciones_unicas(agencias_disponibles)
+
+            # Marca, modelo y tipo se toman de los equipos existentes para evitar escribirlos repetidamente.
+            marcas_base = [
+                "Canon", "HP", "Epson", "Brother", "Ricoh", "Kyocera",
+                "Xerox", "Konica Minolta", "Lexmark", "Sharp"
+            ]
+            tipos_base = [
+                "Multifuncional", "Impresora", "Escáner", "Plotter"
+            ]
+            marcas_existentes = _opciones_unicas(
+                list(df_equipos.get("Marca", pd.Series(dtype=str)).tolist()) + marcas_base
+            )
+            tipos_existentes = _opciones_unicas(
+                list(df_equipos.get("Tipo", pd.Series(dtype=str)).tolist()) + tipos_base
+            )
+
             with n1:
-                empresa_n = st.text_input("Empresa", key="nuevo_eq_empresa")
-                agencia_n = st.text_input("Agencia", key="nuevo_eq_agencia")
-                area_n = st.text_input("Área", key="nuevo_eq_area")
-                marca_n = st.text_input("Marca", key="nuevo_eq_marca")
-                modelo_n = st.text_input("Modelo", key="nuevo_eq_modelo")
+                empresa_n_sel = st.selectbox("Empresa", empresas_eq, key="nuevo_eq_empresa")
+
+                if empresa_n_sel == "— Seleccionar —":
+                    agencias_filtradas_eq = []
+                else:
+                    agencias_filtradas_eq = [
+                        ag for ag in agencias_disponibles
+                        if str(ag).strip().lower().startswith(empresa_n_sel.strip().lower())
+                    ]
+                    # Si Parametros no tiene la empresa como prefijo, dejamos las agencias disponibles
+                    # para no bloquear el registro.
+                    if not agencias_filtradas_eq:
+                        agencias_filtradas_eq = agencias_disponibles
+
+                agencias_eq = _opciones_unicas(agencias_filtradas_eq)
+                agencia_n_sel = st.selectbox("Agencia", agencias_eq, key="nuevo_eq_agencia")
+
+                if agencia_n_sel == "— Seleccionar —":
+                    areas_filtradas_eq = []
+                else:
+                    areas_filtradas_eq = [
+                        ar for ar in areas_disponibles
+                        if str(ar).strip().lower().startswith(agencia_n_sel.strip().lower())
+                    ]
+                    if not areas_filtradas_eq:
+                        # Compatibilidad con Parametros donde Área puede no llevar el prefijo de Agencia.
+                        areas_filtradas_eq = areas_disponibles
+
+                areas_eq = _opciones_unicas(areas_filtradas_eq)
+                area_n_sel = st.selectbox("Área", areas_eq, key="nuevo_eq_area")
+
+                marca_n_sel = st.selectbox("Marca", marcas_existentes, key="nuevo_eq_marca")
 
             with n2:
                 serie_n = st.text_input("Número de serie", key="nuevo_eq_serie")
-                tipo_n = st.text_input("Tipo", placeholder="Multifuncional, impresora, etc.", key="nuevo_eq_tipo")
+
+                # El modelo se filtra por la marca elegida cuando ya existen modelos para esa marca.
+                if marca_n_sel != "— Seleccionar —" and "Marca" in df_equipos.columns and "Modelo" in df_equipos.columns:
+                    modelos_filtrados_eq = df_equipos.loc[
+                        df_equipos["Marca"].fillna("").astype(str).str.strip().str.lower() == marca_n_sel.strip().lower(),
+                        "Modelo"
+                    ].tolist()
+                else:
+                    modelos_filtrados_eq = df_equipos.get("Modelo", pd.Series(dtype=str)).tolist()
+
+                modelos_eq = _opciones_unicas(modelos_filtrados_eq)
+                if len(modelos_eq) > 1:
+                    modelo_n_sel = st.selectbox("Modelo", modelos_eq, key="nuevo_eq_modelo")
+                else:
+                    st.caption("No hay modelos registrados todavía; puedes escribir el primero.")
+                    modelo_n_sel = st.text_input("Modelo", key="nuevo_eq_modelo_manual")
+
+                tipo_n_sel = st.selectbox(
+                    "Tipo",
+                    tipos_existentes,
+                    key="nuevo_eq_tipo"
+                )
                 ip_n = st.text_input("IP", key="nuevo_eq_ip")
                 modalidad_n = st.selectbox("Modalidad", ["Alquiler", "Venta", "Propio", "Otro"], key="nuevo_eq_modalidad")
                 estado_n = st.selectbox("Estado", ["Activo", "Mantenimiento", "Baja", "Retirado"], key="nuevo_eq_estado")
+
+                # Convertimos el valor visual de la lista a texto vacío para Supabase.
+                agencia_n = "" if agencia_n_sel == "— Seleccionar —" else agencia_n_sel
+                area_n = "" if area_n_sel == "— Seleccionar —" else area_n_sel
+                empresa_n = "" if empresa_n_sel == "— Seleccionar —" else empresa_n_sel
+                marca_n = "" if marca_n_sel == "— Seleccionar —" else marca_n_sel
+                modelo_n = "" if modelo_n_sel == "— Seleccionar —" else modelo_n_sel
+                tipo_n = "" if tipo_n_sel == "— Seleccionar —" else tipo_n_sel
 
             with n3:
                 contador_n = st.number_input("Contador actual", min_value=0, value=0, step=1, key="nuevo_eq_contador")
