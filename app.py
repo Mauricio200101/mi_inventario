@@ -5,6 +5,10 @@ import pandas as pd
 # Importamos timezone y timedelta para ajustar la hora a Bolivia (UTC-4)
 from datetime import datetime, timezone, timedelta 
 import io
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.utils import get_column_letter
 import plotly.express as px
 import time
 import hashlib
@@ -354,6 +358,233 @@ def registrar_equipo(empresa, agencia, area, marca, modelo, numero_serie, tipo,
         return True, None
     except Exception as e:
         return False, str(e)
+
+
+
+def generar_plantilla_equipos_excel(empresas, agencias, areas, df_equipos):
+    """Genera una plantilla Excel para carga masiva con listas desplegables."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Equipos"
+    listas = wb.create_sheet("Listas")
+
+    columnas = [
+        "Empresa", "Agencia", "Área", "Marca", "Modelo", "Número de serie",
+        "Tipo", "IP", "Modalidad", "Estado", "Contador actual",
+        "Fecha de instalación", "Observaciones"
+    ]
+    ws.append(columnas)
+
+    # Valores para listas: parámetros actuales + valores existentes en Equipos.
+    def unicos(valores):
+        resultado = []
+        vistos = set()
+        for valor in valores:
+            if valor is None:
+                continue
+            texto = str(valor).strip()
+            if texto and texto not in vistos:
+                vistos.add(texto)
+                resultado.append(texto)
+        return resultado
+
+    marcas_actuales = df_equipos["Marca"].tolist() if "Marca" in df_equipos.columns else []
+    modelos_actuales = df_equipos["Modelo"].tolist() if "Modelo" in df_equipos.columns else []
+    tipos_actuales = df_equipos["Tipo"].tolist() if "Tipo" in df_equipos.columns else []
+
+    marcas = unicos(marcas_actuales + ["Canon", "Ricoh", "Kyocera", "Konica Minolta", "Xerox", "HP", "Epson", "Brother", "Sharp", "Lexmark"])
+    modelos = unicos(modelos_actuales)
+    tipos = unicos(tipos_actuales + ["FOTOCOPIADORA", "MULTIFUNCIONAL", "IMPRESORA", "PLOTTER", "ESCANER", "OTRO"])
+    modalidades = ["Alquiler", "Venta", "Propio", "Otro"]
+    estados = ["Activo", "Mantenimiento", "Baja", "Retirado"]
+
+    listas_data = {
+        "Empresas": unicos(empresas),
+        "Agencias": unicos(agencias),
+        "Areas": unicos(areas),
+        "Marcas": marcas,
+        "Modelos": modelos,
+        "Tipos": tipos,
+        "Modalidades": modalidades,
+        "Estados": estados,
+    }
+
+    for col_idx, (titulo, valores) in enumerate(listas_data.items(), start=1):
+        listas.cell(row=1, column=col_idx, value=titulo)
+        for row_idx, valor in enumerate(valores, start=2):
+            listas.cell(row=row_idx, column=col_idx, value=valor)
+
+    # Estilo de la hoja principal.
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = "A1:M501"
+    ws.row_dimensions[1].height = 24
+
+    anchos = [24, 28, 24, 20, 24, 24, 22, 18, 16, 18, 18, 22, 35]
+    for i, ancho in enumerate(anchos, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = ancho
+
+    # Crea 500 filas preparadas para carga.
+    for fila in range(2, 502):
+        ws.cell(fila, 11).value = 0
+        ws.cell(fila, 12).number_format = "yyyy-mm-dd"
+
+    # Listas desplegables basadas en la hoja oculta "Listas".
+    for col_idx, valores in enumerate(listas_data.values(), start=1):
+        if not valores:
+            continue
+        letra = get_column_letter(col_idx)
+        max_fila = len(valores) + 1
+        dv = DataValidation(type="list", formula1=f"=Listas!${letra}$2:${letra}${max_fila}", allow_blank=True)
+        dv.error = "Selecciona un valor de la lista o deja la celda vacía."
+        dv.errorTitle = "Valor no válido"
+        ws.add_data_validation(dv)
+        dv.add(f"{letra}2:{letra}501")
+
+    # Validación numérica para contador.
+    dv_cont = DataValidation(type="whole", operator="greaterThanOrEqual", formula1="0", allow_blank=True)
+    dv_cont.error = "El contador debe ser un número entero igual o mayor a 0."
+    dv_cont.errorTitle = "Contador no válido"
+    ws.add_data_validation(dv_cont)
+    dv_cont.add("K2:K501")
+
+    # Hoja de instrucciones.
+    listas.sheet_state = "hidden"
+    info = wb.create_sheet("Instrucciones", 0)
+    info["A1"] = "CARGA MASIVA DE EQUIPOS"
+    info["A1"].font = Font(bold=True, size=16)
+    instrucciones = [
+        "1. Completa la hoja 'Equipos'. Una fila corresponde a una máquina.",
+        "2. Usa las listas desplegables para Empresa, Agencia, Área, Marca, Modelo, Tipo, Modalidad y Estado.",
+        "3. Número de serie identifica la máquina y debe evitar duplicados.",
+        "4. IP y Observaciones pueden quedar vacíos si no corresponde.",
+        "5. Si Contador actual queda vacío, la aplicación lo tomará como 0.",
+        "6. Si Fecha de instalación queda vacía, la aplicación usará la fecha actual.",
+        "7. Guarda el archivo como .xlsx y súbelo en la pestaña 'Importar desde Excel'.",
+    ]
+    for i, texto in enumerate(instrucciones, start=3):
+        info.cell(i, 1, texto)
+    info.column_dimensions["A"].width = 115
+    return wb
+
+
+def bytes_plantilla_equipos(empresas, agencias, areas, df_equipos):
+    wb = generar_plantilla_equipos_excel(empresas, agencias, areas, df_equipos)
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def validar_dataframe_equipos(df_importado, df_equipos_existentes):
+    """Valida el Excel y devuelve filas válidas y un reporte de errores."""
+    columnas_excel = [
+        "Empresa", "Agencia", "Área", "Marca", "Modelo", "Número de serie",
+        "Tipo", "IP", "Modalidad", "Estado", "Contador actual",
+        "Fecha de instalación", "Observaciones"
+    ]
+    faltantes = [c for c in columnas_excel if c not in df_importado.columns]
+    if faltantes:
+        return pd.DataFrame(), pd.DataFrame(), [f"Faltan columnas: {', '.join(faltantes)}"]
+
+    df = df_importado[columnas_excel].copy()
+    df = df.dropna(how="all")
+    errores = []
+    series_existentes = set()
+    if not df_equipos_existentes.empty and "Numero Serie" in df_equipos_existentes.columns:
+        series_existentes = {
+            str(x).strip().lower() for x in df_equipos_existentes["Numero Serie"].dropna()
+            if str(x).strip()
+        }
+    series_archivo = set()
+    filas_validas = []
+    filas_error = []
+
+    for indice, fila in df.iterrows():
+        numero_fila = int(indice) + 2
+        registro = fila.to_dict()
+        fila_errores = []
+
+        for campo in ["Empresa", "Agencia", "Área", "Marca", "Modelo", "Número de serie", "Tipo"]:
+            if pd.isna(registro[campo]) or not str(registro[campo]).strip():
+                fila_errores.append(f"{campo} vacío")
+
+        serie = "" if pd.isna(registro["Número de serie"]) else str(registro["Número de serie"]).strip()
+        serie_key = serie.lower()
+        if serie_key:
+            if serie_key in series_existentes:
+                fila_errores.append("Número de serie ya existe en Equipos")
+            if serie_key in series_archivo:
+                fila_errores.append("Número de serie duplicado dentro del Excel")
+            series_archivo.add(serie_key)
+
+        modalidad = "Alquiler" if pd.isna(registro["Modalidad"]) or not str(registro["Modalidad"]).strip() else str(registro["Modalidad"]).strip()
+        estado = "Activo" if pd.isna(registro["Estado"]) or not str(registro["Estado"]).strip() else str(registro["Estado"]).strip()
+        if modalidad not in ["Alquiler", "Venta", "Propio", "Otro"]:
+            fila_errores.append(f"Modalidad no válida: {modalidad}")
+        if estado not in ["Activo", "Mantenimiento", "Baja", "Retirado"]:
+            fila_errores.append(f"Estado no válido: {estado}")
+
+        contador = registro["Contador actual"]
+        if pd.isna(contador) or str(contador).strip() == "":
+            contador = 0
+        try:
+            contador = int(float(contador))
+            if contador < 0:
+                raise ValueError
+        except Exception:
+            fila_errores.append("Contador actual no válido")
+            contador = 0
+
+        fecha = registro["Fecha de instalación"]
+        if pd.isna(fecha) or str(fecha).strip() == "":
+            fecha = datetime.now().date()
+        else:
+            fecha_convertida = pd.to_datetime(fecha, errors="coerce")
+            if pd.isna(fecha_convertida):
+                fila_errores.append("Fecha de instalación no válida")
+                fecha = datetime.now().date()
+            else:
+                fecha = fecha_convertida.date()
+
+        if fila_errores:
+            registro["Fila"] = numero_fila
+            registro["Errores"] = "; ".join(fila_errores)
+            filas_error.append(registro)
+        else:
+            filas_validas.append({
+                "Empresa": str(registro["Empresa"]).strip(),
+                "Agencia": str(registro["Agencia"]).strip(),
+                "Area": str(registro["Área"]).strip(),
+                "Marca": str(registro["Marca"]).strip(),
+                "Modelo": str(registro["Modelo"]).strip(),
+                "Numero Serie": serie,
+                "Tipo": str(registro["Tipo"]).strip(),
+                "IP": None if pd.isna(registro["IP"]) or not str(registro["IP"]).strip() else str(registro["IP"]).strip(),
+                "Modalidad": modalidad,
+                "Estado": estado,
+                "Contador Actual": contador,
+                "Fecha Instalacion": fecha.isoformat(),
+                "Observaciones": None if pd.isna(registro["Observaciones"]) or not str(registro["Observaciones"]).strip() else str(registro["Observaciones"]).strip(),
+            })
+
+    return pd.DataFrame(filas_validas), pd.DataFrame(filas_error), errores
+
+
+def importar_equipos_masivo(df_validos):
+    try:
+        if df_validos.empty:
+            return 0, "No hay filas válidas para importar."
+        supabase = conectar_supabase()
+        registros = df_validos.to_dict(orient="records")
+        for inicio in range(0, len(registros), 100):
+            supabase.table("Equipos").insert(registros[inicio:inicio + 100]).execute()
+        st.cache_data.clear()
+        return len(registros), None
+    except Exception as e:
+        return 0, str(e)
 
 
 def actualizar_equipo(equipo_id, empresa, agencia, area, marca, modelo, numero_serie,
@@ -918,9 +1149,10 @@ else:
 
         df_equipos = obtener_equipos()
 
-        tab_lista, tab_nuevo, tab_contador = st.tabs([
+        tab_lista, tab_nuevo, tab_importar, tab_contador = st.tabs([
             "📋 Equipos registrados",
             "➕ Registrar equipo",
+            "📥 Importar desde Excel",
             "🔢 Registrar contador"
         ])
 
@@ -1102,6 +1334,93 @@ else:
                     st.rerun()
                 else:
                     st.error(f"❌ No se pudo registrar el equipo: {err}")
+
+        with tab_importar:
+            st.markdown("### 📥 Carga masiva de equipos desde Excel")
+            st.caption("Ideal para cargar los más de 150 equipos de la empresa de una sola vez.")
+
+            plantilla_bytes = bytes_plantilla_equipos(
+                empresas_disponibles,
+                agencias_disponibles,
+                areas_disponibles,
+                df_equipos
+            )
+            c_imp1, c_imp2 = st.columns(2)
+            with c_imp1:
+                st.download_button(
+                    "📄 Descargar plantilla Excel",
+                    data=plantilla_bytes,
+                    file_name="Plantilla_Carga_Equipos.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key="descargar_plantilla_equipos"
+                )
+            with c_imp2:
+                st.info("💡 La plantilla ya trae listas desplegables y se actualiza con las Empresas, Agencias y Áreas de tu sistema.")
+
+            archivo_equipos = st.file_uploader(
+                "📎 Sube el Excel completado",
+                type=["xlsx"],
+                key="archivo_importacion_equipos",
+                help="Usa la plantilla descargada y conserva los nombres de las columnas."
+            )
+
+            if archivo_equipos is not None:
+                try:
+                    df_importado = pd.read_excel(archivo_equipos, sheet_name="Equipos")
+                    df_validos, df_errores, errores_estructura = validar_dataframe_equipos(
+                        df_importado, df_equipos
+                    )
+
+                    if errores_estructura:
+                        for mensaje_error in errores_estructura:
+                            st.error(f"❌ {mensaje_error}")
+                    else:
+                        st.markdown("#### Vista previa de la importación")
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("Filas del Excel", len(df_importado.dropna(how="all")))
+                        m2.metric("✅ Listas para importar", len(df_validos))
+                        m3.metric("⚠️ Con errores", len(df_errores))
+
+                        if not df_validos.empty:
+                            st.success(f"Se encontraron {len(df_validos)} equipos listos para cargar.")
+                            st.dataframe(
+                                df_importado.loc[df_importado.index.isin(
+                                    df_importado.index[:len(df_importado)]
+                                )].head(10),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+
+                        if not df_errores.empty:
+                            st.warning("Hay filas que no se importarán hasta corregirlas.")
+                            st.dataframe(
+                                df_errores[["Fila", "Número de serie", "Errores"]],
+                                use_container_width=True,
+                                hide_index=True
+                            )
+
+                        if not df_validos.empty:
+                            confirmar = st.checkbox(
+                                f"Confirmo que quiero importar {len(df_validos)} equipos válidos.",
+                                key="confirmar_importacion_equipos"
+                            )
+                            if st.button(
+                                "🚀 Importar equipos a Supabase",
+                                type="primary",
+                                use_container_width=True,
+                                disabled=not confirmar,
+                                key="importar_equipos_masivo"
+                            ):
+                                with st.spinner("Importando equipos..."):
+                                    cantidad_importada, error_importacion = importar_equipos_masivo(df_validos)
+                                if error_importacion:
+                                    st.error(f"❌ No se pudo completar la importación: {error_importacion}")
+                                else:
+                                    st.success(f"🎉 Se importaron {cantidad_importada} equipos correctamente.")
+                                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ No se pudo leer el Excel: {e}")
 
         with tab_contador:
             if df_equipos.empty:
