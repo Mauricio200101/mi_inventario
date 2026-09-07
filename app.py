@@ -1546,9 +1546,49 @@ else:
                 )
                 equipo_cont_id = opciones_cont[equipo_cont_label]
 
+                # Cargamos el historial antes de registrar una nueva lectura para
+                # poder mostrar el último contador y calcular automáticamente el consumo.
+                df_lecturas = obtener_lecturas_equipo(equipo_cont_id)
+                fila_equipo_cont = df_equipos[df_equipos["id"] == equipo_cont_id].iloc[0]
+                try:
+                    contador_actual_equipo = int(fila_equipo_cont.get("Contador Actual") or 0)
+                except Exception:
+                    contador_actual_equipo = 0
+
+                ultima_lectura = None
+                ultima_fecha = None
+                if not df_lecturas.empty and "Contador" in df_lecturas.columns:
+                    try:
+                        ultima_lectura = int(pd.to_numeric(df_lecturas.iloc[0]["Contador"]))
+                        ultima_fecha = df_lecturas.iloc[0].get("Fecha")
+                    except Exception:
+                        ultima_lectura = None
+
+                # Si ya existen lecturas, usamos la última como referencia.
+                # Si no existen, mostramos el contador actual del equipo como referencia informativa.
+                contador_referencia = ultima_lectura if ultima_lectura is not None else contador_actual_equipo
+
+                m1, m2, m3 = st.columns(3)
+                with m1:
+                    st.metric("🔢 Contador actual", f"{contador_actual_equipo:,}".replace(",", "."))
+                with m2:
+                    if ultima_lectura is not None:
+                        st.metric("📅 Última lectura", f"{ultima_lectura:,}".replace(",", "."))
+                    else:
+                        st.metric("📅 Última lectura", "Sin historial")
+                with m3:
+                    st.metric("📈 Lecturas registradas", len(df_lecturas))
+
+                st.markdown("#### ➕ Registrar nueva lectura")
                 fc1, fc2 = st.columns(2)
                 with fc1:
-                    contador_nuevo = st.number_input("Nuevo contador", min_value=0, value=0, step=1, key="nuevo_contador")
+                    contador_nuevo = st.number_input(
+                        "Nuevo contador",
+                        min_value=max(0, contador_referencia),
+                        value=max(0, contador_referencia),
+                        step=1,
+                        key="nuevo_contador"
+                    )
                     fuente_nueva = st.selectbox(
                         "Fuente",
                         ["Lectura física", "Lectura remota", "Reporte cliente", "Otro"],
@@ -1563,23 +1603,60 @@ else:
                     )
                     obs_lectura = st.text_area("Observaciones", key="obs_contador")
 
-                if st.button("🔢 Registrar lectura", type="primary", use_container_width=True, key="registrar_lectura"):
-                    ok, err = registrar_lectura_equipo(
-                        equipo_cont_id, contador_nuevo, fuente_nueva,
-                        usuario_lectura, obs_lectura
+                incremento = int(contador_nuevo) - int(contador_referencia)
+                if ultima_lectura is not None:
+                    st.info(
+                        f"📊 **Incremento desde la última lectura:** "
+                        f"{incremento:,} impresiones".replace(",", ".")
                     )
-                    if ok:
-                        st.success("✅ Lectura registrada y contador actualizado.")
-                        st.rerun()
+                else:
+                    st.caption(
+                        f"Primera lectura del historial. El contador actual del equipo es "
+                        f"{contador_actual_equipo:,}.".replace(",", ".")
+                    )
+
+                if st.button("🔢 Registrar lectura", type="primary", use_container_width=True, key="registrar_lectura"):
+                    if contador_nuevo < contador_referencia:
+                        st.error("❌ El nuevo contador no puede ser menor que la lectura anterior.")
                     else:
-                        st.error(f"❌ No se pudo registrar la lectura: {err}")
+                        ok, err = registrar_lectura_equipo(
+                            equipo_cont_id, contador_nuevo, fuente_nueva,
+                            usuario_lectura, obs_lectura
+                        )
+                        if ok:
+                            st.success("✅ Lectura registrada y contador actualizado.")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ No se pudo registrar la lectura: {err}")
 
                 st.markdown("### 📊 Historial de lecturas")
-                df_lecturas = obtener_lecturas_equipo(equipo_cont_id)
                 if df_lecturas.empty:
                     st.info("Este equipo todavía no tiene lecturas registradas.")
                 else:
-                    st.dataframe(df_lecturas, use_container_width=True, hide_index=True)
+                    historial = df_lecturas.copy()
+                    if "Fecha" in historial.columns:
+                        historial["Fecha"] = pd.to_datetime(historial["Fecha"], errors="coerce")
+                        historial = historial.sort_values("Fecha", ascending=False)
+
+                    if "Contador" in historial.columns:
+                        historial["Contador"] = pd.to_numeric(historial["Contador"], errors="coerce")
+                        historial["Incremento"] = historial["Contador"].diff(-1)
+                        historial["Incremento"] = historial["Incremento"].fillna(0).astype(int)
+
+                    columnas_historial = [
+                        "Fecha", "Contador", "Incremento", "Fuente", "Usuario", "Observaciones"
+                    ]
+                    columnas_historial = [c for c in columnas_historial if c in historial.columns]
+                    st.dataframe(
+                        historial[columnas_historial],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Fecha": st.column_config.DatetimeColumn("Fecha", format="DD/MM/YYYY HH:mm"),
+                            "Contador": st.column_config.NumberColumn("Contador", format="%d"),
+                            "Incremento": st.column_config.NumberColumn("Impresiones", format="%d"),
+                        }
+                    )
 
     if seccion == "Operaciones de Stock":
         if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
