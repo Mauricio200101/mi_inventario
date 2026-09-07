@@ -1149,12 +1149,88 @@ else:
 
         df_equipos = obtener_equipos()
 
-        tab_lista, tab_nuevo, tab_importar, tab_contador = st.tabs([
+        tab_dashboard, tab_lista, tab_nuevo, tab_importar, tab_contador = st.tabs([
+            "📊 Dashboard",
             "📋 Equipos registrados",
             "➕ Registrar equipo",
             "📥 Importar desde Excel",
             "🔢 Registrar contador"
         ])
+
+        with tab_dashboard:
+            st.markdown("### 📊 Resumen de equipos")
+            st.caption("Vista rápida del parque de equipos registrado en el sistema.")
+
+            if df_equipos.empty:
+                st.info("Todavía no hay equipos registrados para mostrar estadísticas.")
+            else:
+                df_dash = df_equipos.copy()
+                for col in ["Empresa", "Agencia", "Marca", "Modelo", "Tipo", "Modalidad", "Estado"]:
+                    if col not in df_dash.columns:
+                        df_dash[col] = "Sin registrar"
+                    df_dash[col] = df_dash[col].fillna("Sin registrar").astype(str).str.strip()
+                    df_dash.loc[df_dash[col] == "", col] = "Sin registrar"
+
+                df_dash["Contador Actual"] = pd.to_numeric(
+                    df_dash.get("Contador Actual", 0), errors="coerce"
+                ).fillna(0)
+
+                total_equipos = len(df_dash)
+                activos = int((df_dash["Estado"].str.lower() == "activo").sum())
+                alquileres = int((df_dash["Modalidad"].str.lower() == "alquiler").sum())
+                contador_total = int(df_dash["Contador Actual"].sum())
+
+                k1, k2, k3, k4 = st.columns(4)
+                k1.metric("🖨️ Equipos registrados", total_equipos)
+                k2.metric("✅ Equipos activos", activos)
+                k3.metric("💼 En alquiler", alquileres)
+                k4.metric("🔢 Contador acumulado", f"{contador_total:,}".replace(",", "."))
+
+                st.markdown("---")
+                g1, g2 = st.columns(2)
+
+                with g1:
+                    resumen_estado = (
+                        df_dash.groupby("Estado", dropna=False)
+                        .size().reset_index(name="Cantidad")
+                        .sort_values("Cantidad", ascending=False)
+                    )
+                    fig_estado = px.bar(
+                        resumen_estado, x="Estado", y="Cantidad",
+                        title="Equipos por estado", text="Cantidad"
+                    )
+                    fig_estado.update_layout(margin=dict(l=10, r=10, t=50, b=10))
+                    st.plotly_chart(fig_estado, use_container_width=True, key="grafico_estado_equipos")
+
+                with g2:
+                    resumen_modalidad = (
+                        df_dash.groupby("Modalidad", dropna=False)
+                        .size().reset_index(name="Cantidad")
+                        .sort_values("Cantidad", ascending=False)
+                    )
+                    fig_modalidad = px.bar(
+                        resumen_modalidad, x="Modalidad", y="Cantidad",
+                        title="Equipos por modalidad", text="Cantidad"
+                    )
+                    fig_modalidad.update_layout(margin=dict(l=10, r=10, t=50, b=10))
+                    st.plotly_chart(fig_modalidad, use_container_width=True, key="grafico_modalidad_equipos")
+
+                st.markdown("### 🏢 Distribución por empresa")
+                resumen_empresa = (
+                    df_dash.groupby("Empresa", dropna=False)
+                    .size().reset_index(name="Cantidad")
+                    .sort_values("Cantidad", ascending=False)
+                )
+                st.dataframe(resumen_empresa, use_container_width=True, hide_index=True)
+
+                st.markdown("### 🖨️ Equipos con mayor contador")
+                columnas_top = [c for c in ["Empresa", "Agencia", "Marca", "Modelo", "Numero Serie", "Contador Actual"] if c in df_dash.columns]
+                top_contadores = df_dash.sort_values("Contador Actual", ascending=False).head(10)
+                st.dataframe(
+                    top_contadores[columnas_top],
+                    use_container_width=True, hide_index=True,
+                    column_config={"Contador Actual": st.column_config.NumberColumn("Contador", format="%d")}
+                )
 
         with tab_lista:
             if df_equipos.empty:
