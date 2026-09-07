@@ -727,6 +727,34 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
         return False, f"❌ Error de Supabase: {e}"
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
+
+def registrar_consumo_equipo(equipo_id, insumo, cantidad, fecha, usuario, servicio_id=None, empresa=None, agencia=None, area=None, observaciones=None):
+    """Registra el consumo de un insumo asociado a un equipo específico."""
+    supabase = conectar_supabase()
+    registro = {
+        "equipo_id": int(equipo_id),
+        "insumo": _valor_opcional(insumo),
+        "cantidad": float(cantidad),
+        "fecha": str(fecha),
+        "usuario": _valor_opcional(usuario),
+        "servicio_id": int(servicio_id) if servicio_id is not None and not pd.isna(servicio_id) else None,
+        "empresa": _valor_opcional(empresa),
+        "agencia": _valor_opcional(agencia),
+        "area": _valor_opcional(area),
+        "observaciones": _valor_opcional(observaciones),
+    }
+    return supabase.table("Consumo_Equipos").insert(registro).execute()
+
+
+def obtener_consumos_equipos():
+    try:
+        supabase = conectar_supabase()
+        response = supabase.table("Consumo_Equipos").select("*").order("fecha", desc=True).execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        st.warning(f"Aviso al leer consumo por equipo: {e}")
+        return pd.DataFrame()
+
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
     """Busca en la tabla Alquileres de Supabase asignando correctamente Agencia y Área."""
     try:
@@ -1149,9 +1177,11 @@ else:
 
         df_equipos = obtener_equipos()
 
-        tab_dashboard, tab_control, tab_lista, tab_nuevo, tab_importar, tab_contador = st.tabs([
+        tab_dashboard, tab_control, tab_rendimiento_eq, tab_consumo_eq, tab_lista, tab_nuevo, tab_importar, tab_contador = st.tabs([
             "📊 Dashboard",
             "📅 Control de lecturas",
+            "📈 Rendimiento por equipo",
+            "🧴 Consumo por equipo",
             "📋 Equipos registrados",
             "➕ Registrar equipo",
             "📥 Importar desde Excel",
@@ -1370,12 +1400,40 @@ else:
                         equipo_control_id = opciones_control[equipo_control_label]
                         fila_control = df_control[df_control["id"] == equipo_control_id].iloc[0]
 
-                        c1, c2, c3 = st.columns(3)
+                        # Calculamos cuántas copias se hicieron desde la lectura anterior
+                        # y, si hay datos suficientes, cuántas se hicieron en el mes actual.
+                        copias_ultima_lectura = 0
+                        copias_mes_actual = 0
+                        df_hist_control = obtener_lecturas_equipo(equipo_control_id)
+                        if not df_hist_control.empty and "Contador" in df_hist_control.columns:
+                            hist_ctrl = df_hist_control.copy()
+                            hist_ctrl["_fecha_dt"] = pd.to_datetime(hist_ctrl.get("Fecha"), errors="coerce")
+                            hist_ctrl["_contador_num"] = pd.to_numeric(hist_ctrl["Contador"], errors="coerce")
+                            hist_ctrl = hist_ctrl.dropna(subset=["_fecha_dt", "_contador_num"]).sort_values("_fecha_dt", ascending=False)
+
+                            if len(hist_ctrl) >= 2:
+                                copias_ultima_lectura = max(0, int(hist_ctrl.iloc[0]["_contador_num"] - hist_ctrl.iloc[1]["_contador_num"]))
+
+                            if not hist_ctrl.empty:
+                                ahora = obtener_hora_local_bo()
+                                inicio_mes = pd.Timestamp(ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0))
+                                lecturas_mes = hist_ctrl[hist_ctrl["_fecha_dt"] >= inicio_mes]
+                                if not lecturas_mes.empty:
+                                    ultima_mes = int(lecturas_mes.iloc[0]["_contador_num"])
+                                    anteriores_mes = hist_ctrl[hist_ctrl["_fecha_dt"] < inicio_mes]
+                                    if not anteriores_mes.empty:
+                                        base_mes = int(anteriores_mes.iloc[0]["_contador_num"])
+                                        copias_mes_actual = max(0, ultima_mes - base_mes)
+                                    elif len(lecturas_mes) >= 2:
+                                        copias_mes_actual = max(0, int(lecturas_mes.iloc[0]["_contador_num"] - lecturas_mes.iloc[-1]["_contador_num"]))
+
+                        c1, c2, c3, c4 = st.columns(4)
                         c1.metric("🔢 Contador actual", f'{int(fila_control["Contador"]):,}'.replace(",", "."))
                         c2.metric("📅 Última lectura", fila_control["Última lectura"].strftime("%d/%m/%Y") if pd.notna(fila_control["Última lectura"]) else "Sin lectura")
-                        dias_txt = str(fila_control["Días desde lectura"])
-                        c3.metric("⏱️ Días desde lectura", dias_txt)
+                        c3.metric("📄 Copias desde lectura anterior", f"{copias_ultima_lectura:,}".replace(",", "."))
+                        c4.metric("📆 Copias este mes", f"{copias_mes_actual:,}".replace(",", "."))
 
+                        st.caption("💡 Este botón es un acceso rápido: te lleva al formulario de registro de una nueva lectura para el equipo seleccionado.")
                         if st.button("🔢 Registrar nueva lectura", key="ir_registrar_lectura_control", use_container_width=True):
                             st.session_state["equipo_contador_sel"] = next(
                                 (label for label, eid in {
@@ -1386,6 +1444,243 @@ else:
                             )
                             st.session_state["ir_a_contadores"] = True
                             st.rerun()
+
+        with tab_rendimiento_eq:
+            st.markdown("### 📈 Rendimiento por equipo")
+            st.caption("Calcula las copias realizadas a partir de las lecturas de contador de cada máquina.")
+
+            if df_equipos.empty:
+                st.info("Todavía no hay equipos registrados para calcular rendimiento.")
+            else:
+                # Normalizamos los datos básicos del equipo.
+                df_rq = df_equipos.copy()
+                for col in ["Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie", "Modalidad", "Estado"]:
+                    if col not in df_rq.columns:
+                        df_rq[col] = "Sin registrar"
+                    df_rq[col] = df_rq[col].fillna("Sin registrar").astype(str).str.strip()
+                    df_rq.loc[df_rq[col] == "", col] = "Sin registrar"
+
+                # Construimos una fila de rendimiento por equipo.
+                filas_rendimiento = []
+                ahora = obtener_hora_local_bo()
+                inicio_mes = pd.Timestamp(ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0))
+
+                for _, equipo in df_rq.iterrows():
+                    equipo_id = int(equipo["id"])
+                    df_hist = obtener_lecturas_equipo(equipo_id)
+
+                    hist = pd.DataFrame()
+                    if not df_hist.empty and "Contador" in df_hist.columns:
+                        hist = df_hist.copy()
+                        hist["_fecha"] = pd.to_datetime(hist.get("Fecha"), errors="coerce")
+                        hist["_contador"] = pd.to_numeric(hist.get("Contador"), errors="coerce")
+                        hist = hist.dropna(subset=["_fecha", "_contador"]).sort_values("_fecha")
+
+                    contador_actual = pd.to_numeric(equipo.get("Contador Actual", 0), errors="coerce")
+                    contador_actual = int(contador_actual) if pd.notna(contador_actual) else 0
+
+                    copias_acumuladas = 0
+                    copias_mes = 0
+                    promedio_diario = 0.0
+                    primera_fecha = None
+                    ultima_fecha = None
+                    lecturas = len(hist)
+
+                    if not hist.empty:
+                        primera_fecha = hist.iloc[0]["_fecha"]
+                        ultima_fecha = hist.iloc[-1]["_fecha"]
+
+                        # Copias desde la primera lectura registrada hasta la última.
+                        copias_acumuladas = max(0, int(hist.iloc[-1]["_contador"] - hist.iloc[0]["_contador"]))
+
+                        dias_periodo = max(0, (ultima_fecha.date() - primera_fecha.date()).days)
+                        if dias_periodo > 0:
+                            promedio_diario = copias_acumuladas / dias_periodo
+
+                        # Copias del mes actual: tomamos la lectura anterior al inicio
+                        # del mes como base y la última lectura del mes como final.
+                        lecturas_mes = hist[hist["_fecha"] >= inicio_mes]
+                        if not lecturas_mes.empty:
+                            ultima_mes = int(lecturas_mes.iloc[-1]["_contador"])
+                            anteriores = hist[hist["_fecha"] < inicio_mes]
+                            if not anteriores.empty:
+                                base_mes = int(anteriores.iloc[-1]["_contador"])
+                                copias_mes = max(0, ultima_mes - base_mes)
+                            elif len(lecturas_mes) >= 2:
+                                copias_mes = max(0, int(lecturas_mes.iloc[-1]["_contador"] - lecturas_mes.iloc[0]["_contador"]))
+
+                    filas_rendimiento.append({
+                        "id": equipo_id,
+                        "Empresa": equipo["Empresa"],
+                        "Agencia": equipo["Agencia"],
+                        "Área": equipo["Area"],
+                        "Marca": equipo["Marca"],
+                        "Modelo": equipo["Modelo"],
+                        "Número de serie": equipo["Numero Serie"],
+                        "Contador actual": contador_actual,
+                        "Copias acumuladas": copias_acumuladas,
+                        "Copias este mes": copias_mes,
+                        "Promedio copias/día": promedio_diario,
+                        "Lecturas": lecturas,
+                        "Primera lectura": primera_fecha.date() if primera_fecha is not None else None,
+                        "Última lectura": ultima_fecha.date() if ultima_fecha is not None else None,
+                    })
+
+                df_rendimiento_eq = pd.DataFrame(filas_rendimiento)
+
+                # Filtros de consulta.
+                rf1, rf2, rf3 = st.columns(3)
+                with rf1:
+                    lista_emp_r = ["Todas"] + sorted(df_rendimiento_eq["Empresa"].unique().tolist())
+                    filtro_emp_r = st.selectbox("🏢 Empresa", lista_emp_r, key="rend_eq_empresa")
+                with rf2:
+                    df_tmp_r = df_rendimiento_eq if filtro_emp_r == "Todas" else df_rendimiento_eq[df_rendimiento_eq["Empresa"] == filtro_emp_r]
+                    lista_ag_r = ["Todas"] + sorted(df_tmp_r["Agencia"].unique().tolist())
+                    filtro_ag_r = st.selectbox("📍 Agencia", lista_ag_r, key="rend_eq_agencia")
+                with rf3:
+                    opciones_orden = ["Copias este mes", "Copias acumuladas", "Promedio copias/día", "Contador actual"]
+                    orden_r = st.selectbox("📊 Ordenar por", opciones_orden, key="rend_eq_orden")
+
+                df_rend_filtrado = df_rendimiento_eq.copy()
+                if filtro_emp_r != "Todas":
+                    df_rend_filtrado = df_rend_filtrado[df_rend_filtrado["Empresa"] == filtro_emp_r]
+                if filtro_ag_r != "Todas":
+                    df_rend_filtrado = df_rend_filtrado[df_rend_filtrado["Agencia"] == filtro_ag_r]
+                df_rend_filtrado = df_rend_filtrado.sort_values(orden_r, ascending=False)
+
+                total_copias_mes = int(df_rend_filtrado["Copias este mes"].sum())
+                total_copias_acum = int(df_rend_filtrado["Copias acumuladas"].sum())
+                equipos_con_lecturas = int((df_rend_filtrado["Lecturas"] > 0).sum())
+                promedio_general = float(df_rend_filtrado["Promedio copias/día"].mean()) if not df_rend_filtrado.empty else 0.0
+
+                km1, km2, km3, km4 = st.columns(4)
+                km1.metric("🖨️ Equipos analizados", len(df_rend_filtrado))
+                km2.metric("📄 Copias este mes", f"{total_copias_mes:,}".replace(",", "."))
+                km3.metric("📊 Copias acumuladas", f"{total_copias_acum:,}".replace(",", "."))
+                km4.metric("📈 Promedio copias/día", f"{promedio_general:,.0f}".replace(",", "."))
+
+                st.markdown("---")
+                if df_rend_filtrado.empty:
+                    st.info("No hay equipos que coincidan con los filtros.")
+                else:
+                    columnas_r = [
+                        "Empresa", "Agencia", "Área", "Marca", "Modelo", "Número de serie",
+                        "Contador actual", "Copias acumuladas", "Copias este mes",
+                        "Promedio copias/día", "Lecturas", "Última lectura"
+                    ]
+                    st.dataframe(
+                        df_rend_filtrado[columnas_r],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Contador actual": st.column_config.NumberColumn("Contador actual", format="%d"),
+                            "Copias acumuladas": st.column_config.NumberColumn("Copias acumuladas", format="%d"),
+                            "Copias este mes": st.column_config.NumberColumn("Copias este mes", format="%d"),
+                            "Promedio copias/día": st.column_config.NumberColumn("Promedio copias/día", format="%.0f"),
+                            "Lecturas": st.column_config.NumberColumn("Lecturas", format="%d"),
+                            "Última lectura": st.column_config.DateColumn("Última lectura", format="DD/MM/YYYY"),
+                        }
+                    )
+
+                    # Gráfico de los equipos con mayor volumen de copias del mes.
+                    st.markdown("### 🔝 Equipos con mayor volumen de copias este mes")
+                    top_r = df_rend_filtrado.sort_values("Copias este mes", ascending=False).head(10).copy()
+                    top_r["Equipo"] = top_r.apply(
+                        lambda r: f"{r['Marca']} {r['Modelo']} — {r['Número de serie']}", axis=1
+                    )
+                    fig_rend = px.bar(
+                        top_r.sort_values("Copias este mes"),
+                        x="Copias este mes",
+                        y="Equipo",
+                        orientation="h",
+                        title="Top 10 por copias del mes",
+                        text="Copias este mes"
+                    )
+                    fig_rend.update_layout(margin=dict(l=10, r=10, t=50, b=10))
+                    st.plotly_chart(fig_rend, use_container_width=True, key="grafico_rendimiento_equipos")
+
+                    st.markdown("### 🔎 Detalle de un equipo")
+                    opciones_det = {
+                        f'#{int(row["id"])} — {row["Marca"]} {row["Modelo"]} — {row["Número de serie"]}': int(row["id"])
+                        for _, row in df_rend_filtrado.iterrows()
+                    }
+                    equipo_det_label = st.selectbox(
+                        "Selecciona un equipo para analizarlo",
+                        list(opciones_det.keys()),
+                        key="rend_eq_detalle"
+                    )
+                    equipo_det_id = opciones_det[equipo_det_label]
+                    fila_det = df_rendimiento_eq[df_rendimiento_eq["id"] == equipo_det_id].iloc[0]
+                    hist_det = obtener_lecturas_equipo(equipo_det_id)
+
+                    d1, d2, d3, d4 = st.columns(4)
+                    d1.metric("🔢 Contador actual", f'{int(fila_det["Contador actual"]):,}'.replace(",", "."))
+                    d2.metric("📄 Copias este mes", f'{int(fila_det["Copias este mes"]):,}'.replace(",", "."))
+                    d3.metric("📊 Copias acumuladas", f'{int(fila_det["Copias acumuladas"]):,}'.replace(",", "."))
+                    d4.metric("📈 Promedio/día", f'{fila_det["Promedio copias/día"]:,.0f}'.replace(",", "."))
+
+                    if not hist_det.empty and "Contador" in hist_det.columns:
+                        hist_g = hist_det.copy()
+                        hist_g["Fecha"] = pd.to_datetime(hist_g["Fecha"], errors="coerce")
+                        hist_g["Contador"] = pd.to_numeric(hist_g["Contador"], errors="coerce")
+                        hist_g = hist_g.dropna(subset=["Fecha", "Contador"]).sort_values("Fecha")
+                        if not hist_g.empty:
+                            fig_hist = px.line(
+                                hist_g,
+                                x="Fecha",
+                                y="Contador",
+                                markers=True,
+                                title="Evolución del contador"
+                            )
+                            fig_hist.update_layout(margin=dict(l=10, r=10, t=50, b=10))
+                            st.plotly_chart(fig_hist, use_container_width=True, key="grafico_historial_equipo_rend")
+
+                    st.info(
+                        "💡 El cálculo de copias proviene exclusivamente de las lecturas de contador. "
+                        "El consumo exacto de tóner/repuestos por equipo lo vincularemos en el siguiente paso, "
+                        "porque actualmente la tabla Alquileres registra empresa/agencia/área e insumo, pero no un ID de equipo."
+                    )
+
+        with tab_consumo_eq:
+            st.markdown("### 🧴 Consumo de insumos por equipo")
+            st.caption("Consulta qué tóneres y repuestos se utilizaron en cada máquina. Los registros provienen de los servicios técnicos completados.")
+            df_consumo = obtener_consumos_equipos()
+            if df_consumo.empty:
+                st.info("Todavía no hay consumos asociados a equipos. Cuando completes un servicio con un insumo seleccionado, aparecerá aquí.")
+            else:
+                # Enriquecer con datos actuales del equipo.
+                df_c = df_consumo.copy()
+                eq_map = df_equipos.copy() if not df_equipos.empty else pd.DataFrame()
+                if not eq_map.empty and "id" in eq_map.columns:
+                    cols_eq = [c for c in ["id", "Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie"] if c in eq_map.columns]
+                    eq_map = eq_map[cols_eq].copy().rename(columns={"id": "equipo_id"})
+                    df_c["equipo_id"] = pd.to_numeric(df_c["equipo_id"], errors="coerce")
+                    df_c = df_c.merge(eq_map, on="equipo_id", how="left", suffixes=("", "_actual"))
+                if "fecha" in df_c.columns:
+                    df_c["fecha"] = pd.to_datetime(df_c["fecha"], errors="coerce")
+                if "cantidad" in df_c.columns:
+                    df_c["cantidad"] = pd.to_numeric(df_c["cantidad"], errors="coerce").fillna(0)
+
+                c1, c2, c3 = st.columns(3)
+                empresas_c = ["Todas"] + sorted([str(x) for x in df_c.get("Empresa", pd.Series(dtype=str)).dropna().unique() if str(x).strip()])
+                insumos_c = ["Todos"] + sorted([str(x) for x in df_c.get("insumo", pd.Series(dtype=str)).dropna().unique() if str(x).strip()])
+                with c1:
+                    f_emp_c = st.selectbox("Empresa", empresas_c, key="f_cons_emp")
+                with c2:
+                    f_ins_c = st.selectbox("Insumo", insumos_c, key="f_cons_ins")
+                with c3:
+                    f_desde_c = st.date_input("Desde", value=obtener_hora_local_bo().date().replace(day=1), key="f_cons_desde")
+
+                if f_emp_c != "Todas" and "Empresa" in df_c.columns:
+                    df_c = df_c[df_c["Empresa"].astype(str) == f_emp_c]
+                if f_ins_c != "Todos" and "insumo" in df_c.columns:
+                    df_c = df_c[df_c["insumo"].astype(str) == f_ins_c]
+                if "fecha" in df_c.columns:
+                    df_c = df_c[df_c["fecha"].dt.date >= f_desde_c]
+
+                st.dataframe(df_c, use_container_width=True, hide_index=True)
+                total_consumido = float(df_c["cantidad"].sum()) if "cantidad" in df_c.columns else 0
+                st.metric("Unidades de insumos consumidas", f"{total_consumido:,.0f}")
 
         with tab_lista:
             if df_equipos.empty:
@@ -3312,6 +3607,55 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
 
                 insumos_texto = ", ".join(insumos_usados) if insumos_usados else "Ninguno"
 
+                # 🖨️ EQUIPO ASOCIADO: permite vincular el consumo de cada insumo a una máquina concreta.
+                equipo_seleccionado_id = None
+                equipo_seleccionado = None
+                try:
+                    df_eq_serv = obtener_equipos()
+                    if not df_eq_serv.empty:
+                        df_eq_serv = df_eq_serv.copy()
+                        for _c in ["Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie"]:
+                            if _c not in df_eq_serv.columns:
+                                df_eq_serv[_c] = ""
+                            df_eq_serv[_c] = df_eq_serv[_c].fillna("").astype(str).str.strip()
+
+                        # Primero respetamos la ubicación de la solicitud.
+                        df_eq_fil = df_eq_serv.copy()
+                        if emp_sel:
+                            df_eq_fil = df_eq_fil[df_eq_fil["Empresa"].str.lower() == str(emp_sel).strip().lower()]
+                        if ag_sel and not df_eq_fil.empty:
+                            ag_limpia = str(ag_sel).split(" - ")[-1].strip().lower()
+                            df_eq_fil = df_eq_fil[df_eq_fil["Agencia"].apply(lambda x: str(x).split(" - ")[-1].strip().lower()) == ag_limpia]
+                        if ar_sel and not df_eq_fil.empty:
+                            ar_limpia = str(ar_sel).split(" - ")[-1].strip().lower()
+                            df_eq_fil = df_eq_fil[df_eq_fil["Area"].apply(lambda x: str(x).split(" - ")[-1].strip().lower()) == ar_limpia]
+
+                        if not df_eq_fil.empty:
+                            def _etiqueta_equipo(row):
+                                marca = row.get("Marca", "")
+                                modelo = row.get("Modelo", "")
+                                serie = row.get("Numero Serie", "")
+                                return f"#{int(row['id'])} — {marca} {modelo} — {serie}"
+
+                            opciones_eq = df_eq_fil["id"].tolist()
+                            mapa_eq = {int(row["id"]): row for _, row in df_eq_fil.iterrows()}
+                            ids_eq = [int(x) for x in opciones_eq]
+                            st.markdown("### 🖨️ Equipo asociado")
+                            st.caption("Vincula los insumos utilizados con la máquina atendida para calcular consumo y rendimiento reales.")
+                            equipo_seleccionado_id = st.selectbox(
+                                "Equipo atendido:",
+                                options=ids_eq,
+                                format_func=lambda x: _etiqueta_equipo(mapa_eq[x]),
+                                key="tec_equipo_asociado"
+                            )
+                            equipo_seleccionado = mapa_eq.get(int(equipo_seleccionado_id))
+                        else:
+                            st.warning("⚠️ No se encontró un equipo registrado para esta Empresa/Agencia/Área. Registra primero la máquina en Gestión de Equipos.")
+                    else:
+                        st.warning("⚠️ No hay equipos registrados todavía. El consumo no podrá asociarse a una máquina.")
+                except Exception as e_eq:
+                    st.warning(f"⚠️ No se pudo cargar la lista de equipos: {e_eq}")
+
                 # 📊 CAMPOS DINÁMICOS QUE SE ACTIVAN SI ELIGE ALQUILER
                 cnt_ant, cnt_act, paginas_impresas, precio_facturado, dias_calculados = 0, 0, 0, 0.0, 0
 
@@ -3379,6 +3723,37 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
                         st.stop()
 
                     supabase = conectar_supabase()
+
+                    # Si hay insumos, exigimos una máquina concreta para poder medir consumo por equipo.
+                    if insumos_usados and equipo_seleccionado_id is None:
+                        st.error("❌ Selecciona el equipo atendido antes de completar el servicio. Así podremos atribuir el consumo de insumos a la máquina correcta.")
+                        st.stop()
+
+                    # Verificación temprana de la tabla de consumos para no modificar el servicio/stock si falta crearla.
+                    if insumos_usados and equipo_seleccionado_id is not None:
+                        try:
+                            supabase.table("Consumo_Equipos").select("id").limit(1).execute()
+                        except Exception as e_tabla: 
+                            st.error("❌ Falta crear la tabla Consumo_Equipos en Supabase. Ejecuta el SQL que te indico debajo del archivo antes de completar servicios con insumos.")
+                            st.code("""create table public.Consumo_Equipos (
+  id bigint generated by default as identity primary key,
+  equipo_id bigint not null references public.Equipos(id) on delete cascade,
+  insumo text not null,
+  cantidad numeric not null default 1,
+  fecha timestamptz not null default now(),
+  usuario text,
+  servicio_id bigint,
+  empresa text,
+  agencia text,
+  area text,
+  observaciones text
+);
+
+alter table public.Consumo_Equipos enable row level security;
+create policy "anon puede leer consumo equipos" on public.Consumo_Equipos for select to anon using (true);
+create policy "anon puede insertar consumo equipos" on public.Consumo_Equipos for insert to anon with check (true);""", language="sql")
+                            st.stop()
+
                     supabase.table("Servicios").update({
                         "Técnico": tecnico_atendio,
                         "Insumos": f"[{tipo_operacion}] {insumos_texto}",
@@ -3407,6 +3782,26 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
                                         supabase.table("Insumos").update({"Cantidad": nuevo_stock}).eq("id", id_insumo).execute()
                         except Exception as e:
                             st.error(f"⚠️ Error al actualizar stock: {e}")
+
+                    # 2.5️⃣ Registrar cada insumo utilizado asociado al equipo atendido.
+                    if insumos_usados and equipo_seleccionado_id is not None:
+                        try:
+                            for insumo_nom in insumos_usados:
+                                registrar_consumo_equipo(
+                                    equipo_id=equipo_seleccionado_id,
+                                    insumo=insumo_nom,
+                                    cantidad=1,
+                                    fecha=fecha_hora_realizado,
+                                    usuario=tecnico_atendio,
+                                    servicio_id=servicio_id,
+                                    empresa=emp_sel,
+                                    agencia=ag_sel,
+                                    area=ar_sel,
+                                    observaciones=prob_sel
+                                )
+                        except Exception as e_consumo:
+                            st.error(f"❌ No se pudo registrar el consumo asociado al equipo: {e_consumo}")
+                            st.stop()
 
                     # 3️⃣ Registrar en la Hoja de Alquileres, Ventas e Historial General
                     try:
