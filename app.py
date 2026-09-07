@@ -1149,8 +1149,9 @@ else:
 
         df_equipos = obtener_equipos()
 
-        tab_dashboard, tab_lista, tab_nuevo, tab_importar, tab_contador = st.tabs([
+        tab_dashboard, tab_control, tab_lista, tab_nuevo, tab_importar, tab_contador = st.tabs([
             "📊 Dashboard",
+            "📅 Control de lecturas",
             "📋 Equipos registrados",
             "➕ Registrar equipo",
             "📥 Importar desde Excel",
@@ -1231,6 +1232,160 @@ else:
                     use_container_width=True, hide_index=True,
                     column_config={"Contador Actual": st.column_config.NumberColumn("Contador", format="%d")}
                 )
+
+        with tab_control:
+            st.markdown("### 📅 Control de lecturas")
+            st.caption("Identifica rápidamente qué equipos tienen lectura reciente y cuáles necesitan seguimiento.")
+
+            if df_equipos.empty:
+                st.info("Todavía no hay equipos registrados para controlar lecturas.")
+            else:
+                df_control = df_equipos.copy()
+
+                # Normalizamos columnas para evitar errores cuando algún dato venga vacío.
+                for col in ["Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie", "Modalidad", "Estado"]:
+                    if col not in df_control.columns:
+                        df_control[col] = "Sin registrar"
+                    df_control[col] = df_control[col].fillna("Sin registrar").astype(str).str.strip()
+                    df_control.loc[df_control[col] == "", col] = "Sin registrar"
+
+                hoy = obtener_hora_local_bo().date()
+                registros_control = []
+
+                # Buscamos la última lectura de cada equipo.
+                for _, equipo in df_control.iterrows():
+                    equipo_id = int(equipo["id"])
+                    df_hist = obtener_lecturas_equipo(equipo_id)
+                    ultima_fecha = None
+                    ultima_contador = None
+
+                    if not df_hist.empty and "Fecha" in df_hist.columns:
+                        fechas = pd.to_datetime(df_hist["Fecha"], errors="coerce")
+                        if fechas.notna().any():
+                            idx_ultima = fechas.idxmax()
+                            ultima_fecha = fechas.loc[idx_ultima]
+                            try:
+                                ultima_contador = int(pd.to_numeric(df_hist.loc[idx_ultima, "Contador"], errors="coerce"))
+                            except Exception:
+                                ultima_contador = None
+
+                    if ultima_fecha is not None and pd.notna(ultima_fecha):
+                        fecha_lectura = ultima_fecha.date()
+                        dias = max(0, (hoy - fecha_lectura).days)
+                    else:
+                        fecha_lectura = None
+                        dias = None
+
+                    if fecha_lectura is None:
+                        estado_lectura = "🔴 Sin lectura"
+                    elif dias <= 30:
+                        estado_lectura = "🟢 Actual"
+                    elif dias <= 60:
+                        estado_lectura = "🟡 Pendiente"
+                    else:
+                        estado_lectura = "🔴 Atrasado"
+
+                    registros_control.append({
+                        "id": equipo_id,
+                        "Empresa": equipo["Empresa"],
+                        "Agencia": equipo["Agencia"],
+                        "Área": equipo["Area"],
+                        "Marca": equipo["Marca"],
+                        "Modelo": equipo["Modelo"],
+                        "Número de serie": equipo["Numero Serie"],
+                        "Modalidad": equipo["Modalidad"],
+                        "Estado equipo": equipo["Estado"],
+                        "Contador": int(pd.to_numeric(equipo.get("Contador Actual", 0), errors="coerce") or 0),
+                        "Última lectura": fecha_lectura,
+                        "Días desde lectura": dias if dias is not None else "—",
+                        "Estado lectura": estado_lectura,
+                    })
+
+                df_control = pd.DataFrame(registros_control)
+
+                # Filtros principales.
+                f1, f2, f3 = st.columns(3)
+                with f1:
+                    empresas_control = ["Todas"] + sorted(df_control["Empresa"].dropna().unique().tolist())
+                    filtro_empresa_control = st.selectbox("🏢 Empresa", empresas_control, key="control_empresa")
+                with f2:
+                    agencias_control_df = df_control if filtro_empresa_control == "Todas" else df_control[df_control["Empresa"] == filtro_empresa_control]
+                    agencias_control = ["Todas"] + sorted(agencias_control_df["Agencia"].dropna().unique().tolist())
+                    filtro_agencia_control = st.selectbox("📍 Agencia", agencias_control, key="control_agencia")
+                with f3:
+                    estados_lectura = ["Todos", "🟢 Actual", "🟡 Pendiente", "🔴 Atrasado", "🔴 Sin lectura"]
+                    filtro_estado_lectura = st.selectbox("📅 Estado de lectura", estados_lectura, key="control_estado_lectura")
+
+                df_filtrado_control = df_control.copy()
+                if filtro_empresa_control != "Todas":
+                    df_filtrado_control = df_filtrado_control[df_filtrado_control["Empresa"] == filtro_empresa_control]
+                if filtro_agencia_control != "Todas":
+                    df_filtrado_control = df_filtrado_control[df_filtrado_control["Agencia"] == filtro_agencia_control]
+                if filtro_estado_lectura != "Todos":
+                    df_filtrado_control = df_filtrado_control[df_filtrado_control["Estado lectura"] == filtro_estado_lectura]
+
+                actual_count = int((df_control["Estado lectura"] == "🟢 Actual").sum())
+                pendiente_count = int((df_control["Estado lectura"] == "🟡 Pendiente").sum())
+                atrasado_count = int((df_control["Estado lectura"] == "🔴 Atrasado").sum())
+                sin_lectura_count = int((df_control["Estado lectura"] == "🔴 Sin lectura").sum())
+
+                k1, k2, k3, k4 = st.columns(4)
+                k1.metric("🟢 Actual", actual_count)
+                k2.metric("🟡 Pendiente", pendiente_count)
+                k3.metric("🔴 Atrasado", atrasado_count)
+                k4.metric("⚪ Sin lectura", sin_lectura_count)
+
+                st.markdown("---")
+                if df_filtrado_control.empty:
+                    st.info("No hay equipos que coincidan con los filtros seleccionados.")
+                else:
+                    columnas_control = [
+                        "Empresa", "Agencia", "Área", "Marca", "Modelo",
+                        "Número de serie", "Contador", "Última lectura",
+                        "Días desde lectura", "Estado lectura"
+                    ]
+                    st.dataframe(
+                        df_filtrado_control[columnas_control],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Contador": st.column_config.NumberColumn("Contador", format="%d"),
+                            "Última lectura": st.column_config.DateColumn("Última lectura", format="DD/MM/YYYY"),
+                            "Días desde lectura": st.column_config.TextColumn("Días desde lectura"),
+                            "Estado lectura": st.column_config.TextColumn("Estado de lectura"),
+                        }
+                    )
+
+                    st.markdown("### 🔎 Seguimiento de un equipo")
+                    opciones_control = {
+                        f'#{int(row["id"])} — {row["Marca"]} {row["Modelo"]} — {row["Número de serie"]}': int(row["id"])
+                        for _, row in df_filtrado_control.iterrows()
+                    }
+                    if opciones_control:
+                        equipo_control_label = st.selectbox(
+                            "Selecciona un equipo para consultar su historial",
+                            list(opciones_control.keys()),
+                            key="equipo_control_sel"
+                        )
+                        equipo_control_id = opciones_control[equipo_control_label]
+                        fila_control = df_control[df_control["id"] == equipo_control_id].iloc[0]
+
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("🔢 Contador actual", f'{int(fila_control["Contador"]):,}'.replace(",", "."))
+                        c2.metric("📅 Última lectura", fila_control["Última lectura"].strftime("%d/%m/%Y") if pd.notna(fila_control["Última lectura"]) else "Sin lectura")
+                        dias_txt = str(fila_control["Días desde lectura"])
+                        c3.metric("⏱️ Días desde lectura", dias_txt)
+
+                        if st.button("🔢 Registrar nueva lectura", key="ir_registrar_lectura_control", use_container_width=True):
+                            st.session_state["equipo_contador_sel"] = next(
+                                (label for label, eid in {
+                                    f'#{int(row["id"])} — {row.get("Marca", "")} {row.get("Modelo", "")} — Serie: {row.get("Numero Serie", "")} — Contador: {row.get("Contador Actual", 0)}': int(row["id"])
+                                    for _, row in df_equipos.iterrows()
+                                }.items() if eid == equipo_control_id),
+                                None
+                            )
+                            st.session_state["ir_a_contadores"] = True
+                            st.rerun()
 
         with tab_lista:
             if df_equipos.empty:
