@@ -1351,10 +1351,25 @@ else:
                     if not agencias_filtradas_eq:
                         agencias_filtradas_eq = agencias_disponibles
 
-                agencias_eq = _opciones_unicas(agencias_filtradas_eq)
-                agencia_n_sel = st.selectbox("Agencia", agencias_eq, key="nuevo_eq_agencia")
+                # Mostramos nombres cortos para que el formulario sea limpio, pero
+                # conservamos el valor original de Parametros al guardar en Supabase.
+                def _nombre_corto(valor, cantidad_prefijos=1):
+                    texto = str(valor).strip()
+                    partes = [p.strip() for p in texto.split(" - ") if p.strip()]
+                    if len(partes) > cantidad_prefijos:
+                        return " - ".join(partes[cantidad_prefijos:])
+                    return texto
 
-                if agencia_n_sel == "— Seleccionar —":
+                agencias_eq_originales = _opciones_unicas(agencias_filtradas_eq)
+                mapa_agencias_eq = {
+                    _nombre_corto(ag): ag for ag in agencias_eq_originales
+                    if ag != "— Seleccionar —"
+                }
+                agencias_eq = ["— Seleccionar —"] + list(mapa_agencias_eq.keys())
+                agencia_n_visible = st.selectbox("Agencia", agencias_eq, key="nuevo_eq_agencia")
+                agencia_n_sel = mapa_agencias_eq.get(agencia_n_visible, "— Seleccionar —")
+
+                if agencia_n_visible == "— Seleccionar —":
                     areas_filtradas_eq = []
                 else:
                     areas_filtradas_eq = [
@@ -1365,8 +1380,14 @@ else:
                         # Compatibilidad con Parametros donde Área puede no llevar el prefijo de Agencia.
                         areas_filtradas_eq = areas_disponibles
 
-                areas_eq = _opciones_unicas(areas_filtradas_eq)
-                area_n_sel = st.selectbox("Área", areas_eq, key="nuevo_eq_area")
+                areas_eq_originales = _opciones_unicas(areas_filtradas_eq)
+                mapa_areas_eq = {
+                    _nombre_corto(ar, cantidad_prefijos=2): ar for ar in areas_eq_originales
+                    if ar != "— Seleccionar —"
+                }
+                areas_eq = ["— Seleccionar —"] + list(mapa_areas_eq.keys())
+                area_n_visible = st.selectbox("Área", areas_eq, key="nuevo_eq_area")
+                area_n_sel = mapa_areas_eq.get(area_n_visible, "— Seleccionar —")
 
                 marca_n_sel = st.selectbox("Marca", marcas_existentes, key="nuevo_eq_marca")
 
