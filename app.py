@@ -5,10 +5,6 @@ import pandas as pd
 # Importamos timezone y timedelta para ajustar la hora a Bolivia (UTC-4)
 from datetime import datetime, timezone, timedelta 
 import io
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.utils import get_column_letter
 import plotly.express as px
 import time
 import hashlib
@@ -175,46 +171,81 @@ def eliminar_usuario(usuario_a_eliminar):
     """Elimina un usuario de Supabase."""
     supabase = conectar_supabase()
     supabase.table("Usuarios").delete().eq("Usuario", usuario_a_eliminar).execute()
-
 # --- FUNCIONES DE PARÁMETROS (EMPRESAS, ÁREAS Y AGENCIAS) ---
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def obtener_parametros():
+    """
+    Obtiene Empresas, Agencias y Áreas directamente desde Supabase.
+    Así no depende de una copia antigua de Parametros en session_state.
+    """
     try:
-        df_parametros = st.session_state["pestanas"].get("Parametros", pd.DataFrame())
-        if df_parametros.empty:
+        supabase = conectar_supabase()
+        response = (
+            supabase.table("Parametros")
+            .select("Empresa, Agencia, Area")
+            .execute()
+        )
+        datos = response.data or []
+        if not datos:
             return ["Sin Registrar"], ["Sin Registrar"], ["Sin Registrar"]
 
-        df = df_parametros
+        df = pd.DataFrame(datos)
 
-        lista_empresas = df["Empresa"].dropna().astype(str).str.strip().tolist() if "Empresa" in df.columns else []
-        lista_areas = df["Area"].dropna().astype(str).str.strip().tolist() if "Area" in df.columns else []
-        lista_agencias = df["Agencia"].dropna().astype(str).str.strip().tolist() if "Agencia" in df.columns else []
-        
-        lista_empresas = [x for x in lista_empresas if x != ""]
-        lista_areas = [x for x in lista_areas if x != ""]
-        lista_agencias = [x for x in lista_agencias if x != ""]
+        def lista_unica(columna):
+            if columna not in df.columns:
+                return []
+            valores = df[columna].dropna().astype(str).str.strip().tolist()
+            return list(dict.fromkeys(x for x in valores if x))
+
+        empresas = lista_unica("Empresa") or ["Sin Registrar"]
+        agencias = lista_unica("Agencia") or ["Sin Registrar"]
+        areas = lista_unica("Area") or ["Sin Registrar"]
+
+        return empresas, areas, agencias
+
     except Exception as e:
-        lista_empresas = ["Sin Registrar"]
-        lista_areas = ["Sin Registrar"]
-        lista_agencias = ["Sin Registrar"]
-        
-    return lista_empresas, lista_areas, lista_agencias
+        print(f"Error al leer Parametros desde Supabase: {e}")
+        return ["Sin Registrar"], ["Sin Registrar"], ["Sin Registrar"]
 
 def registrar_parametro(nuevo_valor, tipo):
-    """Registra un nuevo parámetro en la tabla Parametros de Supabase."""
+    """Registra un parámetro en Supabase y actualiza las cachés."""
     try:
         supabase = conectar_supabase()
         supabase.table("Parametros").insert({tipo: nuevo_valor}).execute()
+        st.cache_data.clear()
+
+        if "pestanas" in st.session_state:
+            try:
+                st.session_state["pestanas"]["Parametros"] = (
+                    obtener_datos_tabla("Parametros")
+                )
+            except Exception as e_session:
+                print(f"Aviso al actualizar Parametros en sesión: {e_session}")
+        return True
     except Exception as e:
         st.error(f"Error al registrar parámetro: {e}")
+        return False
 
 def eliminar_parametro(valor_a_eliminar, tipo):
-    """Elimina un parámetro de la tabla Parametros en Supabase."""
+    """Elimina un parámetro de Supabase y actualiza las cachés."""
     try:
         supabase = conectar_supabase()
-        supabase.table("Parametros").delete().eq(tipo, valor_a_eliminar).execute()
+        supabase.table("Parametros").delete().eq(
+            tipo, valor_a_eliminar
+        ).execute()
+        st.cache_data.clear()
+
+        if "pestanas" in st.session_state:
+            try:
+                st.session_state["pestanas"]["Parametros"] = (
+                    obtener_datos_tabla("Parametros")
+                )
+            except Exception as e_session:
+                print(f"Aviso al actualizar Parametros en sesión: {e_session}")
+        return True
     except Exception as e:
         st.error(f"Error al eliminar parámetro: {e}")
+        return False
 
 # --- CONTROL DE ACCESO (LOGIN) ---
 def check_password():
@@ -313,355 +344,6 @@ if st.sidebar.button("Cerrar Sesión"):
         del st.session_state["pestanas"]
     st.rerun()
 
-
-# --- FUNCIONES DE GESTIÓN DE EQUIPOS Y CONTADORES ---
-@st.cache_data(ttl=60)
-def obtener_equipos():
-    try:
-        supabase = conectar_supabase()
-        response = supabase.table("Equipos").select("*").order("id", desc=False).execute()
-        return pd.DataFrame(response.data)
-    except Exception as e:
-        st.warning(f"Aviso al leer Equipos: {e}")
-        return pd.DataFrame()
-
-
-def _valor_opcional(valor):
-    if valor is None:
-        return None
-    valor = str(valor).strip()
-    return valor if valor else None
-
-
-def registrar_equipo(empresa, agencia, area, marca, modelo, numero_serie, tipo,
-                     ip, modalidad, estado, contador_actual, fecha_instalacion,
-                     observaciones):
-    try:
-        supabase = conectar_supabase()
-        registro = {
-            "Empresa": _valor_opcional(empresa),
-            "Agencia": _valor_opcional(agencia),
-            "Area": _valor_opcional(area),
-            "Marca": _valor_opcional(marca),
-            "Modelo": _valor_opcional(modelo),
-            "Numero Serie": _valor_opcional(numero_serie),
-            "Tipo": _valor_opcional(tipo),
-            "IP": _valor_opcional(ip),
-            "Modalidad": _valor_opcional(modalidad),
-            "Estado": _valor_opcional(estado),
-            "Contador Actual": int(contador_actual or 0),
-            "Fecha Instalacion": fecha_instalacion.isoformat() if fecha_instalacion else None,
-            "Observaciones": _valor_opcional(observaciones),
-        }
-        supabase.table("Equipos").insert(registro).execute()
-        st.cache_data.clear()
-        return True, None
-    except Exception as e:
-        return False, str(e)
-
-
-
-def generar_plantilla_equipos_excel(empresas, agencias, areas, df_equipos):
-    """Genera una plantilla Excel para carga masiva con listas desplegables."""
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Equipos"
-    listas = wb.create_sheet("Listas")
-
-    columnas = [
-        "Empresa", "Agencia", "Área", "Marca", "Modelo", "Número de serie",
-        "Tipo", "IP", "Modalidad", "Estado", "Contador actual",
-        "Fecha de instalación", "Observaciones"
-    ]
-    ws.append(columnas)
-
-    # Valores para listas: parámetros actuales + valores existentes en Equipos.
-    def unicos(valores):
-        resultado = []
-        vistos = set()
-        for valor in valores:
-            if valor is None:
-                continue
-            texto = str(valor).strip()
-            if texto and texto not in vistos:
-                vistos.add(texto)
-                resultado.append(texto)
-        return resultado
-
-    marcas_actuales = df_equipos["Marca"].tolist() if "Marca" in df_equipos.columns else []
-    modelos_actuales = df_equipos["Modelo"].tolist() if "Modelo" in df_equipos.columns else []
-    tipos_actuales = df_equipos["Tipo"].tolist() if "Tipo" in df_equipos.columns else []
-
-    marcas = unicos(marcas_actuales + ["Canon", "Ricoh", "Kyocera", "Konica Minolta", "Xerox", "HP", "Epson", "Brother", "Sharp", "Lexmark"])
-    modelos = unicos(modelos_actuales)
-    tipos = unicos(tipos_actuales + ["FOTOCOPIADORA", "MULTIFUNCIONAL", "IMPRESORA", "PLOTTER", "ESCANER", "OTRO"])
-    modalidades = ["Alquiler", "Venta", "Propio", "Otro"]
-    estados = ["Activo", "Mantenimiento", "Baja", "Retirado"]
-
-    listas_data = {
-        "Empresas": unicos(empresas),
-        "Agencias": unicos(agencias),
-        "Areas": unicos(areas),
-        "Marcas": marcas,
-        "Modelos": modelos,
-        "Tipos": tipos,
-        "Modalidades": modalidades,
-        "Estados": estados,
-    }
-
-    for col_idx, (titulo, valores) in enumerate(listas_data.items(), start=1):
-        listas.cell(row=1, column=col_idx, value=titulo)
-        for row_idx, valor in enumerate(valores, start=2):
-            listas.cell(row=row_idx, column=col_idx, value=valor)
-
-    # Estilo de la hoja principal.
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.freeze_panes = "A2"
-    ws.auto_filter.ref = "A1:M501"
-    ws.row_dimensions[1].height = 24
-
-    anchos = [24, 28, 24, 20, 24, 24, 22, 18, 16, 18, 18, 22, 35]
-    for i, ancho in enumerate(anchos, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = ancho
-
-    # Crea 500 filas preparadas para carga.
-    for fila in range(2, 502):
-        ws.cell(fila, 11).value = 0
-        ws.cell(fila, 12).number_format = "yyyy-mm-dd"
-
-    # Listas desplegables basadas en la hoja oculta "Listas".
-    for col_idx, valores in enumerate(listas_data.values(), start=1):
-        if not valores:
-            continue
-        letra = get_column_letter(col_idx)
-        max_fila = len(valores) + 1
-        dv = DataValidation(type="list", formula1=f"=Listas!${letra}$2:${letra}${max_fila}", allow_blank=True)
-        dv.error = "Selecciona un valor de la lista o deja la celda vacía."
-        dv.errorTitle = "Valor no válido"
-        ws.add_data_validation(dv)
-        dv.add(f"{letra}2:{letra}501")
-
-    # Validación numérica para contador.
-    dv_cont = DataValidation(type="whole", operator="greaterThanOrEqual", formula1="0", allow_blank=True)
-    dv_cont.error = "El contador debe ser un número entero igual o mayor a 0."
-    dv_cont.errorTitle = "Contador no válido"
-    ws.add_data_validation(dv_cont)
-    dv_cont.add("K2:K501")
-
-    # Hoja de instrucciones.
-    listas.sheet_state = "hidden"
-    info = wb.create_sheet("Instrucciones", 0)
-    info["A1"] = "CARGA MASIVA DE EQUIPOS"
-    info["A1"].font = Font(bold=True, size=16)
-    instrucciones = [
-        "1. Completa la hoja 'Equipos'. Una fila corresponde a una máquina.",
-        "2. Usa las listas desplegables para Empresa, Agencia, Área, Marca, Modelo, Tipo, Modalidad y Estado.",
-        "3. Número de serie identifica la máquina y debe evitar duplicados.",
-        "4. IP y Observaciones pueden quedar vacíos si no corresponde.",
-        "5. Si Contador actual queda vacío, la aplicación lo tomará como 0.",
-        "6. Si Fecha de instalación queda vacía, la aplicación usará la fecha actual.",
-        "7. Guarda el archivo como .xlsx y súbelo en la pestaña 'Importar desde Excel'.",
-    ]
-    for i, texto in enumerate(instrucciones, start=3):
-        info.cell(i, 1, texto)
-    info.column_dimensions["A"].width = 115
-    return wb
-
-
-def bytes_plantilla_equipos(empresas, agencias, areas, df_equipos):
-    wb = generar_plantilla_equipos_excel(empresas, agencias, areas, df_equipos)
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return buffer.getvalue()
-
-
-def validar_dataframe_equipos(df_importado, df_equipos_existentes):
-    """Valida el Excel y devuelve filas válidas y un reporte de errores."""
-    columnas_excel = [
-        "Empresa", "Agencia", "Área", "Marca", "Modelo", "Número de serie",
-        "Tipo", "IP", "Modalidad", "Estado", "Contador actual",
-        "Fecha de instalación", "Observaciones"
-    ]
-    faltantes = [c for c in columnas_excel if c not in df_importado.columns]
-    if faltantes:
-        return pd.DataFrame(), pd.DataFrame(), [f"Faltan columnas: {', '.join(faltantes)}"]
-
-    df = df_importado[columnas_excel].copy()
-    df = df.dropna(how="all")
-    errores = []
-    series_existentes = set()
-    if not df_equipos_existentes.empty and "Numero Serie" in df_equipos_existentes.columns:
-        series_existentes = {
-            str(x).strip().lower() for x in df_equipos_existentes["Numero Serie"].dropna()
-            if str(x).strip()
-        }
-    series_archivo = set()
-    filas_validas = []
-    filas_error = []
-
-    for indice, fila in df.iterrows():
-        numero_fila = int(indice) + 2
-        registro = fila.to_dict()
-        fila_errores = []
-
-        for campo in ["Empresa", "Agencia", "Área", "Marca", "Modelo", "Número de serie", "Tipo"]:
-            if pd.isna(registro[campo]) or not str(registro[campo]).strip():
-                fila_errores.append(f"{campo} vacío")
-
-        serie = "" if pd.isna(registro["Número de serie"]) else str(registro["Número de serie"]).strip()
-        serie_key = serie.lower()
-        if serie_key:
-            if serie_key in series_existentes:
-                fila_errores.append("Número de serie ya existe en Equipos")
-            if serie_key in series_archivo:
-                fila_errores.append("Número de serie duplicado dentro del Excel")
-            series_archivo.add(serie_key)
-
-        modalidad = "Alquiler" if pd.isna(registro["Modalidad"]) or not str(registro["Modalidad"]).strip() else str(registro["Modalidad"]).strip()
-        estado = "Activo" if pd.isna(registro["Estado"]) or not str(registro["Estado"]).strip() else str(registro["Estado"]).strip()
-        if modalidad not in ["Alquiler", "Venta", "Propio", "Otro"]:
-            fila_errores.append(f"Modalidad no válida: {modalidad}")
-        if estado not in ["Activo", "Mantenimiento", "Baja", "Retirado"]:
-            fila_errores.append(f"Estado no válido: {estado}")
-
-        contador = registro["Contador actual"]
-        if pd.isna(contador) or str(contador).strip() == "":
-            contador = 0
-        try:
-            contador = int(float(contador))
-            if contador < 0:
-                raise ValueError
-        except Exception:
-            fila_errores.append("Contador actual no válido")
-            contador = 0
-
-        fecha = registro["Fecha de instalación"]
-        if pd.isna(fecha) or str(fecha).strip() == "":
-            fecha = datetime.now().date()
-        else:
-            fecha_convertida = pd.to_datetime(fecha, errors="coerce")
-            if pd.isna(fecha_convertida):
-                fila_errores.append("Fecha de instalación no válida")
-                fecha = datetime.now().date()
-            else:
-                fecha = fecha_convertida.date()
-
-        if fila_errores:
-            registro["Fila"] = numero_fila
-            registro["Errores"] = "; ".join(fila_errores)
-            filas_error.append(registro)
-        else:
-            filas_validas.append({
-                "Empresa": str(registro["Empresa"]).strip(),
-                "Agencia": str(registro["Agencia"]).strip(),
-                "Area": str(registro["Área"]).strip(),
-                "Marca": str(registro["Marca"]).strip(),
-                "Modelo": str(registro["Modelo"]).strip(),
-                "Numero Serie": serie,
-                "Tipo": str(registro["Tipo"]).strip(),
-                "IP": None if pd.isna(registro["IP"]) or not str(registro["IP"]).strip() else str(registro["IP"]).strip(),
-                "Modalidad": modalidad,
-                "Estado": estado,
-                "Contador Actual": contador,
-                "Fecha Instalacion": fecha.isoformat(),
-                "Observaciones": None if pd.isna(registro["Observaciones"]) or not str(registro["Observaciones"]).strip() else str(registro["Observaciones"]).strip(),
-            })
-
-    return pd.DataFrame(filas_validas), pd.DataFrame(filas_error), errores
-
-
-def importar_equipos_masivo(df_validos):
-    try:
-        if df_validos.empty:
-            return 0, "No hay filas válidas para importar."
-        supabase = conectar_supabase()
-        registros = df_validos.to_dict(orient="records")
-        for inicio in range(0, len(registros), 100):
-            supabase.table("Equipos").insert(registros[inicio:inicio + 100]).execute()
-        st.cache_data.clear()
-        return len(registros), None
-    except Exception as e:
-        return 0, str(e)
-
-
-def actualizar_equipo(equipo_id, empresa, agencia, area, marca, modelo, numero_serie,
-                      tipo, ip, modalidad, estado, contador_actual,
-                      fecha_instalacion, observaciones):
-    try:
-        supabase = conectar_supabase()
-        cambios = {
-            "Empresa": _valor_opcional(empresa),
-            "Agencia": _valor_opcional(agencia),
-            "Area": _valor_opcional(area),
-            "Marca": _valor_opcional(marca),
-            "Modelo": _valor_opcional(modelo),
-            "Numero Serie": _valor_opcional(numero_serie),
-            "Tipo": _valor_opcional(tipo),
-            "IP": _valor_opcional(ip),
-            "Modalidad": _valor_opcional(modalidad),
-            "Estado": _valor_opcional(estado),
-            "Contador Actual": int(contador_actual or 0),
-            "Fecha Instalacion": fecha_instalacion.isoformat() if fecha_instalacion else None,
-            "Observaciones": _valor_opcional(observaciones),
-        }
-        supabase.table("Equipos").update(cambios).eq("id", int(equipo_id)).execute()
-        st.cache_data.clear()
-        return True, None
-    except Exception as e:
-        return False, str(e)
-
-
-def eliminar_equipo(equipo_id):
-    try:
-        supabase = conectar_supabase()
-        supabase.table("Equipos").delete().eq("id", int(equipo_id)).execute()
-        st.cache_data.clear()
-        return True, None
-    except Exception as e:
-        return False, str(e)
-
-
-def obtener_lecturas_equipo(equipo_id):
-    try:
-        supabase = conectar_supabase()
-        response = (
-            supabase.table("Lecturas_Contadores")
-            .select("*")
-            .eq("equipo_id", int(equipo_id))
-            .order("Fecha", desc=True)
-            .execute()
-        )
-        return pd.DataFrame(response.data)
-    except Exception as e:
-        st.warning(f"Aviso al leer contadores: {e}")
-        return pd.DataFrame()
-
-
-def registrar_lectura_equipo(equipo_id, contador, fuente, usuario, observaciones):
-    try:
-        supabase = conectar_supabase()
-        supabase.table("Lecturas_Contadores").insert({
-            "equipo_id": int(equipo_id),
-            "Fecha": obtener_hora_local_bo().isoformat(),
-            "Contador": int(contador),
-            "Fuente": _valor_opcional(fuente),
-            "Usuario": _valor_opcional(usuario),
-            "Observaciones": _valor_opcional(observaciones),
-        }).execute()
-
-        supabase.table("Equipos").update({
-            "Contador Actual": int(contador)
-        }).eq("id", int(equipo_id)).execute()
-
-        st.cache_data.clear()
-        return True, None
-    except Exception as e:
-        return False, str(e)
-
-
 # --- FUNCIONES DE SOPORTES DE INVENTARIO ---
 
 @st.cache_data(ttl=60)
@@ -727,34 +409,6 @@ def registrar_insumo(nombre, categoria, cantidad, stock_minimo, p_tecnico, p_cli
         return False, f"❌ Error de Supabase: {e}"
 
 # --- OBTENER ÚLTIMO REGISTRO DE ALQUILER PARA LOS CONTADORES ---
-
-def registrar_consumo_equipo(equipo_id, insumo, cantidad, fecha, usuario, servicio_id=None, empresa=None, agencia=None, area=None, observaciones=None):
-    """Registra el consumo de un insumo asociado a un equipo específico."""
-    supabase = conectar_supabase()
-    registro = {
-        "equipo_id": int(equipo_id),
-        "insumo": _valor_opcional(insumo),
-        "cantidad": float(cantidad),
-        "fecha": str(fecha),
-        "usuario": _valor_opcional(usuario),
-        "servicio_id": int(servicio_id) if servicio_id is not None and not pd.isna(servicio_id) else None,
-        "empresa": _valor_opcional(empresa),
-        "agencia": _valor_opcional(agencia),
-        "area": _valor_opcional(area),
-        "observaciones": _valor_opcional(observaciones),
-    }
-    return supabase.table("Consumo_Equipos").insert(registro).execute()
-
-
-def obtener_consumos_equipos():
-    try:
-        supabase = conectar_supabase()
-        response = supabase.table("Consumo_Equipos").select("*").order("fecha", desc=True).execute()
-        return pd.DataFrame(response.data)
-    except Exception as e:
-        st.warning(f"Aviso al leer consumo por equipo: {e}")
-        return pd.DataFrame()
-
 def obtener_ultimo_alquiler(insumo, empresa, agencia, area):
     """Busca en la tabla Alquileres de Supabase asignando correctamente Agencia y Área."""
     try:
@@ -1082,17 +736,6 @@ if st.session_state["menu_activo"] == "Inicio":
             if st.button("👥 Configuración\ny Usuarios\n\nRoles y ajustes", key="card_config"):
                 st.session_state["menu_activo"] = "Configuración y Gestión de Usuarios"
                 st.rerun()
-
-
-        # --- GESTIÓN DE EQUIPOS ---
-        st.markdown("---")
-        st.subheader("🖨️ Gestión de Equipos y Contadores")
-        col_eq1, col_eq2, col_eq3 = st.columns(3)
-
-        with col_eq1:
-            if st.button("🖨️ Equipos\n\nClientes y máquinas", key="card_equipos"):
-                st.session_state["menu_activo"] = "Gestión de Equipos"
-                st.rerun()
     else:
         # --- VISTA PARA EL TÉCNICO (Solo 3 tarjetas) ---
         col_t1, col_t2, col_t3 = st.columns(3)
@@ -1171,1218 +814,6 @@ else:
 # ----------------------------------------------------------------------------------
 # 1.    OPERACIONES DE STOCK (ENTRADAS, SALIDAS Y ALERTAS)
 # ----------------------------------------------------------------------------------
-    if seccion in ["Gestión de Equipos", "Gestión de Equipos y Contadores"]:
-        st.subheader("🖨️ Gestión de Equipos")
-        st.caption("Administra clientes, máquinas, datos de red, estado y contadores.")
-
-        df_equipos = obtener_equipos()
-
-        tab_alquileres, tab_clientes, tab_dashboard, tab_control, tab_rendimiento_eq, tab_consumo_eq, tab_lista, tab_nuevo, tab_importar, tab_contador = st.tabs([
-            "🏢 Alquileres",
-            "👤 Clientes",
-            "📊 Dashboard",
-            "📅 Control de lecturas",
-            "📈 Rendimiento por equipo",
-            "🧴 Consumo por equipo",
-            "📋 Equipos registrados",
-            "➕ Registrar equipo",
-            "📥 Importar desde Excel",
-            "🔢 Registrar contador"
-        ])
-
-        with tab_alquileres:
-            st.markdown("### 🏢 Gestión de Alquileres")
-            st.caption("Empresa → Agencia → Área → Equipos en alquiler")
-
-            with st.expander("🖨️ Equipos actualmente en alquiler", expanded=True):
-                df_alq = df_equipos.copy()
-                if not df_alq.empty and "Modalidad" in df_alq.columns:
-                    df_alq = df_alq[df_alq["Modalidad"].fillna("").astype(str).str.strip().str.lower() == "alquiler"]
-                if df_alq.empty:
-                    st.info("No hay equipos con modalidad Alquiler registrados todavía.")
-                else:
-                    cols_alq = [c for c in ["Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie", "Estado", "Contador Actual"] if c in df_alq.columns]
-                    st.dataframe(df_alq[cols_alq], use_container_width=True, hide_index=True)
-
-            st.markdown("---")
-            st.markdown("### 🏢 Empresas, agencias y áreas")
-            st.caption("Administra aquí la estructura de tus clientes de alquiler. La información continúa guardándose en Supabase.")
-
-            col_param_izq, col_param_der = st.columns([1.2, 2.0])
-            
-            # --- COLUMNA IZQUIERDA: FORMULARIOS DE REGISTRO INTELIGENTE (RELACIONAL) ---
-            with col_param_izq:
-                st.write("### ➕ Añadir Nuevo Destino")
-                
-                # 1. FORMULARIO EMPRESA
-                with st.form("alq_nueva_empresa_form", clear_on_submit=True):
-                    st.write("**1. Nueva Empresa / Cliente**")
-                    nueva_emp = st.text_input("Nombre de la Empresa:", placeholder="Ej: Constructora Gamma")
-                    guardar_emp_btn = st.form_submit_button("Añadir Empresa")
-                    
-                if guardar_emp_btn:
-                    if nueva_emp.strip() == "":
-                        st.error("Por favor, escribe un nombre válido.")
-                    elif nueva_emp.strip() in empresas_disponibles:
-                        st.warning("Esta empresa ya se encuentra registrada.")
-                    else:
-                        with st.spinner("Guardando empresa..."):
-                            registrar_parametro(nueva_emp.strip(), "Empresa")
-                        st.success(f"¡Empresa '{nueva_emp}' añadida correctamente!")
-                        st.cache_data.clear()
-                        st.rerun()
-                        
-                st.markdown("---")
-                
-                # 2. FORMULARIO AGENCIA (RELACIONADO CON EMPRESA)
-                empresas_para_seleccion = [e for e in empresas_disponibles if e not in ["Sin Registrar", ""]]
-                with st.form("alq_nueva_agencia_form", clear_on_submit=True):
-                    st.write("**2. Nueva Agencia (Relacionada con Empresa)**")
-                    if empresas_para_seleccion:
-                        empresa_seleccionada_ag = st.selectbox("Selecciona a qué Empresa corresponde:", empresas_para_seleccion)
-                        nueva_ag_nombre = st.text_input("Nombre de la Agencia:", placeholder="Ej: Sucursal Norte")
-                        guardar_ag_btn = st.form_submit_button("Añadir Agencia")
-                    else:
-                        st.info("⚠️ Registra una empresa primero para poder agregar agencias.")
-                        guardar_ag_btn = False
-                    
-                if guardar_ag_btn:
-                    if nueva_ag_nombre.strip() == "":
-                        st.error("Por favor, escribe un nombre de agencia válido.")
-                    else:
-                        nueva_ag_completa = f"{empresa_seleccionada_ag} - {nueva_ag_nombre.strip()}"
-                        if nueva_ag_completa in agencias_disponibles:
-                            st.warning("Esta agencia ya se encuentra registrada para esta empresa.")
-                        else:
-                            with st.spinner("Guardando agencia..."):
-                                registrar_parametro(nueva_ag_completa, "Agencia")
-                            st.success(f"¡Agencia '{nueva_ag_completa}' añadida correctamente!")
-                            st.cache_data.clear()
-                            st.rerun()
-                
-                st.markdown("---")
-                
-                # 3. FORMULARIO ÁREA (RELACIONADO CON AGENCIA)
-                agencias_para_seleccion = [ag for ag in agencias_disponibles if ag not in ["Sin Registrar", ""]]
-                with st.form("alq_nueva_area_form", clear_on_submit=True):
-                    st.write("**3. Nueva Área / Obra (Relacionada con Agencia)**")
-                    if agencias_para_seleccion:
-                        agencia_seleccionada_ar = st.selectbox("Selecciona a qué Agencia corresponde:", agencias_para_seleccion)
-                        nueva_ar_nombre = st.text_input("Nombre del Área / Obra:", placeholder="Ej: Proyecto Piso 2")
-                        guardar_ar_btn = st.form_submit_button("Añadir Área")
-                    else:
-                        st.info("⚠️ Registra una agencia primero para poder asociar un área.")
-                        guardar_ar_btn = False
-                    
-                if guardar_ar_btn:
-                    if nueva_ar_nombre.strip() == "":
-                        st.error("Por favor, escribe un nombre de área válido.")
-                    else:
-                        nueva_ar_completa = f"{agencia_seleccionada_ar} - {nueva_ar_nombre.strip()}"
-                        if nueva_ar_completa in areas_disponibles:
-                            st.warning("Esta área ya se encuentra registrada para esta agencia.")
-                        else:
-                            with st.spinner("Guardando área..."):
-                                registrar_parametro(nueva_ar_completa, "Area")
-                            st.success(f"¡Área '{nueva_ar_completa}' añadida correctamente!")
-                            st.cache_data.clear()
-                            st.rerun()
-
-            # --- COLUMNA DERECHA: EDICIÓN Y ELIMINACIÓN DIRECTA DESDE LOS DESTINOS ---
-            with col_param_der:
-                st.write("### 📋 Destinos Actuales y Configuración de Borrado")
-                st.info("💡 **Acción directa:** Selecciona y elimina cualquier destino que ya no utilices directamente desde su respectiva columna.")
-                
-                c_emp, c_age, c_are = st.columns(3)
-                
-                # COLUMNA DE EMPRESAS
-                with c_emp:
-                    st.markdown("🏢 **Empresa**")
-                    empresas_filtradas = [e for e in empresas_disponibles if e not in ["Sin Registrar", ""]]
-                    for e in empresas_filtradas:
-                        st.markdown(f"• {e}")
-                    
-                    st.markdown("---")
-                    if empresas_filtradas:
-                        empresa_a_borrar = st.selectbox("Eliminar Empresa:", empresas_filtradas, key="alq_del_emp_sel")
-                        conf_emp = st.checkbox("Confirmar borrado", key="alq_conf_emp_check")
-                        if st.button("🗑️ Eliminar", key="alq_del_emp_btn"):
-                            if conf_emp:
-                                with st.spinner("Borrando..."):
-                                    eliminar_parametro(empresa_a_borrar, "Empresa")
-                                st.success("Empresa eliminada.")
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
-                                st.rerun()
-                            else:
-                                st.error("Confirma la casilla primero.")
-                    else:
-                        st.caption("No hay empresas registradas.")
-
-                # COLUMNA DE AGENCIAS
-                with c_age:
-                    st.markdown("🏢 **Agencia**")
-                    agencias_filtradas = [ag for ag in agencias_disponibles if ag not in ["Sin Registrar", ""]]
-                    for ag in agencias_filtradas:
-                        st.markdown(f"• {ag}")
-                        
-                    st.markdown("---")
-                    if agencias_filtradas:
-                        agencia_a_borrar = st.selectbox("Eliminar Agencia:", agencias_filtradas, key="alq_del_ag_sel")
-                        conf_ag = st.checkbox("Confirmar borrado", key="alq_conf_ag_check")
-                        if st.button("🗑️ Eliminar", key="alq_del_ag_btn"):
-                            if conf_ag:
-                                with st.spinner("Borrando..."):
-                                    eliminar_parametro(agencia_a_borrar, "Agencia")
-                                st.success("Agencia eliminada.")
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
-                                st.rerun()
-                            else:
-                                st.error("Confirma la casilla primero.")
-                    else:
-                        st.caption("No hay agencias registradas.")
-
-                # COLUMNA DE ÁREAS
-                with c_are:
-                    st.markdown("📍 **Área**")
-                    areas_filtradas = [a for a in areas_disponibles if a not in ["Sin Registrar", ""]]
-                    for a in areas_filtradas:
-                        st.markdown(f"• {a}")
-                        
-                    st.markdown("---")
-                    if areas_filtradas:
-                        area_a_borrar = st.selectbox("Eliminar Área:", areas_filtradas, key="alq_del_ar_sel")
-                        conf_ar = st.checkbox("Confirmar borrado", key="alq_conf_ar_check")
-                        if st.button("🗑️ Eliminar", key="alq_del_ar_btn"):
-                            if conf_ar:
-                                with st.spinner("Borrando..."):
-                                    eliminar_parametro(area_a_borrar, "Area")
-                                st.success("Área eliminada.")
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
-                                st.rerun()
-                            else:
-                                st.error("Confirma la casilla primero.")
-                    else:
-                        st.caption("No hay áreas registradas.")
-                        
-
-
-        with tab_clientes:
-            st.markdown("### 👤 Gestión de Equipos de Clientes")
-            st.caption("Equipos cuya modalidad no es Alquiler.")
-            df_cli = df_equipos.copy()
-            if not df_cli.empty and "Modalidad" in df_cli.columns:
-                df_cli = df_cli[df_cli["Modalidad"].fillna("").astype(str).str.strip().str.lower() != "alquiler"]
-            if df_cli.empty:
-                st.info("No hay equipos de clientes registrados todavía.")
-            else:
-                c1, c2, c3 = st.columns(3)
-                c1.metric("👤 Equipos de clientes", len(df_cli))
-                estados_cli = df_cli["Estado"].fillna("").astype(str).str.lower() if "Estado" in df_cli.columns else pd.Series(dtype=str)
-                c2.metric("✅ Activos", int((estados_cli == "activo").sum()))
-                cont_cli = pd.to_numeric(df_cli["Contador Actual"], errors="coerce").fillna(0) if "Contador Actual" in df_cli.columns else pd.Series(dtype=float)
-                c3.metric("🔢 Contador", f"{int(cont_cli.sum()):,}".replace(',', '.'))
-                cols_cli = [c for c in ["Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie", "Modalidad", "Estado", "Contador Actual"] if c in df_cli.columns]
-                st.dataframe(df_cli[cols_cli], use_container_width=True, hide_index=True)
-
-        with tab_dashboard:
-            st.markdown("### 📊 Resumen de equipos")
-            st.caption("Vista rápida del parque de equipos registrado en el sistema.")
-
-            if df_equipos.empty:
-                st.info("Todavía no hay equipos registrados para mostrar estadísticas.")
-            else:
-                df_dash = df_equipos.copy()
-                for col in ["Empresa", "Agencia", "Marca", "Modelo", "Tipo", "Modalidad", "Estado"]:
-                    if col not in df_dash.columns:
-                        df_dash[col] = "Sin registrar"
-                    df_dash[col] = df_dash[col].fillna("Sin registrar").astype(str).str.strip()
-                    df_dash.loc[df_dash[col] == "", col] = "Sin registrar"
-
-                df_dash["Contador Actual"] = pd.to_numeric(
-                    df_dash.get("Contador Actual", 0), errors="coerce"
-                ).fillna(0)
-
-                total_equipos = len(df_dash)
-                activos = int((df_dash["Estado"].str.lower() == "activo").sum())
-                alquileres = int((df_dash["Modalidad"].str.lower() == "alquiler").sum())
-                contador_total = int(df_dash["Contador Actual"].sum())
-
-                k1, k2, k3, k4 = st.columns(4)
-                k1.metric("🖨️ Equipos registrados", total_equipos)
-                k2.metric("✅ Equipos activos", activos)
-                k3.metric("💼 En alquiler", alquileres)
-                k4.metric("🔢 Contador acumulado", f"{contador_total:,}".replace(",", "."))
-
-                st.markdown("---")
-                g1, g2 = st.columns(2)
-
-                with g1:
-                    resumen_estado = (
-                        df_dash.groupby("Estado", dropna=False)
-                        .size().reset_index(name="Cantidad")
-                        .sort_values("Cantidad", ascending=False)
-                    )
-                    fig_estado = px.bar(
-                        resumen_estado, x="Estado", y="Cantidad",
-                        title="Equipos por estado", text="Cantidad"
-                    )
-                    fig_estado.update_layout(margin=dict(l=10, r=10, t=50, b=10))
-                    st.plotly_chart(fig_estado, use_container_width=True, key="grafico_estado_equipos")
-
-                with g2:
-                    resumen_modalidad = (
-                        df_dash.groupby("Modalidad", dropna=False)
-                        .size().reset_index(name="Cantidad")
-                        .sort_values("Cantidad", ascending=False)
-                    )
-                    fig_modalidad = px.bar(
-                        resumen_modalidad, x="Modalidad", y="Cantidad",
-                        title="Equipos por modalidad", text="Cantidad"
-                    )
-                    fig_modalidad.update_layout(margin=dict(l=10, r=10, t=50, b=10))
-                    st.plotly_chart(fig_modalidad, use_container_width=True, key="grafico_modalidad_equipos")
-
-                st.markdown("### 🏢 Distribución por empresa")
-                resumen_empresa = (
-                    df_dash.groupby("Empresa", dropna=False)
-                    .size().reset_index(name="Cantidad")
-                    .sort_values("Cantidad", ascending=False)
-                )
-                st.dataframe(resumen_empresa, use_container_width=True, hide_index=True)
-
-                st.markdown("### 🖨️ Equipos con mayor contador")
-                columnas_top = [c for c in ["Empresa", "Agencia", "Marca", "Modelo", "Numero Serie", "Contador Actual"] if c in df_dash.columns]
-                top_contadores = df_dash.sort_values("Contador Actual", ascending=False).head(10)
-                st.dataframe(
-                    top_contadores[columnas_top],
-                    use_container_width=True, hide_index=True,
-                    column_config={"Contador Actual": st.column_config.NumberColumn("Contador", format="%d")}
-                )
-
-        with tab_control:
-            st.markdown("### 📅 Control de lecturas")
-            st.caption("Identifica rápidamente qué equipos tienen lectura reciente y cuáles necesitan seguimiento.")
-
-            if df_equipos.empty:
-                st.info("Todavía no hay equipos registrados para controlar lecturas.")
-            else:
-                df_control = df_equipos.copy()
-
-                # Normalizamos columnas para evitar errores cuando algún dato venga vacío.
-                for col in ["Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie", "Modalidad", "Estado"]:
-                    if col not in df_control.columns:
-                        df_control[col] = "Sin registrar"
-                    df_control[col] = df_control[col].fillna("Sin registrar").astype(str).str.strip()
-                    df_control.loc[df_control[col] == "", col] = "Sin registrar"
-
-                hoy = obtener_hora_local_bo().date()
-                registros_control = []
-
-                # Buscamos la última lectura de cada equipo.
-                for _, equipo in df_control.iterrows():
-                    equipo_id = int(equipo["id"])
-                    df_hist = obtener_lecturas_equipo(equipo_id)
-                    ultima_fecha = None
-                    ultima_contador = None
-
-                    if not df_hist.empty and "Fecha" in df_hist.columns:
-                        fechas = pd.to_datetime(df_hist["Fecha"], errors="coerce")
-                        if fechas.notna().any():
-                            idx_ultima = fechas.idxmax()
-                            ultima_fecha = fechas.loc[idx_ultima]
-                            try:
-                                ultima_contador = int(pd.to_numeric(df_hist.loc[idx_ultima, "Contador"], errors="coerce"))
-                            except Exception:
-                                ultima_contador = None
-
-                    if ultima_fecha is not None and pd.notna(ultima_fecha):
-                        fecha_lectura = ultima_fecha.date()
-                        dias = max(0, (hoy - fecha_lectura).days)
-                    else:
-                        fecha_lectura = None
-                        dias = None
-
-                    if fecha_lectura is None:
-                        estado_lectura = "🔴 Sin lectura"
-                    elif dias <= 30:
-                        estado_lectura = "🟢 Actual"
-                    elif dias <= 60:
-                        estado_lectura = "🟡 Pendiente"
-                    else:
-                        estado_lectura = "🔴 Atrasado"
-
-                    registros_control.append({
-                        "id": equipo_id,
-                        "Empresa": equipo["Empresa"],
-                        "Agencia": equipo["Agencia"],
-                        "Área": equipo["Area"],
-                        "Marca": equipo["Marca"],
-                        "Modelo": equipo["Modelo"],
-                        "Número de serie": equipo["Numero Serie"],
-                        "Modalidad": equipo["Modalidad"],
-                        "Estado equipo": equipo["Estado"],
-                        "Contador": int(pd.to_numeric(equipo.get("Contador Actual", 0), errors="coerce") or 0),
-                        "Última lectura": fecha_lectura,
-                        "Días desde lectura": dias if dias is not None else "—",
-                        "Estado lectura": estado_lectura,
-                    })
-
-                df_control = pd.DataFrame(registros_control)
-
-                # Filtros principales.
-                f1, f2, f3 = st.columns(3)
-                with f1:
-                    empresas_control = ["Todas"] + sorted(df_control["Empresa"].dropna().unique().tolist())
-                    filtro_empresa_control = st.selectbox("🏢 Empresa", empresas_control, key="control_empresa")
-                with f2:
-                    agencias_control_df = df_control if filtro_empresa_control == "Todas" else df_control[df_control["Empresa"] == filtro_empresa_control]
-                    agencias_control = ["Todas"] + sorted(agencias_control_df["Agencia"].dropna().unique().tolist())
-                    filtro_agencia_control = st.selectbox("📍 Agencia", agencias_control, key="control_agencia")
-                with f3:
-                    estados_lectura = ["Todos", "🟢 Actual", "🟡 Pendiente", "🔴 Atrasado", "🔴 Sin lectura"]
-                    filtro_estado_lectura = st.selectbox("📅 Estado de lectura", estados_lectura, key="control_estado_lectura")
-
-                df_filtrado_control = df_control.copy()
-                if filtro_empresa_control != "Todas":
-                    df_filtrado_control = df_filtrado_control[df_filtrado_control["Empresa"] == filtro_empresa_control]
-                if filtro_agencia_control != "Todas":
-                    df_filtrado_control = df_filtrado_control[df_filtrado_control["Agencia"] == filtro_agencia_control]
-                if filtro_estado_lectura != "Todos":
-                    df_filtrado_control = df_filtrado_control[df_filtrado_control["Estado lectura"] == filtro_estado_lectura]
-
-                actual_count = int((df_control["Estado lectura"] == "🟢 Actual").sum())
-                pendiente_count = int((df_control["Estado lectura"] == "🟡 Pendiente").sum())
-                atrasado_count = int((df_control["Estado lectura"] == "🔴 Atrasado").sum())
-                sin_lectura_count = int((df_control["Estado lectura"] == "🔴 Sin lectura").sum())
-
-                k1, k2, k3, k4 = st.columns(4)
-                k1.metric("🟢 Actual", actual_count)
-                k2.metric("🟡 Pendiente", pendiente_count)
-                k3.metric("🔴 Atrasado", atrasado_count)
-                k4.metric("⚪ Sin lectura", sin_lectura_count)
-
-                st.markdown("---")
-                if df_filtrado_control.empty:
-                    st.info("No hay equipos que coincidan con los filtros seleccionados.")
-                else:
-                    columnas_control = [
-                        "Empresa", "Agencia", "Área", "Marca", "Modelo",
-                        "Número de serie", "Contador", "Última lectura",
-                        "Días desde lectura", "Estado lectura"
-                    ]
-                    st.dataframe(
-                        df_filtrado_control[columnas_control],
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Contador": st.column_config.NumberColumn("Contador", format="%d"),
-                            "Última lectura": st.column_config.DateColumn("Última lectura", format="DD/MM/YYYY"),
-                            "Días desde lectura": st.column_config.TextColumn("Días desde lectura"),
-                            "Estado lectura": st.column_config.TextColumn("Estado de lectura"),
-                        }
-                    )
-
-                    st.markdown("### 🔎 Seguimiento de un equipo")
-                    opciones_control = {
-                        f'#{int(row["id"])} — {row["Marca"]} {row["Modelo"]} — {row["Número de serie"]}': int(row["id"])
-                        for _, row in df_filtrado_control.iterrows()
-                    }
-                    if opciones_control:
-                        equipo_control_label = st.selectbox(
-                            "Selecciona un equipo para consultar su historial",
-                            list(opciones_control.keys()),
-                            key="equipo_control_sel"
-                        )
-                        equipo_control_id = opciones_control[equipo_control_label]
-                        fila_control = df_control[df_control["id"] == equipo_control_id].iloc[0]
-
-                        # Calculamos cuántas copias se hicieron desde la lectura anterior
-                        # y, si hay datos suficientes, cuántas se hicieron en el mes actual.
-                        copias_ultima_lectura = 0
-                        copias_mes_actual = 0
-                        df_hist_control = obtener_lecturas_equipo(equipo_control_id)
-                        if not df_hist_control.empty and "Contador" in df_hist_control.columns:
-                            hist_ctrl = df_hist_control.copy()
-                            hist_ctrl["_fecha_dt"] = pd.to_datetime(hist_ctrl.get("Fecha"), errors="coerce")
-                            hist_ctrl["_contador_num"] = pd.to_numeric(hist_ctrl["Contador"], errors="coerce")
-                            hist_ctrl = hist_ctrl.dropna(subset=["_fecha_dt", "_contador_num"]).sort_values("_fecha_dt", ascending=False)
-
-                            if len(hist_ctrl) >= 2:
-                                copias_ultima_lectura = max(0, int(hist_ctrl.iloc[0]["_contador_num"] - hist_ctrl.iloc[1]["_contador_num"]))
-
-                            if not hist_ctrl.empty:
-                                ahora = obtener_hora_local_bo()
-                                inicio_mes = pd.Timestamp(ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0))
-                                lecturas_mes = hist_ctrl[hist_ctrl["_fecha_dt"] >= inicio_mes]
-                                if not lecturas_mes.empty:
-                                    ultima_mes = int(lecturas_mes.iloc[0]["_contador_num"])
-                                    anteriores_mes = hist_ctrl[hist_ctrl["_fecha_dt"] < inicio_mes]
-                                    if not anteriores_mes.empty:
-                                        base_mes = int(anteriores_mes.iloc[0]["_contador_num"])
-                                        copias_mes_actual = max(0, ultima_mes - base_mes)
-                                    elif len(lecturas_mes) >= 2:
-                                        copias_mes_actual = max(0, int(lecturas_mes.iloc[0]["_contador_num"] - lecturas_mes.iloc[-1]["_contador_num"]))
-
-                        c1, c2, c3, c4 = st.columns(4)
-                        c1.metric("🔢 Contador actual", f'{int(fila_control["Contador"]):,}'.replace(",", "."))
-                        c2.metric("📅 Última lectura", fila_control["Última lectura"].strftime("%d/%m/%Y") if pd.notna(fila_control["Última lectura"]) else "Sin lectura")
-                        c3.metric("📄 Copias desde lectura anterior", f"{copias_ultima_lectura:,}".replace(",", "."))
-                        c4.metric("📆 Copias este mes", f"{copias_mes_actual:,}".replace(",", "."))
-
-                        st.caption("💡 Este botón es un acceso rápido: te lleva al formulario de registro de una nueva lectura para el equipo seleccionado.")
-                        if st.button("🔢 Registrar nueva lectura", key="ir_registrar_lectura_control", use_container_width=True):
-                            st.session_state["equipo_contador_sel"] = next(
-                                (label for label, eid in {
-                                    f'#{int(row["id"])} — {row.get("Marca", "")} {row.get("Modelo", "")} — Serie: {row.get("Numero Serie", "")} — Contador: {row.get("Contador Actual", 0)}': int(row["id"])
-                                    for _, row in df_equipos.iterrows()
-                                }.items() if eid == equipo_control_id),
-                                None
-                            )
-                            st.session_state["ir_a_contadores"] = True
-                            st.rerun()
-
-        with tab_rendimiento_eq:
-            st.markdown("### 📈 Rendimiento por equipo")
-            st.caption("Calcula las copias realizadas a partir de las lecturas de contador de cada máquina.")
-
-            if df_equipos.empty:
-                st.info("Todavía no hay equipos registrados para calcular rendimiento.")
-            else:
-                # Normalizamos los datos básicos del equipo.
-                df_rq = df_equipos.copy()
-                for col in ["Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie", "Modalidad", "Estado"]:
-                    if col not in df_rq.columns:
-                        df_rq[col] = "Sin registrar"
-                    df_rq[col] = df_rq[col].fillna("Sin registrar").astype(str).str.strip()
-                    df_rq.loc[df_rq[col] == "", col] = "Sin registrar"
-
-                # Construimos una fila de rendimiento por equipo.
-                filas_rendimiento = []
-                ahora = obtener_hora_local_bo()
-                inicio_mes = pd.Timestamp(ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0))
-
-                for _, equipo in df_rq.iterrows():
-                    equipo_id = int(equipo["id"])
-                    df_hist = obtener_lecturas_equipo(equipo_id)
-
-                    hist = pd.DataFrame()
-                    if not df_hist.empty and "Contador" in df_hist.columns:
-                        hist = df_hist.copy()
-                        hist["_fecha"] = pd.to_datetime(hist.get("Fecha"), errors="coerce")
-                        hist["_contador"] = pd.to_numeric(hist.get("Contador"), errors="coerce")
-                        hist = hist.dropna(subset=["_fecha", "_contador"]).sort_values("_fecha")
-
-                    contador_actual = pd.to_numeric(equipo.get("Contador Actual", 0), errors="coerce")
-                    contador_actual = int(contador_actual) if pd.notna(contador_actual) else 0
-
-                    copias_acumuladas = 0
-                    copias_mes = 0
-                    promedio_diario = 0.0
-                    primera_fecha = None
-                    ultima_fecha = None
-                    lecturas = len(hist)
-
-                    if not hist.empty:
-                        primera_fecha = hist.iloc[0]["_fecha"]
-                        ultima_fecha = hist.iloc[-1]["_fecha"]
-
-                        # Copias desde la primera lectura registrada hasta la última.
-                        copias_acumuladas = max(0, int(hist.iloc[-1]["_contador"] - hist.iloc[0]["_contador"]))
-
-                        dias_periodo = max(0, (ultima_fecha.date() - primera_fecha.date()).days)
-                        if dias_periodo > 0:
-                            promedio_diario = copias_acumuladas / dias_periodo
-
-                        # Copias del mes actual: tomamos la lectura anterior al inicio
-                        # del mes como base y la última lectura del mes como final.
-                        lecturas_mes = hist[hist["_fecha"] >= inicio_mes]
-                        if not lecturas_mes.empty:
-                            ultima_mes = int(lecturas_mes.iloc[-1]["_contador"])
-                            anteriores = hist[hist["_fecha"] < inicio_mes]
-                            if not anteriores.empty:
-                                base_mes = int(anteriores.iloc[-1]["_contador"])
-                                copias_mes = max(0, ultima_mes - base_mes)
-                            elif len(lecturas_mes) >= 2:
-                                copias_mes = max(0, int(lecturas_mes.iloc[-1]["_contador"] - lecturas_mes.iloc[0]["_contador"]))
-
-                    filas_rendimiento.append({
-                        "id": equipo_id,
-                        "Empresa": equipo["Empresa"],
-                        "Agencia": equipo["Agencia"],
-                        "Área": equipo["Area"],
-                        "Marca": equipo["Marca"],
-                        "Modelo": equipo["Modelo"],
-                        "Número de serie": equipo["Numero Serie"],
-                        "Contador actual": contador_actual,
-                        "Copias acumuladas": copias_acumuladas,
-                        "Copias este mes": copias_mes,
-                        "Promedio copias/día": promedio_diario,
-                        "Lecturas": lecturas,
-                        "Primera lectura": primera_fecha.date() if primera_fecha is not None else None,
-                        "Última lectura": ultima_fecha.date() if ultima_fecha is not None else None,
-                    })
-
-                df_rendimiento_eq = pd.DataFrame(filas_rendimiento)
-
-                # Filtros de consulta.
-                rf1, rf2, rf3 = st.columns(3)
-                with rf1:
-                    lista_emp_r = ["Todas"] + sorted(df_rendimiento_eq["Empresa"].unique().tolist())
-                    filtro_emp_r = st.selectbox("🏢 Empresa", lista_emp_r, key="rend_eq_empresa")
-                with rf2:
-                    df_tmp_r = df_rendimiento_eq if filtro_emp_r == "Todas" else df_rendimiento_eq[df_rendimiento_eq["Empresa"] == filtro_emp_r]
-                    lista_ag_r = ["Todas"] + sorted(df_tmp_r["Agencia"].unique().tolist())
-                    filtro_ag_r = st.selectbox("📍 Agencia", lista_ag_r, key="rend_eq_agencia")
-                with rf3:
-                    opciones_orden = ["Copias este mes", "Copias acumuladas", "Promedio copias/día", "Contador actual"]
-                    orden_r = st.selectbox("📊 Ordenar por", opciones_orden, key="rend_eq_orden")
-
-                df_rend_filtrado = df_rendimiento_eq.copy()
-                if filtro_emp_r != "Todas":
-                    df_rend_filtrado = df_rend_filtrado[df_rend_filtrado["Empresa"] == filtro_emp_r]
-                if filtro_ag_r != "Todas":
-                    df_rend_filtrado = df_rend_filtrado[df_rend_filtrado["Agencia"] == filtro_ag_r]
-                df_rend_filtrado = df_rend_filtrado.sort_values(orden_r, ascending=False)
-
-                total_copias_mes = int(df_rend_filtrado["Copias este mes"].sum())
-                total_copias_acum = int(df_rend_filtrado["Copias acumuladas"].sum())
-                equipos_con_lecturas = int((df_rend_filtrado["Lecturas"] > 0).sum())
-                promedio_general = float(df_rend_filtrado["Promedio copias/día"].mean()) if not df_rend_filtrado.empty else 0.0
-
-                km1, km2, km3, km4 = st.columns(4)
-                km1.metric("🖨️ Equipos analizados", len(df_rend_filtrado))
-                km2.metric("📄 Copias este mes", f"{total_copias_mes:,}".replace(",", "."))
-                km3.metric("📊 Copias acumuladas", f"{total_copias_acum:,}".replace(",", "."))
-                km4.metric("📈 Promedio copias/día", f"{promedio_general:,.0f}".replace(",", "."))
-
-                st.markdown("---")
-                if df_rend_filtrado.empty:
-                    st.info("No hay equipos que coincidan con los filtros.")
-                else:
-                    columnas_r = [
-                        "Empresa", "Agencia", "Área", "Marca", "Modelo", "Número de serie",
-                        "Contador actual", "Copias acumuladas", "Copias este mes",
-                        "Promedio copias/día", "Lecturas", "Última lectura"
-                    ]
-                    st.dataframe(
-                        df_rend_filtrado[columnas_r],
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Contador actual": st.column_config.NumberColumn("Contador actual", format="%d"),
-                            "Copias acumuladas": st.column_config.NumberColumn("Copias acumuladas", format="%d"),
-                            "Copias este mes": st.column_config.NumberColumn("Copias este mes", format="%d"),
-                            "Promedio copias/día": st.column_config.NumberColumn("Promedio copias/día", format="%.0f"),
-                            "Lecturas": st.column_config.NumberColumn("Lecturas", format="%d"),
-                            "Última lectura": st.column_config.DateColumn("Última lectura", format="DD/MM/YYYY"),
-                        }
-                    )
-
-                    # Gráfico de los equipos con mayor volumen de copias del mes.
-                    st.markdown("### 🔝 Equipos con mayor volumen de copias este mes")
-                    top_r = df_rend_filtrado.sort_values("Copias este mes", ascending=False).head(10).copy()
-                    top_r["Equipo"] = top_r.apply(
-                        lambda r: f"{r['Marca']} {r['Modelo']} — {r['Número de serie']}", axis=1
-                    )
-                    fig_rend = px.bar(
-                        top_r.sort_values("Copias este mes"),
-                        x="Copias este mes",
-                        y="Equipo",
-                        orientation="h",
-                        title="Top 10 por copias del mes",
-                        text="Copias este mes"
-                    )
-                    fig_rend.update_layout(margin=dict(l=10, r=10, t=50, b=10))
-                    st.plotly_chart(fig_rend, use_container_width=True, key="grafico_rendimiento_equipos")
-
-                    st.markdown("### 🔎 Detalle de un equipo")
-                    opciones_det = {
-                        f'#{int(row["id"])} — {row["Marca"]} {row["Modelo"]} — {row["Número de serie"]}': int(row["id"])
-                        for _, row in df_rend_filtrado.iterrows()
-                    }
-                    equipo_det_label = st.selectbox(
-                        "Selecciona un equipo para analizarlo",
-                        list(opciones_det.keys()),
-                        key="rend_eq_detalle"
-                    )
-                    equipo_det_id = opciones_det[equipo_det_label]
-                    fila_det = df_rendimiento_eq[df_rendimiento_eq["id"] == equipo_det_id].iloc[0]
-                    hist_det = obtener_lecturas_equipo(equipo_det_id)
-
-                    d1, d2, d3, d4 = st.columns(4)
-                    d1.metric("🔢 Contador actual", f'{int(fila_det["Contador actual"]):,}'.replace(",", "."))
-                    d2.metric("📄 Copias este mes", f'{int(fila_det["Copias este mes"]):,}'.replace(",", "."))
-                    d3.metric("📊 Copias acumuladas", f'{int(fila_det["Copias acumuladas"]):,}'.replace(",", "."))
-                    d4.metric("📈 Promedio/día", f'{fila_det["Promedio copias/día"]:,.0f}'.replace(",", "."))
-
-                    if not hist_det.empty and "Contador" in hist_det.columns:
-                        hist_g = hist_det.copy()
-                        hist_g["Fecha"] = pd.to_datetime(hist_g["Fecha"], errors="coerce")
-                        hist_g["Contador"] = pd.to_numeric(hist_g["Contador"], errors="coerce")
-                        hist_g = hist_g.dropna(subset=["Fecha", "Contador"]).sort_values("Fecha")
-                        if not hist_g.empty:
-                            fig_hist = px.line(
-                                hist_g,
-                                x="Fecha",
-                                y="Contador",
-                                markers=True,
-                                title="Evolución del contador"
-                            )
-                            fig_hist.update_layout(margin=dict(l=10, r=10, t=50, b=10))
-                            st.plotly_chart(fig_hist, use_container_width=True, key="grafico_historial_equipo_rend")
-
-                    st.info(
-                        "💡 El cálculo de copias proviene exclusivamente de las lecturas de contador. "
-                        "El consumo exacto de tóner/repuestos por equipo lo vincularemos en el siguiente paso, "
-                        "porque actualmente la tabla Alquileres registra empresa/agencia/área e insumo, pero no un ID de equipo."
-                    )
-
-        with tab_consumo_eq:
-            st.markdown("### 🧴 Consumo de insumos por equipo")
-            st.caption("Consulta qué tóneres y repuestos se utilizaron en cada máquina. Los registros provienen de los servicios técnicos completados.")
-            df_consumo = obtener_consumos_equipos()
-            if df_consumo.empty:
-                st.info("Todavía no hay consumos asociados a equipos. Cuando completes un servicio con un insumo seleccionado, aparecerá aquí.")
-            else:
-                # Enriquecer con datos actuales del equipo.
-                df_c = df_consumo.copy()
-                eq_map = df_equipos.copy() if not df_equipos.empty else pd.DataFrame()
-                if not eq_map.empty and "id" in eq_map.columns:
-                    cols_eq = [c for c in ["id", "Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie"] if c in eq_map.columns]
-                    eq_map = eq_map[cols_eq].copy().rename(columns={"id": "equipo_id"})
-                    df_c["equipo_id"] = pd.to_numeric(df_c["equipo_id"], errors="coerce")
-                    df_c = df_c.merge(eq_map, on="equipo_id", how="left", suffixes=("", "_actual"))
-                if "fecha" in df_c.columns:
-                    df_c["fecha"] = pd.to_datetime(df_c["fecha"], errors="coerce")
-                if "cantidad" in df_c.columns:
-                    df_c["cantidad"] = pd.to_numeric(df_c["cantidad"], errors="coerce").fillna(0)
-
-                c1, c2, c3 = st.columns(3)
-                empresas_c = ["Todas"] + sorted([str(x) for x in df_c.get("Empresa", pd.Series(dtype=str)).dropna().unique() if str(x).strip()])
-                insumos_c = ["Todos"] + sorted([str(x) for x in df_c.get("insumo", pd.Series(dtype=str)).dropna().unique() if str(x).strip()])
-                with c1:
-                    f_emp_c = st.selectbox("Empresa", empresas_c, key="f_cons_emp")
-                with c2:
-                    f_ins_c = st.selectbox("Insumo", insumos_c, key="f_cons_ins")
-                with c3:
-                    f_desde_c = st.date_input("Desde", value=obtener_hora_local_bo().date().replace(day=1), key="f_cons_desde")
-
-                if f_emp_c != "Todas" and "Empresa" in df_c.columns:
-                    df_c = df_c[df_c["Empresa"].astype(str) == f_emp_c]
-                if f_ins_c != "Todos" and "insumo" in df_c.columns:
-                    df_c = df_c[df_c["insumo"].astype(str) == f_ins_c]
-                if "fecha" in df_c.columns:
-                    df_c = df_c[df_c["fecha"].dt.date >= f_desde_c]
-
-                st.dataframe(df_c, use_container_width=True, hide_index=True)
-                total_consumido = float(df_c["cantidad"].sum()) if "cantidad" in df_c.columns else 0
-                st.metric("Unidades de insumos consumidas", f"{total_consumido:,.0f}")
-
-        with tab_lista:
-            if df_equipos.empty:
-                st.info("No hay equipos registrados todavía.")
-            else:
-                busqueda_eq = st.text_input(
-                    "🔍 Buscar equipo",
-                    placeholder="Empresa, agencia, marca, modelo o número de serie...",
-                    key="buscar_equipos"
-                )
-
-                df_mostrar = df_equipos.copy()
-                if busqueda_eq.strip():
-                    texto = df_mostrar.fillna("").astype(str).agg(" ".join, axis=1)
-                    df_mostrar = df_mostrar[
-                        texto.str.contains(busqueda_eq.strip(), case=False, na=False)
-                    ]
-
-                columnas_visibles = [
-                    "id", "Empresa", "Agencia", "Area", "Marca", "Modelo",
-                    "Numero Serie", "Tipo", "IP", "Modalidad", "Estado",
-                    "Contador Actual", "Fecha Instalacion", "Observaciones"
-                ]
-                columnas_visibles = [c for c in columnas_visibles if c in df_mostrar.columns]
-                st.dataframe(
-                    df_mostrar[columnas_visibles],
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-                st.markdown("### ✏️ Editar / eliminar equipo")
-                opciones = {
-                    f'#{int(row["id"])} — {row.get("Marca", "")} {row.get("Modelo", "")} — {row.get("Numero Serie", "")}': int(row["id"])
-                    for _, row in df_mostrar.iterrows()
-                }
-
-                if opciones:
-                    equipo_sel_label = st.selectbox(
-                        "Selecciona el equipo:",
-                        list(opciones.keys()),
-                        key="equipo_editar_sel"
-                    )
-                    equipo_id = opciones[equipo_sel_label]
-                    fila = df_equipos[df_equipos["id"] == equipo_id].iloc[0]
-
-                    with st.expander("✏️ Editar datos del equipo"):
-                        e1, e2, e3 = st.columns(3)
-
-                        with e1:
-                            empresa_e = st.text_input("Empresa", value=str(fila.get("Empresa") or ""), key="ed_emp")
-                            agencia_e = st.text_input("Agencia", value=str(fila.get("Agencia") or ""), key="ed_ag")
-                            area_e = st.text_input("Área", value=str(fila.get("Area") or ""), key="ed_area")
-                            marca_e = st.text_input("Marca", value=str(fila.get("Marca") or ""), key="ed_marca")
-                            modelo_e = st.text_input("Modelo", value=str(fila.get("Modelo") or ""), key="ed_modelo")
-
-                        with e2:
-                            serie_e = st.text_input("Número de serie", value=str(fila.get("Numero Serie") or ""), key="ed_serie")
-                            tipo_e = st.text_input("Tipo", value=str(fila.get("Tipo") or ""), key="ed_tipo")
-                            ip_e = st.text_input("IP", value=str(fila.get("IP") or ""), key="ed_ip")
-
-                            modalidades = ["Alquiler", "Venta", "Propio", "Otro"]
-                            modalidad_actual = str(fila.get("Modalidad") or "")
-                            modalidad_e = st.selectbox(
-                                "Modalidad",
-                                modalidades,
-                                index=modalidades.index(modalidad_actual) if modalidad_actual in modalidades else 0,
-                                key="ed_modalidad"
-                            )
-
-                            estados = ["Activo", "Mantenimiento", "Baja", "Retirado"]
-                            estado_actual = str(fila.get("Estado") or "")
-                            estado_e = st.selectbox(
-                                "Estado",
-                                estados,
-                                index=estados.index(estado_actual) if estado_actual in estados else 0,
-                                key="ed_estado"
-                            )
-
-                        with e3:
-                            try:
-                                contador_base = int(fila.get("Contador Actual") or 0)
-                            except Exception:
-                                contador_base = 0
-
-                            contador_e = st.number_input(
-                                "Contador actual",
-                                min_value=0,
-                                value=contador_base,
-                                step=1,
-                                key="ed_contador"
-                            )
-
-                            try:
-                                fecha_e = pd.to_datetime(fila.get("Fecha Instalacion")).date()
-                            except Exception:
-                                fecha_e = datetime.now().date()
-
-                            fecha_e = st.date_input(
-                                "Fecha de instalación",
-                                value=fecha_e,
-                                key="ed_fecha"
-                            )
-
-                            observaciones_e = st.text_area(
-                                "Observaciones",
-                                value=str(fila.get("Observaciones") or ""),
-                                key="ed_obs"
-                            )
-
-                        b1, b2 = st.columns(2)
-                        with b1:
-                            if st.button("💾 Guardar cambios", key="guardar_equipo_editado", use_container_width=True):
-                                ok, err = actualizar_equipo(
-                                    equipo_id, empresa_e, agencia_e, area_e, marca_e, modelo_e,
-                                    serie_e, tipo_e, ip_e, modalidad_e, estado_e,
-                                    contador_e, fecha_e, observaciones_e
-                                )
-                                if ok:
-                                    st.success("✅ Equipo actualizado correctamente.")
-                                    st.rerun()
-                                else:
-                                    st.error(f"❌ No se pudo actualizar: {err}")
-
-                        with b2:
-                            if st.button("🗑️ Eliminar equipo", key="eliminar_equipo", use_container_width=True):
-                                st.session_state["confirmar_eliminacion_equipo"] = equipo_id
-
-                    if st.session_state.get("confirmar_eliminacion_equipo") == equipo_id:
-                        st.warning("Se eliminará el equipo seleccionado.")
-                        c1, c2 = st.columns(2)
-
-                        with c1:
-                            if st.button("Sí, eliminar definitivamente", key="confirmar_borrado_equipo"):
-                                ok, err = eliminar_equipo(equipo_id)
-                                if ok:
-                                    st.session_state.pop("confirmar_eliminacion_equipo", None)
-                                    st.success("🗑️ Equipo eliminado.")
-                                    st.rerun()
-                                else:
-                                    st.error(f"❌ No se pudo eliminar: {err}")
-
-                        with c2:
-                            if st.button("Cancelar", key="cancelar_borrado_equipo"):
-                                st.session_state.pop("confirmar_eliminacion_equipo", None)
-                                st.rerun()
-
-        with tab_nuevo:
-            st.markdown("### ➕ Registrar nuevo equipo")
-            n1, n2, n3 = st.columns(3)
-
-            # Listas desplegables alimentadas desde Parametros y desde los equipos ya registrados.
-            def _opciones_unicas(valores, incluir_seleccione=True):
-                resultado = []
-                for valor in valores:
-                    if pd.isna(valor):
-                        continue
-                    texto = str(valor).strip()
-                    if texto and texto not in resultado and texto != "Sin Registrar":
-                        resultado.append(texto)
-                resultado.sort(key=lambda x: x.lower())
-                return (["— Seleccionar —"] + resultado) if incluir_seleccione else resultado
-
-            empresas_eq = _opciones_unicas(empresas_disponibles)
-            areas_eq = _opciones_unicas(areas_disponibles)
-            agencias_eq_todas = _opciones_unicas(agencias_disponibles)
-
-            # Marca, modelo y tipo se toman de los equipos existentes para evitar escribirlos repetidamente.
-            marcas_base = [
-                "Canon", "HP", "Epson", "Brother", "Ricoh", "Kyocera",
-                "Xerox", "Konica Minolta", "Lexmark", "Sharp"
-            ]
-            tipos_base = [
-                "Multifuncional", "Impresora", "Escáner", "Plotter"
-            ]
-            marcas_existentes = _opciones_unicas(
-                list(df_equipos.get("Marca", pd.Series(dtype=str)).tolist()) + marcas_base
-            )
-            tipos_existentes = _opciones_unicas(
-                list(df_equipos.get("Tipo", pd.Series(dtype=str)).tolist()) + tipos_base
-            )
-
-            with n1:
-                empresa_n_sel = st.selectbox("Empresa", empresas_eq, key="nuevo_eq_empresa")
-
-                if empresa_n_sel == "— Seleccionar —":
-                    agencias_filtradas_eq = []
-                else:
-                    agencias_filtradas_eq = [
-                        ag for ag in agencias_disponibles
-                        if str(ag).strip().lower().startswith(empresa_n_sel.strip().lower())
-                    ]
-                    # Si Parametros no tiene la empresa como prefijo, dejamos las agencias disponibles
-                    # para no bloquear el registro.
-                    if not agencias_filtradas_eq:
-                        agencias_filtradas_eq = agencias_disponibles
-
-                # Mostramos nombres cortos para que el formulario sea limpio, pero
-                # conservamos el valor original de Parametros al guardar en Supabase.
-                def _nombre_corto(valor, cantidad_prefijos=1):
-                    texto = str(valor).strip()
-                    partes = [p.strip() for p in texto.split(" - ") if p.strip()]
-                    if len(partes) > cantidad_prefijos:
-                        return " - ".join(partes[cantidad_prefijos:])
-                    return texto
-
-                agencias_eq_originales = _opciones_unicas(agencias_filtradas_eq)
-                mapa_agencias_eq = {
-                    _nombre_corto(ag): ag for ag in agencias_eq_originales
-                    if ag != "— Seleccionar —"
-                }
-                agencias_eq = ["— Seleccionar —"] + list(mapa_agencias_eq.keys())
-                agencia_n_visible = st.selectbox("Agencia", agencias_eq, key="nuevo_eq_agencia")
-                agencia_n_sel = mapa_agencias_eq.get(agencia_n_visible, "— Seleccionar —")
-
-                if agencia_n_visible == "— Seleccionar —":
-                    areas_filtradas_eq = []
-                else:
-                    areas_filtradas_eq = [
-                        ar for ar in areas_disponibles
-                        if str(ar).strip().lower().startswith(agencia_n_sel.strip().lower())
-                    ]
-                    if not areas_filtradas_eq:
-                        # Compatibilidad con Parametros donde Área puede no llevar el prefijo de Agencia.
-                        areas_filtradas_eq = areas_disponibles
-
-                areas_eq_originales = _opciones_unicas(areas_filtradas_eq)
-                mapa_areas_eq = {
-                    _nombre_corto(ar, cantidad_prefijos=2): ar for ar in areas_eq_originales
-                    if ar != "— Seleccionar —"
-                }
-                areas_eq = ["— Seleccionar —"] + list(mapa_areas_eq.keys())
-                area_n_visible = st.selectbox("Área", areas_eq, key="nuevo_eq_area")
-                area_n_sel = mapa_areas_eq.get(area_n_visible, "— Seleccionar —")
-
-                marca_n_sel = st.selectbox("Marca", marcas_existentes, key="nuevo_eq_marca")
-
-            with n2:
-                serie_n = st.text_input("Número de serie", key="nuevo_eq_serie")
-
-                # El modelo se filtra por la marca elegida cuando ya existen modelos para esa marca.
-                if marca_n_sel != "— Seleccionar —" and "Marca" in df_equipos.columns and "Modelo" in df_equipos.columns:
-                    modelos_filtrados_eq = df_equipos.loc[
-                        df_equipos["Marca"].fillna("").astype(str).str.strip().str.lower() == marca_n_sel.strip().lower(),
-                        "Modelo"
-                    ].tolist()
-                else:
-                    modelos_filtrados_eq = df_equipos.get("Modelo", pd.Series(dtype=str)).tolist()
-
-                modelos_eq = _opciones_unicas(modelos_filtrados_eq)
-                if len(modelos_eq) > 1:
-                    modelo_n_sel = st.selectbox("Modelo", modelos_eq, key="nuevo_eq_modelo")
-                else:
-                    st.caption("No hay modelos registrados todavía; puedes escribir el primero.")
-                    modelo_n_sel = st.text_input("Modelo", key="nuevo_eq_modelo_manual")
-
-                tipo_n_sel = st.selectbox(
-                    "Tipo",
-                    tipos_existentes,
-                    key="nuevo_eq_tipo"
-                )
-                ip_n = st.text_input("IP", key="nuevo_eq_ip")
-                modalidad_n = st.selectbox("Modalidad", ["Alquiler", "Venta", "Propio", "Otro"], key="nuevo_eq_modalidad")
-                estado_n = st.selectbox("Estado", ["Activo", "Mantenimiento", "Baja", "Retirado"], key="nuevo_eq_estado")
-
-                # Convertimos el valor visual de la lista a texto vacío para Supabase.
-                agencia_n = "" if agencia_n_sel == "— Seleccionar —" else agencia_n_sel
-                area_n = "" if area_n_sel == "— Seleccionar —" else area_n_sel
-                empresa_n = "" if empresa_n_sel == "— Seleccionar —" else empresa_n_sel
-                marca_n = "" if marca_n_sel == "— Seleccionar —" else marca_n_sel
-                modelo_n = "" if modelo_n_sel == "— Seleccionar —" else modelo_n_sel
-                tipo_n = "" if tipo_n_sel == "— Seleccionar —" else tipo_n_sel
-
-            with n3:
-                contador_n = st.number_input("Contador actual", min_value=0, value=0, step=1, key="nuevo_eq_contador")
-                fecha_n = st.date_input("Fecha de instalación", value=datetime.now().date(), key="nuevo_eq_fecha")
-                observaciones_n = st.text_area("Observaciones", key="nuevo_eq_obs")
-
-            if st.button("💾 Registrar equipo", type="primary", use_container_width=True, key="registrar_equipo"):
-                ok, err = registrar_equipo(
-                    empresa_n, agencia_n, area_n, marca_n, modelo_n, serie_n, tipo_n,
-                    ip_n, modalidad_n, estado_n, contador_n, fecha_n, observaciones_n
-                )
-                if ok:
-                    st.success("🎉 Equipo registrado correctamente.")
-                    st.rerun()
-                else:
-                    st.error(f"❌ No se pudo registrar el equipo: {err}")
-
-        with tab_importar:
-            st.markdown("### 📥 Carga masiva de equipos desde Excel")
-            st.caption("Ideal para cargar los más de 150 equipos de la empresa de una sola vez.")
-
-            plantilla_bytes = bytes_plantilla_equipos(
-                empresas_disponibles,
-                agencias_disponibles,
-                areas_disponibles,
-                df_equipos
-            )
-            c_imp1, c_imp2 = st.columns(2)
-            with c_imp1:
-                st.download_button(
-                    "📄 Descargar plantilla Excel",
-                    data=plantilla_bytes,
-                    file_name="Plantilla_Carga_Equipos.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                    key="descargar_plantilla_equipos"
-                )
-            with c_imp2:
-                st.info("💡 La plantilla ya trae listas desplegables y se actualiza con las Empresas, Agencias y Áreas de tu sistema.")
-
-            archivo_equipos = st.file_uploader(
-                "📎 Sube el Excel completado",
-                type=["xlsx"],
-                key="archivo_importacion_equipos",
-                help="Usa la plantilla descargada y conserva los nombres de las columnas."
-            )
-
-            if archivo_equipos is not None:
-                try:
-                    df_importado = pd.read_excel(archivo_equipos, sheet_name="Equipos")
-                    df_validos, df_errores, errores_estructura = validar_dataframe_equipos(
-                        df_importado, df_equipos
-                    )
-
-                    if errores_estructura:
-                        for mensaje_error in errores_estructura:
-                            st.error(f"❌ {mensaje_error}")
-                    else:
-                        st.markdown("#### Vista previa de la importación")
-                        m1, m2, m3 = st.columns(3)
-                        m1.metric("Filas del Excel", len(df_importado.dropna(how="all")))
-                        m2.metric("✅ Listas para importar", len(df_validos))
-                        m3.metric("⚠️ Con errores", len(df_errores))
-
-                        if not df_validos.empty:
-                            st.success(f"Se encontraron {len(df_validos)} equipos listos para cargar.")
-                            st.dataframe(
-                                df_importado.loc[df_importado.index.isin(
-                                    df_importado.index[:len(df_importado)]
-                                )].head(10),
-                                use_container_width=True,
-                                hide_index=True
-                            )
-
-                        if not df_errores.empty:
-                            st.warning("Hay filas que no se importarán hasta corregirlas.")
-                            st.dataframe(
-                                df_errores[["Fila", "Número de serie", "Errores"]],
-                                use_container_width=True,
-                                hide_index=True
-                            )
-
-                        if not df_validos.empty:
-                            confirmar = st.checkbox(
-                                f"Confirmo que quiero importar {len(df_validos)} equipos válidos.",
-                                key="confirmar_importacion_equipos"
-                            )
-                            if st.button(
-                                "🚀 Importar equipos a Supabase",
-                                type="primary",
-                                use_container_width=True,
-                                disabled=not confirmar,
-                                key="importar_equipos_masivo"
-                            ):
-                                with st.spinner("Importando equipos..."):
-                                    cantidad_importada, error_importacion = importar_equipos_masivo(df_validos)
-                                if error_importacion:
-                                    st.error(f"❌ No se pudo completar la importación: {error_importacion}")
-                                else:
-                                    st.success(f"🎉 Se importaron {cantidad_importada} equipos correctamente.")
-                                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ No se pudo leer el Excel: {e}")
-
-        with tab_contador:
-            if df_equipos.empty:
-                st.info("Primero registra al menos un equipo.")
-            else:
-                opciones_cont = {
-                    f'#{int(row["id"])} — {row.get("Marca", "")} {row.get("Modelo", "")} — Serie: {row.get("Numero Serie", "")} — Contador: {row.get("Contador Actual", 0)}': int(row["id"])
-                    for _, row in df_equipos.iterrows()
-                }
-
-                equipo_cont_label = st.selectbox(
-                    "Selecciona el equipo",
-                    list(opciones_cont.keys()),
-                    key="equipo_contador_sel"
-                )
-                equipo_cont_id = opciones_cont[equipo_cont_label]
-
-                # Cargamos el historial antes de registrar una nueva lectura para
-                # poder mostrar el último contador y calcular automáticamente el consumo.
-                df_lecturas = obtener_lecturas_equipo(equipo_cont_id)
-                fila_equipo_cont = df_equipos[df_equipos["id"] == equipo_cont_id].iloc[0]
-                try:
-                    contador_actual_equipo = int(fila_equipo_cont.get("Contador Actual") or 0)
-                except Exception:
-                    contador_actual_equipo = 0
-
-                ultima_lectura = None
-                ultima_fecha = None
-                if not df_lecturas.empty and "Contador" in df_lecturas.columns:
-                    try:
-                        ultima_lectura = int(pd.to_numeric(df_lecturas.iloc[0]["Contador"]))
-                        ultima_fecha = df_lecturas.iloc[0].get("Fecha")
-                    except Exception:
-                        ultima_lectura = None
-
-                # Si ya existen lecturas, usamos la última como referencia.
-                # Si no existen, mostramos el contador actual del equipo como referencia informativa.
-                contador_referencia = ultima_lectura if ultima_lectura is not None else contador_actual_equipo
-
-                m1, m2, m3 = st.columns(3)
-                with m1:
-                    st.metric("🔢 Contador actual", f"{contador_actual_equipo:,}".replace(",", "."))
-                with m2:
-                    if ultima_lectura is not None:
-                        st.metric("📅 Última lectura", f"{ultima_lectura:,}".replace(",", "."))
-                    else:
-                        st.metric("📅 Última lectura", "Sin historial")
-                with m3:
-                    st.metric("📈 Lecturas registradas", len(df_lecturas))
-
-                st.markdown("#### ➕ Registrar nueva lectura")
-                fc1, fc2 = st.columns(2)
-                with fc1:
-                    contador_nuevo = st.number_input(
-                        "Nuevo contador",
-                        min_value=max(0, contador_referencia),
-                        value=max(0, contador_referencia),
-                        step=1,
-                        key="nuevo_contador"
-                    )
-                    fuente_nueva = st.selectbox(
-                        "Fuente",
-                        ["Lectura física", "Lectura remota", "Reporte cliente", "Otro"],
-                        key="fuente_contador"
-                    )
-
-                with fc2:
-                    usuario_lectura = st.text_input(
-                        "Usuario",
-                        value=st.session_state.get("usuario_actual", ""),
-                        key="usuario_contador"
-                    )
-                    obs_lectura = st.text_area("Observaciones", key="obs_contador")
-
-                incremento = int(contador_nuevo) - int(contador_referencia)
-                if ultima_lectura is not None:
-                    st.info(
-                        f"📊 **Incremento desde la última lectura:** "
-                        f"{incremento:,} impresiones".replace(",", ".")
-                    )
-                else:
-                    st.caption(
-                        f"Primera lectura del historial. El contador actual del equipo es "
-                        f"{contador_actual_equipo:,}.".replace(",", ".")
-                    )
-
-                if st.button("🔢 Registrar lectura", type="primary", use_container_width=True, key="registrar_lectura"):
-                    if contador_nuevo < contador_referencia:
-                        st.error("❌ El nuevo contador no puede ser menor que la lectura anterior.")
-                    else:
-                        ok, err = registrar_lectura_equipo(
-                            equipo_cont_id, contador_nuevo, fuente_nueva,
-                            usuario_lectura, obs_lectura
-                        )
-                        if ok:
-                            st.success("✅ Lectura registrada y contador actualizado.")
-                            st.rerun()
-                        else:
-                            st.error(f"❌ No se pudo registrar la lectura: {err}")
-
-                st.markdown("### 📊 Historial de lecturas")
-                if df_lecturas.empty:
-                    st.info("Este equipo todavía no tiene lecturas registradas.")
-                else:
-                    historial = df_lecturas.copy()
-                    if "Fecha" in historial.columns:
-                        historial["Fecha"] = pd.to_datetime(historial["Fecha"], errors="coerce")
-                        historial = historial.sort_values("Fecha", ascending=False)
-
-                    if "Contador" in historial.columns:
-                        historial["Contador"] = pd.to_numeric(historial["Contador"], errors="coerce")
-                        historial["Incremento"] = historial["Contador"].diff(-1)
-                        historial["Incremento"] = historial["Incremento"].fillna(0).astype(int)
-
-                    columnas_historial = [
-                        "Fecha", "Contador", "Incremento", "Fuente", "Usuario", "Observaciones"
-                    ]
-                    columnas_historial = [c for c in columnas_historial if c in historial.columns]
-                    st.dataframe(
-                        historial[columnas_historial],
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Fecha": st.column_config.DatetimeColumn("Fecha", format="DD/MM/YYYY HH:mm"),
-                            "Contador": st.column_config.NumberColumn("Contador", format="%d"),
-                            "Incremento": st.column_config.NumberColumn("Impresiones", format="%d"),
-                        }
-                    )
-
     if seccion == "Operaciones de Stock":
         if st.session_state["rol_actual"] in ["Administrador", "Secretaria"]:
             st.subheader("⚠️ Alertas de Stock Crítico")
@@ -3134,7 +1565,7 @@ if st.session_state["menu_activo"] == "Configuración y Gestión de Usuarios":
         
         st.subheader("⚙️ Configuración y Gestión de Usuarios")
         
-        tab_sub_usuarios = st.tabs(["👥 Cuentas de Usuarios"])[0]
+        tab_sub_usuarios, tab_sub_parametros = st.tabs(["👥 Cuentas de Usuarios", "🏢 Parámetros de Alquiler (Empresas/Áreas/Agencias)"])
         
         with tab_sub_usuarios:
             col_user_izq, col_user_der = st.columns([1, 1.5])
@@ -3189,8 +1620,210 @@ if st.session_state["menu_activo"] == "Configuración y Gestión de Usuarios":
                         st.warning(f"Usuario {user_sel} eliminado")
                         st.rerun()
                 
-    else:
-        st.warning("🔒 Esta sección es exclusiva para el Administrador de la plataforma.")
+        with tab_sub_parametros:
+            # ================================================================
+            # GESTIÓN JERÁRQUICA: EMPRESA → AGENCIA → ÁREA
+            # ================================================================
+            st.markdown("### 🌳 Empresas, Agencias y Áreas")
+            st.caption(
+                "La estructura se administra como un árbol: primero Empresa/Cliente, "
+                "dentro de ella sus Agencias y dentro de cada Agencia sus Áreas."
+            )
+
+            col_form, col_tree = st.columns([1.0, 1.45])
+
+            # ------------------------------------------------------------
+            # IZQUIERDA: FORMULARIOS RELACIONALES
+            # ------------------------------------------------------------
+            with col_form:
+                st.markdown("### ➕ Agregar al árbol")
+
+                with st.form("nueva_empresa_form", clear_on_submit=True):
+                    st.markdown("**1️⃣ Nueva Empresa / Cliente**")
+                    nueva_emp = st.text_input(
+                        "Nombre de la Empresa:",
+                        placeholder="Ej: Banco Unión CBBA"
+                    )
+                    guardar_emp_btn = st.form_submit_button("➕ Añadir Empresa")
+
+                if guardar_emp_btn:
+                    nombre = nueva_emp.strip()
+                    if not nombre:
+                        st.error("Por favor, escribe un nombre válido.")
+                    elif nombre in empresas_disponibles:
+                        st.warning("Esta empresa ya se encuentra registrada.")
+                    else:
+                        with st.spinner("Guardando empresa..."):
+                            registrar_parametro(nombre, "Empresa")
+                        st.success(f"Empresa '{nombre}' añadida.")
+                        st.cache_data.clear()
+                        st.rerun()
+
+                empresas_tree = [
+                    e for e in empresas_disponibles
+                    if e not in ["Sin Registrar", ""]
+                ]
+
+                st.markdown("---")
+
+                with st.form("nueva_agencia_form", clear_on_submit=True):
+                    st.markdown("**2️⃣ Nueva Agencia**")
+                    if empresas_tree:
+                        empresa_seleccionada_ag = st.selectbox(
+                            "Pertenece a la Empresa:",
+                            empresas_tree,
+                            key="tree_empresa_ag"
+                        )
+                        nueva_ag_nombre = st.text_input(
+                            "Nombre de la Agencia:",
+                            placeholder="Ej: Central / Norte"
+                        )
+                        guardar_ag_btn = st.form_submit_button("➕ Añadir Agencia")
+                    else:
+                        st.info("Registra primero una Empresa / Cliente.")
+                        guardar_ag_btn = False
+                        empresa_seleccionada_ag = ""
+                        nueva_ag_nombre = ""
+
+                if guardar_ag_btn:
+                    nombre_ag = nueva_ag_nombre.strip()
+                    if not nombre_ag:
+                        st.error("Por favor, escribe un nombre de agencia válido.")
+                    else:
+                        nueva_ag_completa = f"{empresa_seleccionada_ag} - {nombre_ag}"
+                        if nueva_ag_completa in agencias_disponibles:
+                            st.warning("Esta agencia ya existe para esa empresa.")
+                        else:
+                            with st.spinner("Guardando agencia..."):
+                                registrar_parametro(nueva_ag_completa, "Agencia")
+                            st.success(f"Agencia '{nombre_ag}' añadida a '{empresa_seleccionada_ag}'.")
+                            st.cache_data.clear()
+                            st.rerun()
+
+                st.markdown("---")
+
+                agencias_tree = [
+                    a for a in agencias_disponibles
+                    if a not in ["Sin Registrar", ""]
+                ]
+
+                with st.form("nueva_area_form", clear_on_submit=True):
+                    st.markdown("**3️⃣ Nueva Área**")
+                    if agencias_tree:
+                        agencia_seleccionada_ar = st.selectbox(
+                            "Pertenece a la Agencia:",
+                            agencias_tree,
+                            format_func=lambda x: (
+                                x.split(" - ")[-1] if " - " in x else x
+                            ),
+                            key="tree_agencia_ar"
+                        )
+                        nueva_ar_nombre = st.text_input(
+                            "Nombre del Área:",
+                            placeholder="Ej: Cajas / Plataforma"
+                        )
+                        guardar_ar_btn = st.form_submit_button("➕ Añadir Área")
+                    else:
+                        st.info("Registra primero una Agencia.")
+                        guardar_ar_btn = False
+                        agencia_seleccionada_ar = ""
+                        nueva_ar_nombre = ""
+
+                if guardar_ar_btn:
+                    nombre_ar = nueva_ar_nombre.strip()
+                    if not nombre_ar:
+                        st.error("Por favor, escribe un nombre de área válido.")
+                    else:
+                        nueva_ar_completa = f"{agencia_seleccionada_ar} - {nombre_ar}"
+                        if nueva_ar_completa in areas_disponibles:
+                            st.warning("Esta área ya existe para esa agencia.")
+                        else:
+                            with st.spinner("Guardando área..."):
+                                registrar_parametro(nueva_ar_completa, "Area")
+                            st.success(f"Área '{nombre_ar}' añadida.")
+                            st.cache_data.clear()
+                            st.rerun()
+
+            # ------------------------------------------------------------
+            # DERECHA: ÁRBOL REAL DE EMPRESA → AGENCIA → ÁREA
+            # ------------------------------------------------------------
+            with col_tree:
+                st.markdown("### 🌳 Estructura actual")
+
+                if not empresas_tree:
+                    st.info("No hay Empresas / Clientes registrados.")
+                else:
+                    for empresa in empresas_tree:
+                        # Agencias que pertenecen realmente a esta empresa
+                        pref_ag = empresa.strip() + " - "
+                        agencias_empresa = sorted(
+                            [
+                                a for a in agencias_tree
+                                if a.startswith(pref_ag)
+                            ],
+                            key=lambda x: x.split(" - ")[-1].lower()
+                        )
+
+                        with st.expander(
+                            f"🏢 {empresa}",
+                            expanded=True
+                        ):
+                            if not agencias_empresa:
+                                st.caption("└── Sin agencias registradas")
+                            else:
+                                for agencia_completa in agencias_empresa:
+                                    agencia_nombre = agencia_completa[len(pref_ag):]
+
+                                    # Áreas que pertenecen exactamente a esta agencia
+                                    pref_ar = agencia_completa.strip() + " - "
+                                    areas_agencia = sorted(
+                                        [
+                                            a for a in areas_disponibles
+                                            if a not in ["Sin Registrar", ""]
+                                            and a.startswith(pref_ar)
+                                        ],
+                                        key=lambda x: x.split(" - ")[-1].lower()
+                                    )
+
+                                    with st.expander(
+                                        f"📍 {agencia_nombre}",
+                                        expanded=True
+                                    ):
+                                        if not areas_agencia:
+                                            st.caption("└── Sin áreas registradas")
+                                        else:
+                                            for area_completa in areas_agencia:
+                                                area_nombre = area_completa[len(pref_ar):]
+                                                st.markdown(
+                                                    f"　└── 📌 **{area_nombre}**"
+                                                )
+
+                            # Administración de borrado, sin mezclar el árbol
+                            with st.expander("⚙️ Administrar / eliminar esta Empresa"):
+                                conf_emp = st.checkbox(
+                                    "Confirmar eliminación",
+                                    key=f"conf_tree_emp_{empresa}"
+                                )
+                                if st.button(
+                                    "🗑️ Eliminar Empresa",
+                                    key=f"del_tree_emp_{empresa}"
+                                ):
+                                    if conf_emp:
+                                        with st.spinner("Borrando..."):
+                                            eliminar_parametro(empresa, "Empresa")
+                                        st.success(f"Empresa '{empresa}' eliminada.")
+                                        st.cache_data.clear()
+                                        st.rerun()
+                                    else:
+                                        st.error("Confirma la casilla primero.")
+
+                    st.markdown("---")
+                    st.caption(
+                        "💡 Las agencias y áreas se muestran únicamente debajo de "
+                        "la Empresa a la que pertenecen. Los nombres completos "
+                        "internos de Supabase se mantienen para no romper las relaciones."
+                    )
+
 # ----------------------------------------------------------------------------------
 # 6. PESTAÑA DE INSUMOS DE RESPALDO (BACKUP)
 # ----------------------------------------------------------------------------------
@@ -3646,55 +2279,6 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
 
                 insumos_texto = ", ".join(insumos_usados) if insumos_usados else "Ninguno"
 
-                # 🖨️ EQUIPO ASOCIADO: permite vincular el consumo de cada insumo a una máquina concreta.
-                equipo_seleccionado_id = None
-                equipo_seleccionado = None
-                try:
-                    df_eq_serv = obtener_equipos()
-                    if not df_eq_serv.empty:
-                        df_eq_serv = df_eq_serv.copy()
-                        for _c in ["Empresa", "Agencia", "Area", "Marca", "Modelo", "Numero Serie"]:
-                            if _c not in df_eq_serv.columns:
-                                df_eq_serv[_c] = ""
-                            df_eq_serv[_c] = df_eq_serv[_c].fillna("").astype(str).str.strip()
-
-                        # Primero respetamos la ubicación de la solicitud.
-                        df_eq_fil = df_eq_serv.copy()
-                        if emp_sel:
-                            df_eq_fil = df_eq_fil[df_eq_fil["Empresa"].str.lower() == str(emp_sel).strip().lower()]
-                        if ag_sel and not df_eq_fil.empty:
-                            ag_limpia = str(ag_sel).split(" - ")[-1].strip().lower()
-                            df_eq_fil = df_eq_fil[df_eq_fil["Agencia"].apply(lambda x: str(x).split(" - ")[-1].strip().lower()) == ag_limpia]
-                        if ar_sel and not df_eq_fil.empty:
-                            ar_limpia = str(ar_sel).split(" - ")[-1].strip().lower()
-                            df_eq_fil = df_eq_fil[df_eq_fil["Area"].apply(lambda x: str(x).split(" - ")[-1].strip().lower()) == ar_limpia]
-
-                        if not df_eq_fil.empty:
-                            def _etiqueta_equipo(row):
-                                marca = row.get("Marca", "")
-                                modelo = row.get("Modelo", "")
-                                serie = row.get("Numero Serie", "")
-                                return f"#{int(row['id'])} — {marca} {modelo} — {serie}"
-
-                            opciones_eq = df_eq_fil["id"].tolist()
-                            mapa_eq = {int(row["id"]): row for _, row in df_eq_fil.iterrows()}
-                            ids_eq = [int(x) for x in opciones_eq]
-                            st.markdown("### 🖨️ Equipo asociado")
-                            st.caption("Vincula los insumos utilizados con la máquina atendida para calcular consumo y rendimiento reales.")
-                            equipo_seleccionado_id = st.selectbox(
-                                "Equipo atendido:",
-                                options=ids_eq,
-                                format_func=lambda x: _etiqueta_equipo(mapa_eq[x]),
-                                key="tec_equipo_asociado"
-                            )
-                            equipo_seleccionado = mapa_eq.get(int(equipo_seleccionado_id))
-                        else:
-                            st.warning("⚠️ No se encontró un equipo registrado para esta Empresa/Agencia/Área. Registra primero la máquina en Gestión de Equipos.")
-                    else:
-                        st.warning("⚠️ No hay equipos registrados todavía. El consumo no podrá asociarse a una máquina.")
-                except Exception as e_eq:
-                    st.warning(f"⚠️ No se pudo cargar la lista de equipos: {e_eq}")
-
                 # 📊 CAMPOS DINÁMICOS QUE SE ACTIVAN SI ELIGE ALQUILER
                 cnt_ant, cnt_act, paginas_impresas, precio_facturado, dias_calculados = 0, 0, 0, 0.0, 0
 
@@ -3762,37 +2346,6 @@ if st.session_state["menu_activo"] in ["Servicios y Soporte", "Servicios y Sopor
                         st.stop()
 
                     supabase = conectar_supabase()
-
-                    # Si hay insumos, exigimos una máquina concreta para poder medir consumo por equipo.
-                    if insumos_usados and equipo_seleccionado_id is None:
-                        st.error("❌ Selecciona el equipo atendido antes de completar el servicio. Así podremos atribuir el consumo de insumos a la máquina correcta.")
-                        st.stop()
-
-                    # Verificación temprana de la tabla de consumos para no modificar el servicio/stock si falta crearla.
-                    if insumos_usados and equipo_seleccionado_id is not None:
-                        try:
-                            supabase.table("Consumo_Equipos").select("id").limit(1).execute()
-                        except Exception as e_tabla: 
-                            st.error("❌ Falta crear la tabla Consumo_Equipos en Supabase. Ejecuta el SQL que te indico debajo del archivo antes de completar servicios con insumos.")
-                            st.code("""create table public.Consumo_Equipos (
-  id bigint generated by default as identity primary key,
-  equipo_id bigint not null references public.Equipos(id) on delete cascade,
-  insumo text not null,
-  cantidad numeric not null default 1,
-  fecha timestamptz not null default now(),
-  usuario text,
-  servicio_id bigint,
-  empresa text,
-  agencia text,
-  area text,
-  observaciones text
-);
-
-alter table public.Consumo_Equipos enable row level security;
-create policy "anon puede leer consumo equipos" on public.Consumo_Equipos for select to anon using (true);
-create policy "anon puede insertar consumo equipos" on public.Consumo_Equipos for insert to anon with check (true);""", language="sql")
-                            st.stop()
-
                     supabase.table("Servicios").update({
                         "Técnico": tecnico_atendio,
                         "Insumos": f"[{tipo_operacion}] {insumos_texto}",
@@ -3821,26 +2374,6 @@ create policy "anon puede insertar consumo equipos" on public.Consumo_Equipos fo
                                         supabase.table("Insumos").update({"Cantidad": nuevo_stock}).eq("id", id_insumo).execute()
                         except Exception as e:
                             st.error(f"⚠️ Error al actualizar stock: {e}")
-
-                    # 2.5️⃣ Registrar cada insumo utilizado asociado al equipo atendido.
-                    if insumos_usados and equipo_seleccionado_id is not None:
-                        try:
-                            for insumo_nom in insumos_usados:
-                                registrar_consumo_equipo(
-                                    equipo_id=equipo_seleccionado_id,
-                                    insumo=insumo_nom,
-                                    cantidad=1,
-                                    fecha=fecha_hora_realizado,
-                                    usuario=tecnico_atendio,
-                                    servicio_id=servicio_id,
-                                    empresa=emp_sel,
-                                    agencia=ag_sel,
-                                    area=ar_sel,
-                                    observaciones=prob_sel
-                                )
-                        except Exception as e_consumo:
-                            st.error(f"❌ No se pudo registrar el consumo asociado al equipo: {e_consumo}")
-                            st.stop()
 
                     # 3️⃣ Registrar en la Hoja de Alquileres, Ventas e Historial General
                     try:
@@ -3941,4 +2474,3 @@ create policy "anon puede insertar consumo equipos" on public.Consumo_Equipos fo
 
             # Mostrar la tabla final limpia y visual
             st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
-
