@@ -179,26 +179,68 @@ def eliminar_usuario(usuario_a_eliminar):
 # --- FUNCIONES DE PARÁMETROS (EMPRESAS, ÁREAS Y AGENCIAS) ---
 @st.cache_data(ttl=60)
 def obtener_parametros():
+    """Lee Empresas, Agencias y Áreas directamente desde Supabase."""
     try:
-        df_parametros = st.session_state["pestanas"].get("Parametros", pd.DataFrame())
-        if df_parametros.empty:
-            return ["Sin Registrar"], ["Sin Registrar"], ["Sin Registrar"]
+        supabase = conectar_supabase()
+        response = supabase.table("Parametros").select("*").execute()
+        df = pd.DataFrame(response.data or [])
 
-        df = df_parametros
+        lista_empresas = []
+        lista_areas = []
+        lista_agencias = []
 
-        lista_empresas = df["Empresa"].dropna().astype(str).str.strip().tolist() if "Empresa" in df.columns else []
-        lista_areas = df["Area"].dropna().astype(str).str.strip().tolist() if "Area" in df.columns else []
-        lista_agencias = df["Agencia"].dropna().astype(str).str.strip().tolist() if "Agencia" in df.columns else []
-        
-        lista_empresas = [x for x in lista_empresas if x != ""]
-        lista_areas = [x for x in lista_areas if x != ""]
-        lista_agencias = [x for x in lista_agencias if x != ""]
+        if not df.empty:
+            if "Empresa" in df.columns:
+                lista_empresas = [x for x in df["Empresa"].dropna().astype(str).str.strip().tolist() if x]
+            if "Area" in df.columns:
+                lista_areas = [x for x in df["Area"].dropna().astype(str).str.strip().tolist() if x]
+            if "Agencia" in df.columns:
+                lista_agencias = [x for x in df["Agencia"].dropna().astype(str).str.strip().tolist() if x]
+
+        # Quita duplicados conservando el orden y mantiene compatibilidad
+        # con el resto de la aplicación que espera estas tres listas.
+        lista_empresas = list(dict.fromkeys(lista_empresas)) or ["Sin Registrar"]
+        lista_agencias = list(dict.fromkeys(lista_agencias)) or ["Sin Registrar"]
+        lista_areas = list(dict.fromkeys(lista_areas)) or ["Sin Registrar"]
+        return lista_empresas, lista_areas, lista_agencias
     except Exception as e:
-        lista_empresas = ["Sin Registrar"]
-        lista_areas = ["Sin Registrar"]
-        lista_agencias = ["Sin Registrar"]
-        
-    return lista_empresas, lista_areas, lista_agencias
+        print(f"Error al leer Parametros desde Supabase: {e}")
+        return ["Sin Registrar"], ["Sin Registrar"], ["Sin Registrar"]
+
+def limpiar_nombre_agencia(empresa, agencia):
+    """Muestra solo el nombre de la agencia, ocultando el prefijo de empresa."""
+    prefijo = f"{str(empresa).strip()} - "
+    texto = str(agencia).strip()
+    return texto[len(prefijo):] if texto.startswith(prefijo) else texto
+
+def limpiar_nombre_area(agencia, area):
+    """Muestra solo el nombre del área, ocultando el prefijo de empresa/agencia."""
+    prefijo = f"{str(agencia).strip()} - "
+    texto = str(area).strip()
+    return texto[len(prefijo):] if texto.startswith(prefijo) else texto
+
+def armar_arbol_parametros(empresas, agencias, areas):
+    """Construye la jerarquía Empresa -> Agencia -> Área a partir de los textos actuales."""
+    arbol = {e: {} for e in empresas if e not in ["Sin Registrar", ""]}
+
+    for agencia in agencias:
+        partes = [p.strip() for p in str(agencia).split(" - ")]
+        if len(partes) >= 2:
+            empresa = partes[0]
+            nombre_agencia = " - ".join(partes[1:])
+            if empresa in arbol:
+                arbol[empresa].setdefault(nombre_agencia, {"valor": agencia, "areas": []})
+
+    for area in areas:
+        partes = [p.strip() for p in str(area).split(" - ")]
+        if len(partes) >= 3:
+            empresa = partes[0]
+            nombre_agencia = partes[1]
+            nombre_area = " - ".join(partes[2:])
+            if empresa in arbol and nombre_agencia in arbol[empresa]:
+                arbol[empresa][nombre_agencia]["areas"].append({"nombre": nombre_area, "valor": area})
+
+    return arbol
 
 def registrar_parametro(nuevo_valor, tipo):
     """Registra un nuevo parámetro en la tabla Parametros de Supabase."""
@@ -2932,14 +2974,16 @@ if st.session_state["menu_activo"] == "Reportes por Fecha / Edición":
 # ==========================================
 if st.session_state["menu_activo"] == "Configuración y Gestión de Usuarios":
     if st.session_state["rol_actual"] == "Administrador":
-        
         st.subheader("⚙️ Configuración y Gestión de Usuarios")
-        
-        tab_sub_usuarios, tab_sub_parametros = st.tabs(["👥 Cuentas de Usuarios", "🏢 Parámetros de Alquiler (Empresas/Áreas/Agencias)"])
-        
+
+        tab_sub_usuarios, tab_sub_parametros = st.tabs([
+            "👥 Cuentas de Usuarios",
+            "🏢 Empresas, Agencias y Áreas"
+        ])
+
         with tab_sub_usuarios:
             col_user_izq, col_user_der = st.columns([1, 1.5])
-            
+
             with col_user_izq:
                 st.write("➕ **Crear Nuevo Usuario**")
                 with st.form("nuevo_usuario_form", clear_on_submit=True):
@@ -2947,12 +2991,12 @@ if st.session_state["menu_activo"] == "Configuración y Gestión de Usuarios":
                     nuevo_pass = st.text_input("Contraseña", type="password", placeholder="Ej: t1234")
                     nuevo_rol = st.selectbox("Asignar Rol:", ["Administrador", "Secretaria", "Técnico"])
                     crear_user_btn = st.form_submit_button("Crear Usuario")
-                    
+
                 if crear_user_btn:
                     df_actual_users = obtener_usuarios()
                     if nuevo_user.strip() == "" or nuevo_pass.strip() == "":
                         st.error("Todos los campos son obligatorios.")
-                    elif nuevo_user in df_actual_users["Usuario"].values:
+                    elif not df_actual_users.empty and nuevo_user in df_actual_users["Usuario"].values:
                         st.warning("Este nombre de usuario ya está registrado.")
                     else:
                         with st.spinner("Registrando nuevo usuario..."):
@@ -2960,198 +3004,208 @@ if st.session_state["menu_activo"] == "Configuración y Gestión de Usuarios":
                         st.success(f"¡Usuario '{nuevo_user}' registrado exitosamente como '{nuevo_rol}'!")
                         st.cache_data.clear()
                         st.rerun()
-                        
+
             st.write("📋 **Gestionar Usuarios**")
             df_usuarios = obtener_usuarios()
-            
-            # Selector para elegir el usuario a gestionar
-            user_sel = st.selectbox("Selecciona usuario para gestionar:", df_usuarios["Usuario"].tolist())
-            
-            if user_sel:
-                datos_user = df_usuarios[df_usuarios["Usuario"] == user_sel].iloc[0]
-                
-                with st.expander("✏️ Editar Usuario"):
-                    with st.form("form_editar_user"):
-                        new_u = st.text_input("Nuevo Nombre", value=datos_user["Usuario"])
-                        new_p = st.text_input("Nueva Contraseña", value=datos_user["Contraseña"])
-                        new_r = st.selectbox("Nuevo Rol", ["Administrador", "Secretaria", "Técnico"], 
-                                           index=["Administrador", "Secretaria", "Técnico"].index(datos_user["Rol"]))
-                        
-                        if st.form_submit_button("Guardar Cambios"):
-                            editar_usuario(user_sel, new_u, new_p, new_r)
-                            st.success("Usuario actualizado")
+            if df_usuarios.empty:
+                st.info("No hay usuarios registrados.")
+            else:
+                user_sel = st.selectbox("Selecciona usuario para gestionar:", df_usuarios["Usuario"].tolist())
+                if user_sel:
+                    datos_user = df_usuarios[df_usuarios["Usuario"] == user_sel].iloc[0]
+
+                    with st.expander("✏️ Editar Usuario"):
+                        with st.form("form_editar_user"):
+                            new_u = st.text_input("Nuevo Nombre", value=datos_user["Usuario"])
+                            new_p = st.text_input("Nueva Contraseña", value=datos_user["Contraseña"])
+                            new_r = st.selectbox(
+                                "Nuevo Rol",
+                                ["Administrador", "Secretaria", "Técnico"],
+                                index=["Administrador", "Secretaria", "Técnico"].index(datos_user["Rol"])
+                            )
+                            if st.form_submit_button("Guardar Cambios"):
+                                editar_usuario(user_sel, new_u, new_p, new_r)
+                                st.success("Usuario actualizado")
+                                st.cache_data.clear()
+                                st.rerun()
+
+                    if st.button("🗑️ Eliminar este usuario"):
+                        if user_sel == st.session_state["usuario_actual"]:
+                            st.error("No puedes eliminar tu propio usuario mientras estás conectado.")
+                        else:
+                            eliminar_usuario(user_sel)
+                            st.warning(f"Usuario {user_sel} eliminado")
+                            st.cache_data.clear()
                             st.rerun()
 
-                if st.button("🗑️ Eliminar este usuario"):
-                    if user_sel == st.session_state["usuario_actual"]:
-                        st.error("No puedes eliminar tu propio usuario mientras estás conectado.")
-                    else:
-                        eliminar_usuario(user_sel)
-                        st.warning(f"Usuario {user_sel} eliminado")
-                        st.rerun()
-                
         with tab_sub_parametros:
-            col_param_izq, col_param_der = st.columns([1.2, 2.0])
-            
-            # --- COLUMNA IZQUIERDA: FORMULARIOS DE REGISTRO INTELIGENTE (RELACIONAL) ---
-            with col_param_izq:
-                st.write("### ➕ Añadir Nuevo Destino")
-                
-                # 1. FORMULARIO EMPRESA
-                with st.form("nueva_empresa_form", clear_on_submit=True):
-                    st.write("**1. Nueva Empresa / Cliente**")
-                    nueva_emp = st.text_input("Nombre de la Empresa:", placeholder="Ej: Constructora Gamma")
-                    guardar_emp_btn = st.form_submit_button("Añadir Empresa")
-                    
+            st.markdown("### 🏢 Estructura de Clientes")
+            st.caption("Organiza la información como: **Empresa / Cliente → Agencia → Área → Equipos**. Los nombres completos siguen guardándose internamente para mantener compatibilidad con el resto del sistema.")
+
+            # Refresca desde Supabase al entrar en esta sección para mostrar siempre el estado real.
+            try:
+                supabase_param = conectar_supabase()
+                resp_param = supabase_param.table("Parametros").select("*").execute()
+                df_param_actual = pd.DataFrame(resp_param.data or [])
+            except Exception as e:
+                df_param_actual = pd.DataFrame()
+                st.error(f"No se pudo leer Parametros desde Supabase: {e}")
+
+            empresas_ui = []
+            agencias_ui = []
+            areas_ui = []
+            if not df_param_actual.empty:
+                if "Empresa" in df_param_actual.columns:
+                    empresas_ui = list(dict.fromkeys([x for x in df_param_actual["Empresa"].dropna().astype(str).str.strip().tolist() if x]))
+                if "Agencia" in df_param_actual.columns:
+                    agencias_ui = list(dict.fromkeys([x for x in df_param_actual["Agencia"].dropna().astype(str).str.strip().tolist() if x]))
+                if "Area" in df_param_actual.columns:
+                    areas_ui = list(dict.fromkeys([x for x in df_param_actual["Area"].dropna().astype(str).str.strip().tolist() if x]))
+
+            arbol = armar_arbol_parametros(empresas_ui, agencias_ui, areas_ui)
+
+            # ---------------- REGISTRO ----------------
+            st.markdown("#### ➕ Agregar ubicación")
+            paso1, paso2, paso3 = st.columns(3)
+
+            with paso1:
+                st.markdown("**1️⃣ Empresa / Cliente**")
+                with st.form("nueva_empresa_form_hier", clear_on_submit=True):
+                    nueva_emp = st.text_input("Nombre", placeholder="Ej: Banco Unión")
+                    guardar_emp_btn = st.form_submit_button("➕ Agregar empresa", use_container_width=True)
                 if guardar_emp_btn:
-                    if nueva_emp.strip() == "":
-                        st.error("Por favor, escribe un nombre válido.")
-                    elif nueva_emp.strip() in empresas_disponibles:
-                        st.warning("Esta empresa ya se encuentra registrada.")
+                    nombre = nueva_emp.strip()
+                    if not nombre:
+                        st.error("Escribe un nombre válido.")
+                    elif nombre in empresas_ui:
+                        st.warning("Esta empresa ya está registrada.")
                     else:
-                        with st.spinner("Guardando empresa..."):
-                            registrar_parametro(nueva_emp.strip(), "Empresa")
-                        st.success(f"¡Empresa '{nueva_emp}' añadida correctamente!")
+                        registrar_parametro(nombre, "Empresa")
                         st.cache_data.clear()
+                        st.success(f"Empresa '{nombre}' agregada.")
                         st.rerun()
-                        
-                st.markdown("---")
-                
-                # 2. FORMULARIO AGENCIA (RELACIONADO CON EMPRESA)
-                empresas_para_seleccion = [e for e in empresas_disponibles if e not in ["Sin Registrar", ""]]
-                with st.form("nueva_agencia_form", clear_on_submit=True):
-                    st.write("**2. Nueva Agencia (Relacionada con Empresa)**")
-                    if empresas_para_seleccion:
-                        empresa_seleccionada_ag = st.selectbox("Selecciona a qué Empresa corresponde:", empresas_para_seleccion)
-                        nueva_ag_nombre = st.text_input("Nombre de la Agencia:", placeholder="Ej: Sucursal Norte")
-                        guardar_ag_btn = st.form_submit_button("Añadir Agencia")
-                    else:
-                        st.info("⚠️ Registra una empresa primero para poder agregar agencias.")
-                        guardar_ag_btn = False
-                    
-                if guardar_ag_btn:
-                    if nueva_ag_nombre.strip() == "":
-                        st.error("Por favor, escribe un nombre de agencia válido.")
-                    else:
-                        nueva_ag_completa = f"{empresa_seleccionada_ag} - {nueva_ag_nombre.strip()}"
-                        if nueva_ag_completa in agencias_disponibles:
-                            st.warning("Esta agencia ya se encuentra registrada para esta empresa.")
+
+            empresas_validas = [e for e in empresas_ui if e]
+            with paso2:
+                st.markdown("**2️⃣ Agencia**")
+                if empresas_validas:
+                    with st.form("nueva_agencia_form_hier", clear_on_submit=True):
+                        empresa_ag = st.selectbox("Empresa", empresas_validas, key="hier_empresa_ag")
+                        nombre_ag = st.text_input("Nombre de agencia", placeholder="Ej: Agencia Norte")
+                        guardar_ag_btn = st.form_submit_button("➕ Agregar agencia", use_container_width=True)
+                    if guardar_ag_btn:
+                        nombre = nombre_ag.strip()
+                        if not nombre:
+                            st.error("Escribe un nombre válido.")
                         else:
-                            with st.spinner("Guardando agencia..."):
-                                registrar_parametro(nueva_ag_completa, "Agencia")
-                            st.success(f"¡Agencia '{nueva_ag_completa}' añadida correctamente!")
+                            valor = f"{empresa_ag} - {nombre}"
+                            if valor in agencias_ui:
+                                st.warning("Esta agencia ya está registrada para esa empresa.")
+                            else:
+                                registrar_parametro(valor, "Agencia")
+                                st.cache_data.clear()
+                                st.success(f"Agencia '{nombre}' agregada a '{empresa_ag}'.")
+                                st.rerun()
+                else:
+                    st.info("Primero registra una empresa.")
+
+            agencias_validas = [a for a in agencias_ui if a]
+            with paso3:
+                st.markdown("**3️⃣ Área**")
+                if agencias_validas:
+                    empresas_ag = []
+                    for a in agencias_validas:
+                        partes = [p.strip() for p in a.split(" - ")]
+                        if len(partes) >= 2:
+                            empresas_ag.append((partes[0], a))
+                    etiquetas_ag = {a: f"{emp} → {limpiar_nombre_agencia(emp, a)}" for emp, a in empresas_ag}
+                    with st.form("nueva_area_form_hier", clear_on_submit=True):
+                        agencia_ar = st.selectbox("Agencia", [a for _, a in empresas_ag], format_func=lambda x: etiquetas_ag[x], key="hier_agencia_ar")
+                        nombre_ar = st.text_input("Nombre del área", placeholder="Ej: Cajas")
+                        guardar_ar_btn = st.form_submit_button("➕ Agregar área", use_container_width=True)
+                    if guardar_ar_btn:
+                        nombre = nombre_ar.strip()
+                        if not nombre:
+                            st.error("Escribe un nombre válido.")
+                        else:
+                            valor = f"{agencia_ar} - {nombre}"
+                            if valor in areas_ui:
+                                st.warning("Esta área ya está registrada para esa agencia.")
+                            else:
+                                registrar_parametro(valor, "Area")
+                                st.cache_data.clear()
+                                st.success(f"Área '{nombre}' agregada.")
+                                st.rerun()
+                else:
+                    st.info("Primero registra una agencia.")
+
+            st.markdown("---")
+            st.markdown("### 🌳 Estructura actual")
+            st.caption("Así quedará organizada y será mucho más fácil encontrar una ubicación al registrar equipos, servicios o consumos.")
+
+            if not arbol:
+                st.info("Todavía no hay empresas registradas.")
+            else:
+                for empresa, agencias_empresa in arbol.items():
+                    with st.expander(f"🏢 {empresa}", expanded=True):
+                        if not agencias_empresa:
+                            st.caption("↳ Sin agencias registradas")
+                        for nombre_agencia, datos_ag in agencias_empresa.items():
+                            st.markdown(f"**📍 {nombre_agencia}**")
+                            if not datos_ag["areas"]:
+                                st.caption("   ↳ Sin áreas registradas")
+                            else:
+                                for area in datos_ag["areas"]:
+                                    st.markdown(f"   ↳ 📌 {area['nombre']}")
+
+            # ---------------- ELIMINACIÓN SEGURA ----------------
+            st.markdown("---")
+            with st.expander("🗑️ Administrar / eliminar ubicaciones", expanded=False):
+                st.warning("Las eliminaciones son directas en Supabase. Para evitar ubicaciones huérfanas, primero elimina las áreas, luego las agencias y finalmente la empresa.")
+                d1, d2, d3 = st.columns(3)
+
+                with d1:
+                    st.markdown("**📌 Áreas**")
+                    if areas_ui:
+                        area_del = st.selectbox("Área a eliminar", areas_ui, format_func=lambda x: limpiar_nombre_area(" - ".join(x.split(" - ")[:-1]), x), key="hier_del_area")
+                        if st.button("🗑️ Eliminar área", key="hier_del_area_btn"):
+                            eliminar_parametro(area_del, "Area")
                             st.cache_data.clear()
                             st.rerun()
-                
-                st.markdown("---")
-                
-                # 3. FORMULARIO ÁREA (RELACIONADO CON AGENCIA)
-                agencias_para_seleccion = [ag for ag in agencias_disponibles if ag not in ["Sin Registrar", ""]]
-                with st.form("nueva_area_form", clear_on_submit=True):
-                    st.write("**3. Nueva Área / Obra (Relacionada con Agencia)**")
-                    if agencias_para_seleccion:
-                        agencia_seleccionada_ar = st.selectbox("Selecciona a qué Agencia corresponde:", agencias_para_seleccion)
-                        nueva_ar_nombre = st.text_input("Nombre del Área / Obra:", placeholder="Ej: Proyecto Piso 2")
-                        guardar_ar_btn = st.form_submit_button("Añadir Área")
                     else:
-                        st.info("⚠️ Registra una agencia primero para poder asociar un área.")
-                        guardar_ar_btn = False
-                    
-                if guardar_ar_btn:
-                    if nueva_ar_nombre.strip() == "":
-                        st.error("Por favor, escribe un nombre de área válido.")
-                    else:
-                        nueva_ar_completa = f"{agencia_seleccionada_ar} - {nueva_ar_nombre.strip()}"
-                        if nueva_ar_completa in areas_disponibles:
-                            st.warning("Esta área ya se encuentra registrada para esta agencia.")
-                        else:
-                            with st.spinner("Guardando área..."):
-                                registrar_parametro(nueva_ar_completa, "Area")
-                            st.success(f"¡Área '{nueva_ar_completa}' añadida correctamente!")
+                        st.caption("Sin áreas")
+
+                with d2:
+                    st.markdown("**📍 Agencias**")
+                    if agencias_ui:
+                        ag_del = st.selectbox("Agencia a eliminar", agencias_ui, format_func=lambda x: limpiar_nombre_agencia(x.split(" - ")[0], x), key="hier_del_ag")
+                        tiene_areas = any(str(a).startswith(f"{ag_del} - ") for a in areas_ui)
+                        if tiene_areas:
+                            st.caption("⚠️ Primero elimina sus áreas.")
+                        if st.button("🗑️ Eliminar agencia", key="hier_del_ag_btn", disabled=tiene_areas):
+                            eliminar_parametro(ag_del, "Agencia")
                             st.cache_data.clear()
                             st.rerun()
-
-            # --- COLUMNA DERECHA: EDICIÓN Y ELIMINACIÓN DIRECTA DESDE LOS DESTINOS ---
-            with col_param_der:
-                st.write("### 📋 Destinos Actuales y Configuración de Borrado")
-                st.info("💡 **Acción directa:** Selecciona y elimina cualquier destino que ya no utilices directamente desde su respectiva columna.")
-                
-                c_emp, c_age, c_are = st.columns(3)
-                
-                # COLUMNA DE EMPRESAS
-                with c_emp:
-                    st.markdown("🏢 **Empresa**")
-                    empresas_filtradas = [e for e in empresas_disponibles if e not in ["Sin Registrar", ""]]
-                    for e in empresas_filtradas:
-                        st.markdown(f"• {e}")
-                    
-                    st.markdown("---")
-                    if empresas_filtradas:
-                        empresa_a_borrar = st.selectbox("Eliminar Empresa:", empresas_filtradas, key="del_emp_sel")
-                        conf_emp = st.checkbox("Confirmar borrado", key="conf_emp_check")
-                        if st.button("🗑️ Eliminar", key="del_emp_btn"):
-                            if conf_emp:
-                                with st.spinner("Borrando..."):
-                                    eliminar_parametro(empresa_a_borrar, "Empresa")
-                                st.success("Empresa eliminada.")
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
-                                st.rerun()
-                            else:
-                                st.error("Confirma la casilla primero.")
                     else:
-                        st.caption("No hay empresas registradas.")
+                        st.caption("Sin agencias")
 
-                # COLUMNA DE AGENCIAS
-                with c_age:
-                    st.markdown("🏢 **Agencia**")
-                    agencias_filtradas = [ag for ag in agencias_disponibles if ag not in ["Sin Registrar", ""]]
-                    for ag in agencias_filtradas:
-                        st.markdown(f"• {ag}")
-                        
-                    st.markdown("---")
-                    if agencias_filtradas:
-                        agencia_a_borrar = st.selectbox("Eliminar Agencia:", agencias_filtradas, key="del_ag_sel")
-                        conf_ag = st.checkbox("Confirmar borrado", key="conf_ag_check")
-                        if st.button("🗑️ Eliminar", key="del_ag_btn"):
-                            if conf_ag:
-                                with st.spinner("Borrando..."):
-                                    eliminar_parametro(agencia_a_borrar, "Agencia")
-                                st.success("Agencia eliminada.")
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
-                                st.rerun()
-                            else:
-                                st.error("Confirma la casilla primero.")
+                with d3:
+                    st.markdown("**🏢 Empresas**")
+                    if empresas_ui:
+                        emp_del = st.selectbox("Empresa a eliminar", empresas_ui, key="hier_del_emp")
+                        tiene_agencias = any(str(a).startswith(f"{emp_del} - ") for a in agencias_ui)
+                        if tiene_agencias:
+                            st.caption("⚠️ Primero elimina sus agencias.")
+                        if st.button("🗑️ Eliminar empresa", key="hier_del_emp_btn", disabled=tiene_agencias):
+                            eliminar_parametro(emp_del, "Empresa")
+                            st.cache_data.clear()
+                            st.rerun()
                     else:
-                        st.caption("No hay agencias registradas.")
+                        st.caption("Sin empresas")
 
-                # COLUMNA DE ÁREAS
-                with c_are:
-                    st.markdown("📍 **Área**")
-                    areas_filtradas = [a for a in areas_disponibles if a not in ["Sin Registrar", ""]]
-                    for a in areas_filtradas:
-                        st.markdown(f"• {a}")
-                        
-                    st.markdown("---")
-                    if areas_filtradas:
-                        area_a_borrar = st.selectbox("Eliminar Área:", areas_filtradas, key="del_ar_sel")
-                        conf_ar = st.checkbox("Confirmar borrado", key="conf_ar_check")
-                        if st.button("🗑️ Eliminar", key="del_ar_btn"):
-                            if conf_ar:
-                                with st.spinner("Borrando..."):
-                                    eliminar_parametro(area_a_borrar, "Area")
-                                st.success("Área eliminada.")
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
-                                st.rerun()
-                            else:
-                                st.error("Confirma la casilla primero.")
-                    else:
-                        st.caption("No hay áreas registradas.")
-                        
     else:
         st.warning("🔒 Esta sección es exclusiva para el Administrador de la plataforma.")
+
 # ----------------------------------------------------------------------------------
 # 6. PESTAÑA DE INSUMOS DE RESPALDO (BACKUP)
 # ----------------------------------------------------------------------------------
